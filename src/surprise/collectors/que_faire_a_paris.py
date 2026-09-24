@@ -2,10 +2,13 @@
 
 API: Opendatasoft Explore v2.1, dataset ``que-faire-a-paris-``.
 The export endpoint returns every matching record in one call (the records
-endpoint caps offset + limit at 10 000).
+endpoint caps offset + limit at 10 000). ``OPENDATA_PARIS_URL`` overrides the
+portal, e.g. the Opendatasoft mirror https://parisdata.opendatasoft.com when
+opendata.paris.fr does not resolve.
 """
 
 import argparse
+import os
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -21,7 +24,7 @@ from surprise.models import Activity, ActivityKind, Occurrence, Offer, RawRecord
 
 SOURCE_ID = "que_faire_a_paris"
 DATASET = "que-faire-a-paris-"
-EXPORT_URL = f"https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/{DATASET}/exports/json"
+DEFAULT_BASE_URL = "https://opendata.paris.fr"
 PARIS = ZoneInfo("Europe/Paris")
 WINDOW = timedelta(weeks=6)
 # An occurrence counts as an evening one if it is still running at this hour.
@@ -44,9 +47,14 @@ class Normalized:
 def fetch(client: httpx.Client, today: date, window: timedelta = WINDOW) -> list[dict[str, Any]]:
     """Events still running today and starting within the window."""
     where = f"date_end >= date'{today.isoformat()}' and date_start <= date'{(today + window).isoformat()}'"
-    response = client.get(EXPORT_URL, params={"where": where, "timezone": "Europe/Paris"})
+    response = client.get(export_url(), params={"where": where, "timezone": "Europe/Paris"})
     response.raise_for_status()
     return response.json()
+
+
+def export_url() -> str:
+    base_url = os.environ.get("OPENDATA_PARIS_URL") or DEFAULT_BASE_URL
+    return f"{base_url.rstrip('/')}/api/explore/v2.1/catalog/datasets/{DATASET}/exports/json"
 
 
 def to_raw_record(payload: dict[str, Any]) -> RawRecord:
@@ -76,7 +84,8 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
     except ValidationError:
         return Normalized(raw, rejection="hors Paris intra-muros")
 
-    occurrences = [o for o in parse_occurrences(payload.get("occurrences")) if _in_window(o, now, window)]
+    all_occurrences = parse_occurrences(payload.get("occurrences"))
+    occurrences = [o for o in all_occurrences if _in_window(o, now, window)]
 
     try:
         activity = Activity(
@@ -84,8 +93,12 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             # Descriptions are rewritten during enrichment, never copied from the source.
             description=None,
             kind=ActivityKind.TEMPORARY,
-            starts_on=_date(payload.get("date_start")),
-            ends_on=_date(payload.get("date_end")),
+            # date_start/date_end are shifted by 1-3 h and can land on the next day:
+            # the occurrences are the reliable source, the fields a fallback.
+            starts_on=min((o.starts_at.date() for o in all_occurrences), default=_date(payload.get("date_start"))),
+            ends_on=max(
+                ((o.ends_at or o.starts_at).date() for o in all_occurrences), default=_date(payload.get("date_end"))
+            ),
             website=_safe_url(payload.get("contact_url")) or _safe_url(payload.get("url")),
             is_evening=is_evening(occurrences),
             venue=venue,
@@ -99,13 +112,20 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
 
 
 def parse_occurrences(value: str | None) -> list[Occurrence]:
-    """Parse ``start_end;start_end`` ISO 8601 pairs, skipping malformed ones."""
+    """Parse ``start_end;start_end`` ISO 8601 pairs, skipping malformed ones.
+
+    The wall-clock time is Paris local time but the API always writes a +02:00
+    offset, even in winter: the offset is replaced, not converted. An end at or
+    before the start ("de 21h00 à 00h00") is on the following day.
+    """
     occurrences = []
     for chunk in (value or "").split(";"):
         start, _, end = chunk.strip().partition("_")
         try:
-            starts_at = datetime.fromisoformat(start)
-            ends_at = datetime.fromisoformat(end) if end else None
+            starts_at = _paris_wall_clock(start)
+            ends_at = _paris_wall_clock(end) if end else None
+            if ends_at and ends_at <= starts_at:
+                ends_at += timedelta(days=1)
             occurrences.append(Occurrence(starts_at=starts_at, ends_at=ends_at))
         except (ValueError, ValidationError):
             continue
@@ -152,6 +172,10 @@ def _youth_audience(payload: dict[str, Any]) -> str | None:
 
 def _in_window(occurrence: Occurrence, now: datetime, window: timedelta) -> bool:
     return (occurrence.ends_at or occurrence.starts_at) >= now and occurrence.starts_at <= now + window
+
+
+def _paris_wall_clock(value: str) -> datetime:
+    return datetime.fromisoformat(value).replace(tzinfo=PARIS)
 
 
 def _date(value: str | None) -> date | None:

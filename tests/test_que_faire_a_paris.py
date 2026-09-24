@@ -9,7 +9,7 @@ import respx
 from surprise.collectors import que_faire_a_paris as qfap
 from surprise.store import SupabaseStore
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "que_faire_a_paris.json").read_text())
+FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "que_faire_a_paris.json").read_text(encoding="utf-8"))
 NOW = datetime(2026, 9, 24, 22, tzinfo=timezone.utc)
 
 
@@ -63,14 +63,24 @@ def test_is_evening_unknown_without_occurrences():
 
 
 @respx.mock
-def test_collect_queries_the_six_week_window():
-    route = respx.get(qfap.EXPORT_URL).mock(return_value=httpx.Response(200, json=FIXTURE))
+def test_collect_queries_the_six_week_window(monkeypatch):
+    monkeypatch.delenv("OPENDATA_PARIS_URL", raising=False)
+    route = respx.get(
+        "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/que-faire-a-paris-/exports/json"
+    ).mock(return_value=httpx.Response(200, json=FIXTURE))
     with httpx.Client() as client:
         results = list(qfap.collect(client, NOW))
     assert route.calls.last.request.url.params["where"] == (
         "date_end >= date'2026-09-25' and date_start <= date'2026-11-06'"
     )
     assert [r.rejection for r in results] == [None, "jeune public", "hors Paris intra-muros", None]
+
+
+def test_portal_url_can_be_overridden(monkeypatch):
+    monkeypatch.setenv("OPENDATA_PARIS_URL", "https://parisdata.opendatasoft.com/")
+    assert qfap.export_url() == (
+        "https://parisdata.opendatasoft.com/api/explore/v2.1/catalog/datasets/que-faire-a-paris-/exports/json"
+    )
 
 
 @respx.mock
@@ -83,3 +93,26 @@ def test_store_skips_duplicate_raw_records():
     assert request.url.params["on_conflict"] == "source_id,external_id,content_hash"
     assert "resolution=ignore-duplicates" in request.headers["Prefer"]
     assert json.loads(request.content)[0]["source_id"] == "que_faire_a_paris"
+
+
+def test_occurrence_offset_is_ignored_in_winter():
+    # The API writes +02:00 all year; "de 20h00 à 22h00" is 20:00 Paris time.
+    [occurrence] = qfap.parse_occurrences("2026-11-02T20:00:00+02:00_2026-11-02T22:00:00+02:00")
+    assert occurrence.starts_at.isoformat() == "2026-11-02T20:00:00+01:00"
+    assert occurrence.ends_at.isoformat() == "2026-11-02T22:00:00+01:00"
+
+
+def test_dates_come_from_occurrences_not_shifted_fields():
+    payload = next(p for p in FIXTURE if p["id"] == "12345") | {
+        "date_start": "2026-09-27T00:00:00+02:00",
+        "date_end": "2026-10-03T01:30:00+02:00",
+        "occurrences": "2026-09-26T21:00:00+02:00_2026-09-26T22:15:00+02:00;"
+        "2026-10-02T20:45:00+02:00_2026-10-02T22:00:00+02:00",
+    }
+    activity = qfap.normalize(payload, NOW).activity
+    assert (activity.starts_on.isoformat(), activity.ends_on.isoformat()) == ("2026-09-26", "2026-10-02")
+
+
+def test_occurrence_ending_at_midnight_ends_the_next_day():
+    [occurrence] = qfap.parse_occurrences("2026-09-30T21:00:00+02:00_2026-09-30T00:00:00+02:00")
+    assert occurrence.ends_at.isoformat() == "2026-10-01T00:00:00+02:00"

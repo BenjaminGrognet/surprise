@@ -7,7 +7,7 @@
     "lead_text": "Texte source, à ne pas republier.",
     "date_start": "2026-10-01T20:00:00+02:00",
     "date_end": "2026-12-15T22:00:00+01:00",
-    "occurrences": "2026-10-01T20:00:00+02:00_2026-10-01T22:00:00+02:00;2026-10-02T20:00:00+02:00_2026-10-02T22:00:00+02:00;2026-12-15T20:00:00+01:00_2026-12-15T22:00:00+01:00;pas-une-date",
+    "occurrences": "2026-10-01T20:00:00+02:00_2026-10-01T22:00:00+02:00;2026-10-02T20:00:00+02:00_2026-10-02T22:00:00+02:00;2026-12-15T20:00:00+02:00_2026-12-15T22:00:00+02:00;pas-une-date",
     "cover_url": "https://quefaire.paris.fr/image.jpg",
     "qfap_tags": "Concert;Musique classique",
     "address_name": "Église Saint-Julien-le-Pauvre",

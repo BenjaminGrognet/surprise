@@ -6,7 +6,7 @@ from pathlib import Path
 from surprise.collectors import que_faire_a_paris as qfap
 from surprise.local_store import LocalStore
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "que_faire_a_paris.json").read_text())
+FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "que_faire_a_paris.json").read_text(encoding="utf-8"))
 NOW = datetime(2026, 9, 24, 22, tzinfo=timezone.utc)
 
 
