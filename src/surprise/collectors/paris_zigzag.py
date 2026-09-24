@@ -14,6 +14,7 @@ URL of the article photo shown just above the block (to review before any public
 the information only in prose are counted and left for LLM extraction.
 """
 
+import calendar
 import html
 import re
 import time as clock
@@ -73,10 +74,16 @@ _DATE = re.compile(
 )
 _HAS_MONTH = re.compile(r"\b(" + "|".join(_MONTHS) + r")\b", re.IGNORECASE)
 _HOUR = re.compile(r"\b(\d{1,2})\s?h(?:\s?\d{2})?\b", re.IGNORECASE)
+# "de 9h à 19h", "18h-2h": the second hour is a closing time.
+_HOUR_RANGE = re.compile(r"(?<!\d)(\d{1,2})\s?h?(?:\s?\d{2})?\s*(?:à|-|–)\s*(\d{1,2})\s?h(?:\s?\d{2})?\b", re.IGNORECASE)
+# "fin septembre", "début octobre", "mi-novembre": a day of the month.
+_MONTH_PART = re.compile(r"\b(fin|début|debut|mi)[\s-]+(" + "|".join(_MONTHS) + r")\b", re.IGNORECASE)
 _CHILD_AUDIENCE = re.compile(r"jeune public|pour enfants|en famille", re.IGNORECASE)
 _FREE = re.compile(r"gratuit|entrée libre|accès libre", re.IGNORECASE)
 _TRACKING_PARAMS = re.compile(r"^(utm_|gclid$|gad_|fbclid$|mc_)")
 EVENING_FROM_HOUR = 19
+# "fin" is the last day of the month (February: 28).
+_MONTH_PART_DAY = {"début": 1, "debut": 1, "mi": 15, "fin": None}
 
 _ADDRESS_LABELS = {"lieu", "adresse", "où", "ou"}
 _DATE_LABELS = {"dates", "date", "quand"}
@@ -257,7 +264,8 @@ def parse_dates(text: str | None, today: date) -> tuple[date | None, date | None
     """French date phrases: 'Du 25 au 27 septembre 2026', 'Jusqu'au 4 janvier 2027', 'À partir du 10 mai'…"""
     if not text or not _HAS_MONTH.search(text):
         return None, None
-    tokens = [(int(d), m.lower() if m else None, int(y) if y else None) for d, m, y in _DATE.findall(text)]
+    text = _MONTH_PART.sub(lambda m: f"{_MONTH_PART_DAY.get(m.group(1).lower()) or calendar.mdays[_MONTHS[m.group(2).lower()]]} {m.group(2)}", text)
+    tokens =[(int(d), m.lower() if m else None, int(y) if y else None) for d, m, y in _DATE.findall(text)]
     # "Du 25 au 27 septembre 2026": a day without month or year takes those of the next date.
     month, year, dates = None, None, []
     for day, token_month, token_year in reversed(tokens):
@@ -294,10 +302,12 @@ def parse_dates(text: str | None, today: date) -> tuple[date | None, date | None
 
 
 def is_evening(text: str) -> bool | None:
-    hours = [int(h) for h in _HOUR.findall(text) if int(h) < 24]
+    """Whether the activity starts in the evening or closes after midnight; "de 9h à 19h" is not."""
+    starts = _HOUR_RANGE.sub(lambda m: m.group(0) if int(m.group(2)) < 6 else f"{m.group(1)}h", text)
+    hours = [int(h) for h in _HOUR.findall(starts) if int(h) < 24]
     if not hours:
         return None
-    # An hour before 6 is a closing time after midnight ("de 18h à 2h").
+    # An hour before 6 is a closing time after midnight ("jusqu'à 2h").
     return any(hour >= EVENING_FROM_HOUR or hour < 6 for hour in hours)
 
 

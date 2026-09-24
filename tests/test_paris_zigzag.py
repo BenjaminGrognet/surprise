@@ -94,11 +94,30 @@ def test_past_events_are_rejected():
         ("Les 19 et 20 septembre 2026", (date(2026, 9, 19), date(2026, 9, 20))),
         ("Le 12 mars", (date(2027, 3, 12), date(2027, 3, 12))),
         ("Toute l'année", (None, None)),
+        ("jusqu'à fin septembre 2026 ; mercredi de 18h à 23h", (None, date(2026, 9, 30))),
+        ("Mi-octobre 2026", (date(2026, 10, 15), date(2026, 10, 15))),
         ("Lundi à 21h, mardi à 19h jusqu'au 27 octobre 2026", (None, date(2026, 10, 27))),
     ],
 )
 def test_parse_dates(text, expected):
     assert zz.parse_dates(text, TODAY) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Dimanche de 10 à 18h, de mardi à vendredi de 9 h à 19h", False),
+        ("déjeuner de 12h à 15h et dîner de 19h à 23h", True),
+        ("de 18h à 2h", True),
+        ("de 20h-2h", True),
+        ("Le 30 septembre 2026 à 19h", True),
+        ("Vendredi 25 septembre 2026 de 19h à minuit", True),
+        ("jusqu'à 2h", True),
+        ("tous les jours", None),
+    ],
+)
+def test_is_evening_ignores_closing_times(text, expected):
+    assert zz.is_evening(text) is expected
 
 
 @pytest.mark.parametrize(

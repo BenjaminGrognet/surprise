@@ -19,6 +19,12 @@ BOOKING = re.compile(
     r"themisweb|seetickets|feverup|placeminute|billetreduc|mapado|billetweb|helloasso",
     re.IGNORECASE,
 )
+# Not an outing: shops, beauty treatments, wellness products.
+OFF_TOPIC = re.compile(
+    r"soins? (?:du |de )?visage|hydrafacial|skincare|épilation|manucure|pédicure|coiffure|coiffeur|maquillage|"
+    r"massage prénatal|flagship|boutique|concept[- ]store|magasin|shopping|\bcures?\b",
+    re.IGNORECASE,
+)
 _EUROS = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)", re.IGNORECASE)
 # "de 24 à 45 €": the lower bound carries no currency sign.
 _EURO_RANGE = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:à|-|–)\s*\d+(?:[.,]\d{1,2})?\s*(?:€|euros?)", re.IGNORECASE)

@@ -123,6 +123,14 @@ def test_booking_link_prefers_the_booking_button():
     assert enrich.booking_link("https://x.example/", '<a href="#resa">Réserver</a><a href="https://shotgun.live/">Shotgun</a>') is None
 
 
+def test_booking_link_names_the_activity_on_a_programme_page():
+    # A JavaScript-built theatre site: every show's ticketing link sits in JSON.
+    page = '{"G":"https://www.billetweb.fr/mozart-moi-jamais"},{"G":"https://www.billetweb.fr/adjani-les-murmures-de-l-ame"}'
+    title = "Isabelle Adjani, Les murmures de l’âme"
+    assert enrich.booking_link("https://studio.example/adjani", page, title) == "https://www.billetweb.fr/adjani-les-murmures-de-l-ame"
+    assert enrich.booking_link("https://studio.example/adjani", page, "Un autre spectacle") is None
+
+
 @respx.mock
 def test_enrich_one_finds_the_official_site_booking_link():
     page = '<html><a href="https://billets.example/event/42">Réserver</a></html>'

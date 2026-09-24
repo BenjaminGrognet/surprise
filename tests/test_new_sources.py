@@ -53,6 +53,9 @@ def test_paris_friendly_page_ignores_the_booking_date():
     assert str(activity.offers[0].booking_url) == "https://www.lvmh.com/masterclass"
     no_venue = payload | {"address": None, "venue_name": None}
     assert paris_friendly.normalize(no_venue, NOW).rejection == "sans lieu"
+    assert paris_friendly.normalize(payload | {"venue_name": "Paris"}, NOW).rejection == "lieu imprécis"
+    hydrafacial = payload | {"title": "Hydrafacial : un soin visage chez Skincare Agency"}
+    assert paris_friendly.normalize(hydrafacial, NOW).rejection == "hors sujet"
 
 
 PARIS_CITY_GAME_PAGE = """

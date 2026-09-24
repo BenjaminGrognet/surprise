@@ -15,7 +15,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import BOOKING, Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import BOOKING, OFF_TOPIC, Normalized, euro_amounts, run, safe_url
 from surprise.collectors.paris_zigzag import postal_code, split_venue
 from surprise.models import Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -94,6 +94,8 @@ def normalize(payload: dict[str, Any]) -> Normalized:
     name = payload["name"]
     if _CHILD_AUDIENCE.search(name):
         return Normalized(raw, rejection="jeune public")
+    if OFF_TOPIC.search(name):
+        return Normalized(raw, rejection="hors sujet")
     address = payload.get("address")
     if not address:
         return Normalized(raw, rejection="sans lieu")

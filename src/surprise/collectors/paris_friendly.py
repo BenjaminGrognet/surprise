@@ -16,7 +16,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, run, safe_url
 from surprise.collectors.paris_zigzag import PARIS, WINDOW, is_evening, parse_dates, postal_code, split_venue
 from surprise.models import Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -81,9 +81,14 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
         return Normalized(raw, rejection="sans nom")
     if _CHILD_AUDIENCE.search(title):
         return Normalized(raw, rejection="jeune public")
+    if OFF_TOPIC.search(f"{title} {payload['url']}"):
+        return Normalized(raw, rejection="hors sujet")
     address = payload.get("address") or ""
     if not address:
         return Normalized(raw, rejection="sans lieu")
+    # A venue named just "Paris" is a placeholder, often with another page's address (lanterns on the lac Daumesnil at the Odéon).
+    if (payload.get("venue_name") or "").strip().lower() == "paris":
+        return Normalized(raw, rejection="lieu imprécis")
     # "28 Rue de Monceau, 75008 Paris 75008 Paris"
     _, street = split_venue(re.sub(r"(\s*75\d{3}\s*Paris)+\s*$", "", address), default_name=title)
     try:

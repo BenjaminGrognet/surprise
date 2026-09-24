@@ -17,6 +17,7 @@ import argparse
 import html
 import os
 import re
+import unicodedata
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -43,6 +44,11 @@ _ATTRIBUTE = re.compile(r"([\w:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
 _TAG = re.compile(r"<[^>]+>")
 _ANCHOR = re.compile(r"<a\s[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL)
 # Links that look like booking but lead elsewhere.
+# Any URL in the page source, including JSON of JavaScript-built sites.
+_URL = re.compile(r"https?://[^\s\"'<>\\]+")
+_WORD = re.compile(r"[a-z0-9]{4,}")
+# A site's home page, possibly in a language ("/", "/en", "/fr-fr/").
+_HOME_PAGE = re.compile(r"(?:[a-z]{2}(?:[-_][a-z]{2})?)?", re.IGNORECASE)
 _NOT_BOOKING = re.compile(r"cadeau|gift|newsletter|groupe|en-nombre|professionnel|entreprise|privatis|mentions|cgv|conditions", re.IGNORECASE)
 
 SYSTEM_PROMPT = """Tu rédiges les fiches d'un site qui propose des sorties originales en couple à Paris.
@@ -60,7 +66,7 @@ class SitePreview:
     booking_url: str | None = None
 
 
-def site_preview(client: httpx.Client, url: str) -> SitePreview:
+def site_preview(client: httpx.Client, url: str, title: str | None = None) -> SitePreview:
     """og:image and description of a page; empty when the site does not answer."""
     try:
         response = client.get(url)
@@ -79,22 +85,44 @@ def site_preview(client: httpx.Client, url: str) -> SitePreview:
     return SitePreview(
         image_url=urljoin(str(response.url), image) if image else None,
         description=description or None,
-        booking_url=booking_link(str(response.url), response.text),
+        booking_url=booking_link(str(response.url), response.text, title),
     )
 
 
-def booking_link(page_url: str, page: str) -> str | None:
-    """The page's booking link: a "Réserver" / "Billetterie" anchor first, else a link to a ticketing site."""
+def booking_link(page_url: str, page: str, title: str | None = None) -> str | None:
+    """The page's booking link.
+
+    A page listing several shows (a theatre's programme) links to each one's
+    ticketing: the link naming the activity wins ("billetweb.fr/adjani-les-murmures-de-l-ame"
+    for "Isabelle Adjani, Les murmures de l'âme"). Otherwise a "Réserver" /
+    "Billetterie" anchor, else an anchor to a ticketing site.
+    """
     anchors = []
     for href, text in _ANCHOR.findall(page):
         url = urljoin(page_url, html.unescape(href).strip())
         label = _TAG.sub("", html.unescape(text)).strip()
-        # A deep link only: a ticketing home page or a same-page anchor is not the activity's booking.
-        if url.startswith("http") and urlsplit(url).path.strip("/") and "#" not in url and not _NOT_BOOKING.search(f"{url} {label}"):
+        if _is_deep_link(url) and not _NOT_BOOKING.search(f"{url} {label}"):
             anchors.append((url, label))
-    return next((url for url, label in anchors if BOOKING.search(label)), None) or next(
-        (url for url, _ in anchors if BOOKING.search(urlsplit(url).netloc)), None
-    )
+    labelled = [url for url, label in anchors if BOOKING.search(label)]
+    ticketing = [url for url, _ in anchors if BOOKING.search(urlsplit(url).netloc)]
+    if title:
+        # JavaScript-built sites keep their links in JSON, not in anchors.
+        in_source = [url for url in _URL.findall(page) if BOOKING.search(urlsplit(url).netloc) and _is_deep_link(url)]
+        wanted = _words(title)
+        best = max(labelled + ticketing + in_source, key=lambda url: len(wanted & _words(url)), default=None)
+        if best and len(wanted & _words(best)) >= min(2, len(wanted)):
+            return best
+    return next(iter(labelled + ticketing), None)
+
+
+def _is_deep_link(url: str) -> bool:
+    """A page of its own: a site's home page or a same-page anchor is not the activity's booking."""
+    return url.startswith("http") and bool(urlsplit(url).path.strip("/")) and "#" not in url and not _NOT_BOOKING.search(url)
+
+
+def _words(text: str) -> set[str]:
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    return set(_WORD.findall(ascii_text)) - {"paris", "https", "html", "event", "events", "www"}
 
 
 def find_place(client: httpx.Client, api_key: str, query: str) -> str | None:
@@ -170,8 +198,10 @@ def enrich_one(
     has_image = bool(activity.get("image"))
     has_booking = any(offer.get("booking_url") for offer in activity.get("offers") or [])
     # The official site gives the image, the booking link and, when the source has no licensed text, the excerpt to rewrite.
-    if activity.get("website") and (not has_image or not has_booking or not item.get("source_text")):
-        preview = site_preview(http, activity["website"])
+    website = activity.get("website")
+    fetch_site = bool(website) and (not has_image or not has_booking or not item.get("source_text"))
+    if fetch_site:
+        preview = site_preview(http, website, activity.get("title"))
     if not has_image and preview.image_url:
         fields.update(image_url=preview.image_url, image_origin=activity["website"])
     elif not has_image and places_key:
@@ -181,10 +211,15 @@ def enrich_one(
             fields["place_id"] = find_place(http, places_key, query)
         except httpx.HTTPError:
             pass
-    if not has_booking:
+    # Only what was looked up: a refresh must not erase a value found before.
+    if fetch_site and not has_booking:
         fields["booking_url"] = preview.booking_url
-    fields["site_excerpt"] = preview.description
-    source_text = item.get("source_text") or preview.description
+    # The home page of an event's venue describes the venue, not the event.
+    about_venue = activity.get("kind") == "temporary" and website and _HOME_PAGE.fullmatch(urlsplit(website).path.strip("/"))
+    excerpt = None if about_venue else preview.description
+    if fetch_site:
+        fields["site_excerpt"] = excerpt
+    source_text = item.get("source_text") or excerpt
     if describer and source_text:
         fields["description"] = describer(activity, source_text)
     return fields
