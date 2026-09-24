@@ -77,3 +77,17 @@ def test_moderation_rejects_unknown_or_filtered_activities(tmp_path):
         assert not store.set_status("que_faire_a_paris", "2", "approved")  # rejected by the hard filters
         with pytest.raises(ValueError):
             store.set_status("que_faire_a_paris", "12345", "published")
+
+
+def test_enrichment_is_listed_and_survives_recollection(tmp_path):
+    store, results = _store_with_fixture(tmp_path / "surprise.db")
+    with store:
+        assert {i["external_id"] for i in store.pending_enrichment()} == {"12345", "4"}
+        store.save_enrichment("que_faire_a_paris", "4", {"image_url": "https://site.example/a.jpg", "site_excerpt": "Extrait"})
+        store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
+        assert {i["external_id"] for i in store.pending_enrichment()} == {"12345"}
+        # Enriched without a description: picked up again once descriptions are enabled.
+        assert {i["external_id"] for i in store.pending_enrichment(missing_description=True)} == {"12345", "4"}
+        [item] = [i for i in store.list_for_moderation() if i["external_id"] == "4"]
+    assert item["enrichment"]["image_url"] == "https://site.example/a.jpg"
+    assert item["enrichment"]["description"] is None

@@ -6,16 +6,24 @@ SQLite store. Standard library only.
 
 import argparse
 import json
+import os
+import re
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
+import httpx
+
+from surprise.categories import CATEGORIES
+from surprise.enrich import place_photo
 from surprise.local_store import DEFAULT_PATH, STATUSES, LocalStore
+from surprise.sources import SOURCES, source_name
 
 PAGE = files("surprise").joinpath("admin.html")
+_PLACE_ID = re.compile(r"^[A-Za-z0-9_-]{10,300}$")
 
 
 def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
@@ -26,7 +34,12 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
                 self._send(HTTPStatus.OK, PAGE.read_bytes(), "text/html; charset=utf-8")
             elif path == "/api/activities":
                 with LocalStore(db_path) as store:
-                    self._send_json(HTTPStatus.OK, store.list_for_moderation())
+                    items = store.list_for_moderation()
+                self._send_json(HTTPStatus.OK, [item | {"source_name": source_name(item["source_id"])} for item in items])
+            elif path == "/api/meta":
+                self._send_json(HTTPStatus.OK, {"categories": CATEGORIES, "sources": SOURCES})
+            elif path == "/api/place-photo":
+                self._place_photo(parse_qs(urlsplit(self.path).query).get("place_id", [""])[0])
             else:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
 
@@ -49,6 +62,22 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
             if not found:
                 return self._send_json(HTTPStatus.NOT_FOUND, {"error": "activité inconnue"})
             self._send_json(HTTPStatus.OK, {"status": status})
+
+        def _place_photo(self, place_id: str) -> None:
+            """Fresh Google photo of a place: Google forbids storing photo names, so it is fetched on display."""
+            api_key = os.environ.get("GOOGLE_PLACES_API_KEY")
+            if not api_key:
+                return self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "GOOGLE_PLACES_API_KEY absente"})
+            if not _PLACE_ID.match(place_id):
+                return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "place_id invalide"})
+            try:
+                with httpx.Client(timeout=15) as client:
+                    photo = place_photo(client, api_key, place_id)
+            except httpx.HTTPError:
+                photo = None
+            if not photo:
+                return self._send_json(HTTPStatus.NOT_FOUND, {"error": "pas de photo"})
+            self._send_json(HTTPStatus.OK, photo)
 
         def _send_json(self, code: HTTPStatus, data: object) -> None:
             self._send(code, json.dumps(data, ensure_ascii=False).encode(), "application/json; charset=utf-8")

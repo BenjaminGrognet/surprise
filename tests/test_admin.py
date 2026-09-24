@@ -65,3 +65,45 @@ def test_status_is_updated_through_the_api(base_url):
 def test_invalid_requests_are_refused(base_url, path, data, content_type, expected):
     status, _ = request(f"{base_url}/api/activities/{path}", data, content_type)
     assert status == expected
+
+
+def test_source_name_and_ids_with_slash_and_hash(tmp_path):
+    from urllib.parse import quote
+
+    from surprise.collectors import paris_zigzag as zz
+
+    path = tmp_path / "surprise.db"
+    page = "<p><strong>Bar Test</strong><br />1 rue de Marengo, 75001 Paris</p>"
+    [payload] = zz.parse_article("https://www.pariszigzag.fr/bar-restaurant/bar/test/", page)
+    result = zz.normalize(payload, NOW)
+    with LocalStore(path) as store:
+        store.save_raw_records([result.raw])
+        store.save_normalized([(result.raw, result.activity, result.rejection)])
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(path))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        [item] = json.loads(request(f"{base_url}/api/activities")[1])
+        assert item["source_name"] == "Paris ZigZag"
+        assert item["external_id"] == "bar-restaurant/bar/test#bar-test"
+        status, _ = request(
+            f"{base_url}/api/activities/paris_zigzag/{quote(item['external_id'], safe='')}/status", {"status": "approved"}
+        )
+        assert status == 200
+        assert json.loads(request(f"{base_url}/api/activities")[1])[0]["status"] == "approved"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_meta_lists_categories_and_sources(base_url):
+    meta = json.loads(request(f"{base_url}/api/meta")[1])
+    assert meta["categories"]["humour"] == "Humour / stand-up"
+    assert meta["sources"]["paris_zigzag"] == "Paris ZigZag"
+
+
+def test_place_photo_needs_a_key_and_a_valid_id(base_url, monkeypatch):
+    monkeypatch.delenv("GOOGLE_PLACES_API_KEY", raising=False)
+    assert request(f"{base_url}/api/place-photo?place_id=ChIJabcdefghij")[0] == 503
+    monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "test-key")
+    assert request(f"{base_url}/api/place-photo?place_id=../../etc")[0] == 400

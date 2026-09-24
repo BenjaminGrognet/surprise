@@ -8,13 +8,13 @@
   :root {
     --bg: #f6f5f2; --surface: #ffffff; --text: #1d1c1a; --muted: #6b6860; --border: #e3e0d8;
     --accent: #7a3cff; --ok: #1f8a4c; --ok-bg: #e5f4ea; --ko: #c0392b; --ko-bg: #fbe9e7;
-    --warn: #9a6500; --warn-bg: #fdf1d8; --focus: #7a3cff33;
+    --warn: #9a6500; --warn-bg: #fdf1d8; --focus: #7a3cff33; --cat-bg: #efe8ff;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #151413; --surface: #1f1e1c; --text: #ecebe7; --muted: #a09d94; --border: #34322e;
       --accent: #a98bff; --ok: #5cc88a; --ok-bg: #1b3325; --ko: #ef7a6c; --ko-bg: #3a211d;
-      --warn: #e6b450; --warn-bg: #3a2f17; --focus: #a98bff33;
+      --warn: #e6b450; --warn-bg: #3a2f17; --focus: #a98bff33; --cat-bg: #2a2340;
     }
   }
   * { box-sizing: border-box; }
@@ -55,7 +55,14 @@
   .more { display: block; margin: 16px auto; font: inherit; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
   .empty { text-align: center; color: var(--muted); padding: 48px 0; }
   #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
-  #toast.show { opacity: 1; }
+  #toast.show { opacity: 1; pointer-events: auto; }
+  .toast-action { margin-left: 12px; font: inherit; font-weight: 600; background: none; border: 0; color: inherit; text-decoration: underline; cursor: pointer; }
+  .badge.source { font-weight: 600; }
+  .badge.category { background: var(--cat-bg); color: var(--accent); border-color: transparent; }
+  figure { margin: 0; width: 132px; }
+  figcaption { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .origin { color: var(--muted); font-size: 12px; font-weight: 600; }
+  .links a.book { background: var(--accent); color: #fff; padding: 2px 10px; border-radius: 999px; text-decoration: none; font-weight: 600; }
   @media (max-width: 700px) {
     .card { grid-template-columns: 1fr; }
     .cover { width: 100%; height: 160px; }
@@ -72,6 +79,8 @@
   </div>
   <div class="bar filters">
     <input type="search" id="q" placeholder="Titre, lieu, adresse…" aria-label="Rechercher">
+    <select id="source" aria-label="Source"><option value="">Toutes sources</option></select>
+    <select id="category" aria-label="Catégorie"><option value="">Toutes catégories</option></select>
     <select id="arr" aria-label="Arrondissement"><option value="">Tous arrondissements</option></select>
     <select id="sort" aria-label="Tri">
       <option value="date">Tri : prochaine date</option>
@@ -84,7 +93,7 @@
   </div>
 </header>
 <main>
-  <p class="hint"><kbd>j</kbd>/<kbd>k</kbd> naviguer · <kbd>v</kbd> valider · <kbd>r</kbd> rejeter · <kbd>a</kbd> remettre en attente · <kbd>o</kbd> ouvrir la fiche source</p>
+  <p class="hint"><kbd>j</kbd>/<kbd>k</kbd> naviguer · <kbd>v</kbd> valider · <kbd>r</kbd> rejeter · <kbd>a</kbd> remettre en attente · <kbd>o</kbd> ouvrir la fiche source · <kbd>z</kbd> annuler la dernière décision</p>
   <div id="list"></div>
   <button class="more" id="more" hidden>Afficher plus</button>
 </main>
@@ -99,9 +108,13 @@ const timeFmt = new Intl.DateTimeFormat("fr-FR", { ...TZ, hour: "2-digit", minut
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const euros = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
+let META = { categories: {}, sources: {} };
 let items = [];
 let state = { tab: "proposed", shown: PAGE_SIZE, focus: 0 };
 let visible = [];
+// Activities decided since the view was last changed: they leave the list whatever the tab.
+const dismissed = new Set();
+let lastDecision = null;
 
 const $ = (id) => document.getElementById(id);
 function h(tag, attrs = {}, ...children) {
@@ -120,9 +133,11 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const nextStart = (it) => it.activity.occurrences[0]?.starts_at
   || (it.activity.starts_on && (it.activity.starts_on > TODAY ? it.activity.starts_on : TODAY)) || "9999";
 
-function toast(message) {
-  const t = $("toast"); t.textContent = message; t.classList.add("show");
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 2500);
+function toast(message, action) {
+  const t = $("toast");
+  t.replaceChildren(message, action ? h("button", { class: "toast-action", onclick: action.run }, action.label) : "");
+  t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 5000);
 }
 
 function price(offer) {
@@ -148,10 +163,13 @@ function occurrence(o) {
 }
 
 function filtered() {
-  const q = $("q").value.trim().toLowerCase(), arr = $("arr").value;
+  const q = $("q").value.trim().toLowerCase(), arr = $("arr").value, source = $("source").value, category = $("category").value;
   const out = items.filter((it) => {
     const a = it.activity, v = a.venue || {};
+    if (dismissed.has(key(it))) return false;
     if (state.tab !== "all" && it.status !== state.tab) return false;
+    if (source && it.source_id !== source) return false;
+    if (category === "none" ? (a.categories || []).length : category && !(a.categories || []).includes(category)) return false;
     if (arr && String(v.arrondissement) !== arr) return false;
     if ($("evening").checked && !a.is_evening) return false;
     if ($("free").checked && !a.offers[0]?.is_free) return false;
@@ -168,13 +186,48 @@ function filtered() {
   return out.sort(cmp);
 }
 
+const truncate = (s, n) => s.length > n ? `${s.slice(0, n - 1)}…` : s;
+
+// Claude's description first; otherwise the licensed text we have, labelled so it is never mistaken for ours.
+function description(it) {
+  const e = it.enrichment || {};
+  if (e.description) return { origin: "Description", value: e.description };
+  if (it.lead_text) return { origin: `Texte ${it.source_name} :`, value: plainText(it.lead_text) };
+  if (e.site_excerpt) return { origin: "Extrait du site officiel :", value: e.site_excerpt };
+  return null;
+}
+
+// Image and its origin: the source's photo, the official site's image, or a Google photo fetched on display.
+function figure(it) {
+  const a = it.activity, e = it.enrichment || {};
+  const url = a.image?.url || e.image_url;
+  const credit = a.image ? a.image.license : e.image_url ? `Image du site officiel (${hostname(e.image_origin)}) — licence à vérifier` : "";
+  const img = h("img", { class: "cover", alt: "", loading: "lazy", src: url });
+  const caption = h("figcaption", { title: credit }, credit);
+  img.addEventListener("error", () => { img.style.visibility = "hidden"; });
+  if (!url && e.place_id) {
+    fetch(`/api/place-photo?place_id=${encodeURIComponent(e.place_id)}`).then((r) => r.ok ? r.json() : null).then((photo) => {
+      if (!photo) return;
+      img.src = photo.photo_uri;
+      caption.textContent = `Photo Google${photo.attribution ? ` : ${photo.attribution}` : ""}`;
+    }).catch(() => {});
+    return h("figure", {}, img, caption);
+  }
+  return url ? h("figure", {}, img, caption) : h("figure", {}, h("div", { class: "cover" }), h("figcaption", {}, "Pas d'image"));
+}
+
+function hostname(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+
 function card(it, index) {
   const a = it.activity, v = a.venue || {}, offer = a.offers[0];
   const badges = [
     h("span", { class: `badge ${{ approved: "ok", rejected: "ko" }[it.status] || ""}` }, STATUS_LABEL[it.status]),
+    h("span", { class: "badge source" }, it.source_name),
     it.changed_since_decision && h("span", { class: "badge warn", title: "La source a modifié la fiche depuis la décision" }, "Modifiée"),
     a.is_evening && h("span", { class: "badge" }, "Soirée"),
-    price(offer) && h("span", { class: "badge" }, price(offer)),
+    price(offer) && h("span", { class: "badge", title: offer.label || "" }, truncate(price(offer), 40)),
     v.arrondissement && h("span", { class: "badge" }, `${v.arrondissement}${v.arrondissement === 1 ? "er" : "e"}`),
   ];
   const occ = a.occurrences.slice(0, 4).map((o) => h("li", {}, occurrence(o)));
@@ -184,22 +237,24 @@ function card(it, index) {
     class: cls, disabled: it.status === status,
     onclick: (e) => { e.stopPropagation(); decide(it, status); },
   }, label);
-  const cover = h("img", { class: "cover", alt: "", loading: "lazy", src: it.cover_url });
-  cover.addEventListener("error", () => cover.style.visibility = "hidden");
+  const text = description(it);
   return h("article", {
     class: `card${index === state.focus ? " focused" : ""}`, "data-key": key(it),
     onclick: () => { state.focus = index; highlight(); },
   },
-    it.cover_url ? cover : h("div", { class: "cover" }),
+    figure(it),
     h("div", {},
       h("h2", {}, a.title),
       h("div", { class: "meta" }, [v.name, v.address, v.postal_code].filter(Boolean).join(" · ")),
       h("div", { class: "badges" }, badges),
-      it.lead_text && h("p", { class: "lead" }, plainText(it.lead_text)),
+      (a.categories || []).length > 0 && h("div", { class: "badges" },
+        a.categories.map((c) => h("span", { class: "badge category" }, META.categories[c] || c))),
+      text && h("p", { class: "lead" }, h("span", { class: "origin" }, text.origin), " ", text.value),
       h("div", { class: "meta" }, dates(a)),
       occ.length ? h("ul", { class: "occ" }, occ) : h("p", { class: "occ" }, "Aucun créneau dans les 6 semaines"),
       h("div", { class: "links" },
-        link(it.source_url, "Fiche source"), link(a.website, "Site"), link(offer?.booking_url, "Réservation")),
+        offer?.booking_url && h("a", { class: "book", href: offer.booking_url, target: "_blank", rel: "noopener noreferrer" }, "Réserver"),
+        link(a.website, "Site officiel"), link(it.source_url, `Fiche ${it.source_name}`)),
     ),
     h("div", { class: "actions" },
       act("approved", "Valider", "approve"), act("rejected", "Rejeter", "reject"), act("proposed", "En attente", "")),
@@ -211,7 +266,7 @@ function renderTabs() {
   for (const it of items) counts[it.status] = (counts[it.status] || 0) + 1;
   $("tabs").replaceChildren(...TABS.map(([id, label]) => h("button", {
     class: "tab", "aria-pressed": String(state.tab === id),
-    onclick: () => { state.tab = id; state.shown = PAGE_SIZE; state.focus = 0; render(); },
+    onclick: () => { state.tab = id; resetView(); },
   }, label, h("span", { class: "n" }, String(counts[id] || 0)))));
 }
 
@@ -232,24 +287,55 @@ function highlight(scroll = false) {
   if (el?.classList.contains("card")) { el.classList.add("focused"); if (scroll) el.scrollIntoView({ block: "nearest" }); }
 }
 
+function resetView() {
+  dismissed.clear(); state.shown = PAGE_SIZE; state.focus = 0; render();
+}
+
+async function save(it, status) {
+  const res = await fetch(`/api/activities/${encodeURIComponent(it.source_id)}/${encodeURIComponent(it.external_id)}/status`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+}
+
+// The decided activity leaves the list and the focus moves to the one that followed it.
 async function decide(it, status) {
-  const previous = it.status;
+  if (it.status === status) return;
+  const previous = { status: it.status, changed: it.changed_since_decision, index: visible.indexOf(it) };
   it.status = status; it.changed_since_decision = false;
+  dismissed.add(key(it));
+  state.focus = Math.max(previous.index, 0);
   render(); highlight(true);
   try {
-    const res = await fetch(`/api/activities/${encodeURIComponent(it.source_id)}/${encodeURIComponent(it.external_id)}/status`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
-    toast(`${STATUS_LABEL[status]} : ${it.activity.title}`);
+    await save(it, status);
+    lastDecision = { it, previous };
+    toast(`${STATUS_LABEL[status]} : ${it.activity.title}`, { label: "Annuler", run: undo });
   } catch (err) {
-    it.status = previous; render();
+    Object.assign(it, { status: previous.status, changed_since_decision: previous.changed });
+    dismissed.delete(key(it)); render(); highlight(true);
     toast(`Échec : ${err.message}`);
   }
 }
 
+async function undo() {
+  if (!lastDecision) return;
+  const { it, previous } = lastDecision;
+  lastDecision = null;
+  try {
+    await save(it, previous.status);
+    Object.assign(it, { status: previous.status, changed_since_decision: previous.changed });
+    dismissed.delete(key(it));
+    render();
+    state.focus = Math.max(visible.indexOf(it), 0);
+    highlight(true);
+    toast(`Annulé : ${it.activity.title}`);
+  } catch (err) {
+    toast(`Échec de l'annulation : ${err.message}`);
+  }
+}
+
 document.addEventListener("keydown", (e) => {
-  if (e.target.matches("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest?.("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
   const it = visible[state.focus];
   const move = (d) => {
     state.focus = Math.max(0, Math.min(state.focus + d, visible.length - 1));
@@ -260,17 +346,27 @@ document.addEventListener("keydown", (e) => {
     j: () => move(1), ArrowDown: () => move(1), k: () => move(-1), ArrowUp: () => move(-1),
     v: () => it && decide(it, "approved"), r: () => it && decide(it, "rejected"), a: () => it && decide(it, "proposed"),
     o: () => it?.source_url && window.open(it.source_url, "_blank", "noopener"),
+    z: () => undo(),
   };
   if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
 });
 
-for (const id of ["q", "arr", "sort", "evening", "free", "changed"]) {
-  $(id).addEventListener("input", () => { state.shown = PAGE_SIZE; state.focus = 0; render(); });
+for (const id of ["q", "source", "category", "arr", "sort", "evening", "free", "changed"]) {
+  $(id).addEventListener("input", resetView);
 }
 $("more").addEventListener("click", () => { state.shown += PAGE_SIZE; render(); });
 
-fetch("/api/activities").then((r) => r.json()).then((data) => {
+Promise.all([fetch("/api/meta").then((r) => r.json()), fetch("/api/activities").then((r) => r.json())]).then(([meta, data]) => {
+  META = meta;
   items = data;
+  const counts = {};
+  for (const it of items) for (const c of it.activity.categories || []) counts[c] = (counts[c] || 0) + 1;
+  $("category").append(
+    ...Object.entries(META.categories).filter(([id]) => counts[id]).map(([id, label]) => h("option", { value: id }, `${label} (${counts[id]})`)),
+    h("option", { value: "none" }, `Sans catégorie (${items.filter((it) => !(it.activity.categories || []).length).length})`),
+  );
+  const sources = new Map(items.map((it) => [it.source_id, it.source_name]));
+  $("source").append(...[...sources].sort((x, y) => x[1].localeCompare(y[1], "fr")).map(([id, name]) => h("option", { value: id }, name)));
   const arrs = [...new Set(items.map((it) => it.activity.venue?.arrondissement).filter(Boolean))].sort((x, y) => x - y);
   $("arr").append(...arrs.map((n) => h("option", { value: n }, `${n}${n === 1 ? "er" : "e"} arrondissement`)));
   render();

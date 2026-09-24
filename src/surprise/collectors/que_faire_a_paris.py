@@ -7,20 +7,18 @@ portal, e.g. the Opendatasoft mirror https://parisdata.opendatasoft.com when
 opendata.paris.fr does not resolve.
 """
 
-import argparse
 import os
 import re
-from collections import Counter
-from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
-from decimal import Decimal
 from typing import Any, Iterator
 from zoneinfo import ZoneInfo
 
 import httpx
-from pydantic import HttpUrl, TypeAdapter, ValidationError
+from pydantic import ValidationError
 
-from surprise.models import Activity, ActivityKind, Occurrence, Offer, RawRecord, Venue
+from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
+from surprise.categories import categorize
+from surprise.models import Activity, ActivityKind, Image, Occurrence, Offer, RawRecord, Venue
 
 SOURCE_ID = "que_faire_a_paris"
 DATASET = "que-faire-a-paris-"
@@ -30,18 +28,15 @@ WINDOW = timedelta(weeks=6)
 # An occurrence counts as an evening one if it is still running at this hour.
 EVENING_FROM = time(19, 0)
 
-_url = TypeAdapter(HttpUrl)
 _CHILD_AUDIENCE = re.compile(r"enfant|jeune public|famille|b[ée]b[ée]", re.IGNORECASE)
 _ADULT_AUDIENCE = re.compile(r"adulte", re.IGNORECASE)
 _CHILD_TAGS = {"enfants", "jeune public", "famille"}
-_EUROS = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)", re.IGNORECASE)
-
-
-@dataclass
-class Normalized:
-    raw: RawRecord
-    activity: Activity | None = None
-    rejection: str | None = None
+# Not couple outings: municipal sport programmes, senior, health and social events.
+_OFF_TARGET_TAGS = {"sport", "santé", "solidarité", "senior", "handicap", "prévention"}
+_NEUTRAL_TAGS = {"loisirs"}
+_OFF_TARGET_TITLE = re.compile(
+    r"\bparis sportives?\b|\bparis sport\b|\bgymnase\b|\bcentre sportif\b|\bsport seniors?\b", re.IGNORECASE
+)
 
 
 def fetch(client: httpx.Client, today: date, window: timedelta = WINDOW) -> list[dict[str, Any]]:
@@ -61,7 +56,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
     return RawRecord(
         source_id=SOURCE_ID,
         external_id=str(payload.get("event_id") or payload["id"]),
-        url=_safe_url(payload.get("url")),
+        url=safe_url(payload.get("url")),
         payload=payload,
     )
 
@@ -69,7 +64,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW) -> Normalized:
     raw = to_raw_record(payload)
 
-    if reason := _youth_audience(payload):
+    if reason := _youth_audience(payload) or _off_target(payload):
         return Normalized(raw, rejection=reason)
 
     try:
@@ -79,7 +74,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             postal_code=str(payload.get("address_zipcode") or ""),
             latitude=(payload.get("lat_lon") or {}).get("lat"),
             longitude=(payload.get("lat_lon") or {}).get("lon"),
-            website=_safe_url(payload.get("address_url")),
+            website=safe_url(payload.get("address_url")),
         )
     except ValidationError:
         return Normalized(raw, rejection="hors Paris intra-muros")
@@ -99,9 +94,11 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             ends_on=max(
                 ((o.ends_at or o.starts_at).date() for o in all_occurrences), default=_date(payload.get("date_end"))
             ),
-            website=_safe_url(payload.get("contact_url")) or _safe_url(payload.get("url")),
+            website=safe_url(payload.get("contact_url")) or safe_url(payload.get("url")),
             is_evening=is_evening(occurrences),
             venue=venue,
+            categories=categorize(payload["title"], venue.name, tags=_tags(payload)),
+            image=parse_image(payload),
             occurrences=occurrences,
             offers=[parse_offer(payload)],
         )
@@ -146,8 +143,8 @@ def is_evening(occurrences: list[Occurrence]) -> bool | None:
 def parse_offer(payload: dict[str, Any]) -> Offer:
     price_type = (payload.get("price_type") or "").lower()
     is_free = price_type == "gratuit"
-    amounts = [] if is_free else sorted(Decimal(a.replace(",", ".")) for a in _EUROS.findall(payload.get("price_detail") or ""))
-    booking_url = _safe_url(payload.get("access_link"))
+    amounts = [] if is_free else euro_amounts(payload.get("price_detail"))
+    booking_url = safe_url(payload.get("access_link"))
     return Offer(
         label=payload.get("price_type"),
         is_free=is_free,
@@ -158,16 +155,39 @@ def parse_offer(payload: dict[str, Any]) -> Offer:
     )
 
 
+def parse_image(payload: dict[str, Any]) -> Image | None:
+    if not (url := safe_url(payload.get("cover_url"))):
+        return None
+    credit = (payload.get("cover_credit") or "").strip()
+    return Image(
+        url=url,
+        license=f"Que Faire à Paris — crédit : {credit}" if credit else "Que Faire à Paris — crédit non précisé",
+        source_url=safe_url(payload.get("url")),
+    )
+
+
 def _youth_audience(payload: dict[str, Any]) -> str | None:
-    tags = payload.get("qfap_tags") or payload.get("tags") or []
-    if isinstance(tags, str):
-        tags = tags.split(";")
-    if _CHILD_TAGS & {t.strip().lower() for t in tags}:
+    if _CHILD_TAGS & {t.strip().lower() for t in _tags(payload)}:
         return "jeune public"
     audience = payload.get("audience") or ""
     if _CHILD_AUDIENCE.search(audience) and not _ADULT_AUDIENCE.search(audience):
         return "jeune public"
     return None
+
+
+def _off_target(payload: dict[str, Any]) -> str | None:
+    """Tagged only with off-target themes (a dance night tagged Sport;Danse stays), or a sports venue."""
+    tags = {t.strip().lower() for t in _tags(payload)} - {""}
+    if tags & _OFF_TARGET_TAGS and tags <= _OFF_TARGET_TAGS | _NEUTRAL_TAGS:
+        return "hors cible"
+    if _OFF_TARGET_TITLE.search(payload.get("title") or "") or _OFF_TARGET_TITLE.search(payload.get("address_name") or ""):
+        return "hors cible"
+    return None
+
+
+def _tags(payload: dict[str, Any]) -> list[str]:
+    tags = payload.get("qfap_tags") or payload.get("tags") or []
+    return tags.split(";") if isinstance(tags, str) else tags
 
 
 def _in_window(occurrence: Occurrence, now: datetime, window: timedelta) -> bool:
@@ -182,13 +202,6 @@ def _date(value: str | None) -> date | None:
     return datetime.fromisoformat(value).astimezone(PARIS).date() if value else None
 
 
-def _safe_url(value: str | None) -> HttpUrl | None:
-    try:
-        return _url.validate_python(value.strip()) if value else None
-    except ValidationError:
-        return None
-
-
 def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Normalized]:
     now = now or datetime.now(timezone.utc)
     for payload in fetch(client, now.astimezone(PARIS).date()):
@@ -196,34 +209,12 @@ def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Norma
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--store",
-        choices=["local", "supabase"],
-        help="local : data/surprise.db (SQLite) ; supabase : payloads bruts dans raw_records",
-    )
-    args = parser.parse_args()
+    run(__doc__.splitlines()[0], lambda: _collect_with_client())
 
+
+def _collect_with_client() -> Iterator[Normalized]:
     with httpx.Client(timeout=60, follow_redirects=True) as client:
-        results = list(collect(client))
-
-    kept = [r for r in results if r.activity]
-    print(f"{len(results)} fiches, {len(kept)} retenues, {sum(bool(r.activity.is_evening) for r in kept)} en soirée")
-    for reason, count in Counter(r.rejection for r in results if r.rejection).most_common():
-        print(f"  rejet — {reason} : {count}")
-
-    if args.store == "local":
-        from surprise.local_store import DEFAULT_PATH, LocalStore
-
-        with LocalStore() as store:
-            added = store.save_raw_records([r.raw for r in results])
-            store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
-        print(f"{added} nouveaux payloads bruts dans {DEFAULT_PATH}")
-    elif args.store == "supabase":
-        from surprise.store import SupabaseStore
-
-        with SupabaseStore.from_env() as store:
-            print(f"{store.save_raw_records([r.raw for r in results])} payloads bruts envoyés")
+        yield from collect(client)
 
 
 if __name__ == "__main__":

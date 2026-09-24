@@ -44,7 +44,7 @@ poésie, concert dans une église…
 | LLM | API Claude, **budget modéré** — extraction, enrichissement, reformulation |
 | Curation | **File de modération** : le pipeline propose, un humain valide avant publication |
 | Modèle économique | Non défini — on stocke le potentiel d'affiliation par source pour garder l'option |
-| MVP | Que Faire à Paris + OpenAgenda + extraction LLM sur un média |
+| MVP | Que Faire à Paris + OpenAgenda + **Paris ZigZag** (média retenu, orienté insolite) |
 | Stockage | **Supabase** (PostgreSQL + PostGIS) — schéma dans `supabase/migrations/` |
 
 ## Sources
@@ -72,9 +72,14 @@ c'est autorisé.
 Paris ZigZag, Sortiraparis, Time Out Paris, Le Bonbon, Paris Secret, My Little Paris,
 Le Fooding, Télérama Sortir — y compris via leurs **newsletters** (boîte mail dédiée).
 
-Règle : le LLM n'en extrait que l'**entité** (nom du lieu / de l'événement, date). La
+Règle : on n'en extrait que l'**entité** (nom du lieu / de l'événement, date). La
 fiche est ensuite reconstruite depuis le **site officiel** du lieu. Aucun texte ni image
 des médias n'est republié.
+
+Paris ZigZag : `robots.txt` autorise l'exploration, mais les mentions légales interdisent
+toute reproduction du contenu. Le collecteur lit les sitemaps et ne garde que les **blocs
+pratiques** (nom, lien officiel, lieu, adresse, dates, tarifs, horaires) — des faits, sans
+texte éditorial ni image. Les articles sans bloc pratique (~60 %) restent à extraire par LLM.
 
 ### Niveau 4 — Compléments
 
@@ -105,6 +110,7 @@ Deux natures de fiches, rafraîchies différemment :
 |---|---|---|
 | Paris intra-muros | **Dur** | Rejet à la collecte |
 | Jeune public / famille | **Dur** | Rejet à la collecte |
+| Hors cible (sport municipal, seniors, santé, solidarité) | **Dur** | Rejet à la collecte ; payload brut conservé, retraitable |
 | Soirée | **Souple** | Marqué ; évalué sur les **créneaux** (un lieu ouvert 10h–23h est éligible) |
 | Trop basique | **Souple** | Marqué ; remplacé en phase 3 par un score d'originalité filtrable |
 
@@ -136,5 +142,4 @@ provenance     relie une entité et ses champs au raw_record d'origine
 
 ## Questions ouvertes
 
-- Média du MVP : **Paris ZigZag** (orienté insolite) ou **Sortiraparis** (volume) ?
 - Modèle économique

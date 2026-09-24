@@ -116,3 +116,13 @@ def test_dates_come_from_occurrences_not_shifted_fields():
 def test_occurrence_ending_at_midnight_ends_the_next_day():
     [occurrence] = qfap.parse_occurrences("2026-09-30T21:00:00+02:00_2026-09-30T00:00:00+02:00")
     assert occurrence.ends_at.isoformat() == "2026-10-01T00:00:00+02:00"
+
+
+def test_off_target_events_are_rejected():
+    base = next(p for p in FIXTURE if p["id"] == "12345")
+    assert qfap.normalize(base | {"qfap_tags": "Sport;Loisirs"}, NOW).rejection == "hors cible"
+    assert qfap.normalize(base | {"qfap_tags": "Solidarité"}, NOW).rejection == "hors cible"
+    assert qfap.normalize(base | {"title": "Paris sport proximité : badminton"}, NOW).rejection == "hors cible"
+    assert qfap.normalize(base | {"address_name": "Gymnase Auguste Blanqui"}, NOW).rejection == "hors cible"
+    # A dance night also tagged Sport is a real outing.
+    assert qfap.normalize(base | {"qfap_tags": "Danse;Loisirs;Sport"}, NOW).rejection is None

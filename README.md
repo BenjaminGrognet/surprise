@@ -11,11 +11,30 @@ uv run python -m surprise.collectors.que_faire_a_paris --store local
 uv run python -m surprise.collectors.que_faire_a_paris --store supabase
 ```
 
+Paris ZigZag (média de curation, faits uniquement : nom, lieu, dates, lien officiel) :
+
+```bash
+uv run python -m surprise.collectors.paris_zigzag --store local
+```
+
 Si `opendata.paris.fr` ne résout pas (DNS d'entreprise), passer par le miroir Opendatasoft :
 
 ```bash
 OPENDATA_PARIS_URL=https://parisdata.opendatasoft.com uv run python -m surprise.collectors.que_faire_a_paris
 ```
+
+## Enrichissement
+
+Images et descriptions courtes des activités collectées (seules les nouvelles sont traitées) :
+
+```bash
+uv run python -m surprise.enrich
+```
+
+- Image : photo de la source, sinon `og:image` du site officiel, sinon Google Places si `GOOGLE_PLACES_API_KEY`
+  est définie (seul l'identifiant du lieu est stocké, la photo est chargée à l'affichage avec son crédit).
+- Description : rédigée par Claude si `ANTHROPIC_API_KEY` est définie (modèle : `SURPRISE_LLM_MODEL`,
+  `claude-opus-5` par défaut), à partir du texte de la source sous licence ou de l'extrait du site officiel.
 
 ## Modération
 
@@ -26,5 +45,5 @@ uv run python -m surprise.admin
 ```
 
 Ouvre http://127.0.0.1:8000 (`--port` pour changer, `--db` pour une autre base). Raccourcis : `j`/`k` naviguer,
-`v` valider, `r` rejeter, `a` remettre en attente, `o` ouvrir la fiche source. Les décisions sont conservées
+`v` valider, `r` rejeter, `a` remettre en attente, `o` ouvrir la fiche source, `z` annuler. Filtre par source. Les décisions sont conservées
 d'une collecte à l'autre ; une fiche modifiée par la source après décision est marquée « Modifiée ».

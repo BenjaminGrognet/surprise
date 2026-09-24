@@ -40,6 +40,19 @@ create table if not exists moderation (
   decided_at text not null default (datetime('now')),
   primary key (source_id, external_id)
 );
+-- Image and description found for an activity; also kept across collection runs.
+create table if not exists enrichment (
+  source_id text not null,
+  external_id text not null,
+  image_url text,
+  image_origin text,
+  place_id text,
+  site_excerpt text,
+  description text,
+  description_model text,
+  enriched_at text not null default (datetime('now')),
+  primary key (source_id, external_id)
+);
 """
 
 
@@ -93,9 +106,11 @@ class LocalStore:
             """
             select n.source_id, n.external_id, n.activity, coalesce(m.status, 'proposed'),
                    m.content_hash is not null and m.content_hash != n.content_hash, m.decided_at,
-                   r.url, json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.cover_url')
+                   r.url, json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.cover_url'),
+                   e.image_url, e.image_origin, e.place_id, e.site_excerpt, e.description
             from normalized n
             left join moderation m using (source_id, external_id)
+            left join enrichment e using (source_id, external_id)
             left join raw_records r
               on r.source_id = n.source_id and r.external_id = n.external_id and r.content_hash = n.content_hash
             where n.activity is not null
@@ -112,8 +127,18 @@ class LocalStore:
                 "source_url": source_url,
                 "lead_text": lead_text,
                 "cover_url": cover_url,
+                "enrichment": {
+                    "image_url": image_url,
+                    "image_origin": image_origin,
+                    "place_id": place_id,
+                    "site_excerpt": site_excerpt,
+                    "description": description,
+                },
             }
-            for source_id, external_id, activity, status, changed, decided_at, source_url, lead_text, cover_url in rows
+            for (
+                source_id, external_id, activity, status, changed, decided_at, source_url, lead_text, cover_url,
+                image_url, image_origin, place_id, site_excerpt, description,
+            ) in rows
         ]
 
     def set_status(self, source_id: str, external_id: str, status: str) -> bool:
@@ -139,3 +164,36 @@ class LocalStore:
                     (status, source_id, external_id),
                 )
             return True
+
+    def pending_enrichment(self, refresh: bool = False, missing_description: bool = False) -> list[dict[str, Any]]:
+        """Kept activities without enrichment (or without description, or all with refresh), with the source's text."""
+        rows = self._db.execute(
+            """
+            select n.source_id, n.external_id, n.activity,
+                   json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.description')
+            from normalized n
+            left join raw_records r
+              on r.source_id = n.source_id and r.external_id = n.external_id and r.content_hash = n.content_hash
+            left join enrichment e using (source_id, external_id)
+            where n.activity is not null and (? or e.source_id is null or (? and e.description is null))
+            """,
+            (refresh, missing_description),
+        )
+        return [
+            {
+                "source_id": source_id,
+                "external_id": external_id,
+                "activity": json.loads(activity),
+                "source_text": "\n".join(filter(None, [lead_text, description])) or None,
+            }
+            for source_id, external_id, activity, lead_text, description in rows
+        ]
+
+    def save_enrichment(self, source_id: str, external_id: str, fields: dict[str, str | None]) -> None:
+        columns = ("image_url", "image_origin", "place_id", "site_excerpt", "description", "description_model")
+        with self._db:
+            self._db.execute(
+                f"insert or replace into enrichment (source_id, external_id, {', '.join(columns)})"
+                f" values (?, ?, {', '.join('?' for _ in columns)})",
+                (source_id, external_id, *(fields.get(column) for column in columns)),
+            )

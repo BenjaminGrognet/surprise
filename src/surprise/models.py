@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import AwareDatetime, BaseModel, Field, HttpUrl, computed_field, field_validator, model_validator
 
+from surprise.categories import CATEGORIES
+
 PARIS_POSTAL_CODE = re.compile(r"^750(0[1-9]|1[0-9]|20)$|^75116$")
 
 
@@ -110,8 +112,16 @@ class Activity(BaseModel):
     image: Image | None = None
     is_evening: bool | None = None
     venue: Venue | None = None
+    categories: list[str] = Field(default_factory=list)
     occurrences: list[Occurrence] = Field(default_factory=list)
     offers: list[Offer] = Field(default_factory=list)
+
+    @field_validator("categories")
+    @classmethod
+    def known_categories(cls, value: list[str]) -> list[str]:
+        if unknown := set(value) - CATEGORIES.keys():
+            raise ValueError(f"catégories inconnues : {sorted(unknown)}")
+        return value
 
     @model_validator(mode="after")
     def consistent_dates(self) -> "Activity":
