@@ -45,6 +45,7 @@ poésie, concert dans une église…
 | Curation | **File de modération** : le pipeline propose, un humain valide avant publication |
 | Modèle économique | Non défini — on stocke le potentiel d'affiliation par source pour garder l'option |
 | MVP | Que Faire à Paris + OpenAgenda + extraction LLM sur un média |
+| Stockage | **Supabase** (PostgreSQL + PostGIS) — schéma dans `supabase/migrations/` |
 
 ## Sources
 
@@ -116,8 +117,24 @@ Filtres souples = on garde la donnée, on ne perd rien d'irrécupérable.
 - Descriptions reformulées ; images uniquement de sources licites, licence stockée
 - Provenance conservée pour chaque champ important
 
+## Modèle de données
+
+```
+sources        référentiel des sources (niveau, licence, affiliation possible)
+raw_records    payload brut par source, dédupliqué par hash — permet de tout retraiter
+venues         lieu à Paris intra-muros (contrainte SQL), arrondissement calculé, geo PostGIS
+activities     fiche activité, permanent|temporary, statut proposed|approved|rejected
+occurrences    créneaux datés d'une activité
+offers         prix, unité (personne/couple/groupe), réservation, lien affilié
+provenance     relie une entité et ses champs au raw_record d'origine
+```
+
+- RLS : le public ne lit que les activités `approved` (et leurs lieux, créneaux, offres).
+  `raw_records` et `provenance` restent privés ; les collecteurs écrivent avec la clé service.
+- Les modèles Pydantic des collecteurs (`src/surprise/models.py`) reflètent ce schéma et
+  appliquent les filtres durs dès la normalisation.
+
 ## Questions ouvertes
 
 - Média du MVP : **Paris ZigZag** (orienté insolite) ou **Sortiraparis** (volume) ?
-- Stockage : PostgreSQL + PostGIS (Supabase / Neon) — à valider en phase 2
 - Modèle économique
