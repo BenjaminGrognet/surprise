@@ -173,7 +173,11 @@ def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Norma
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--store", action="store_true", help="enregistre les payloads bruts dans Supabase")
+    parser.add_argument(
+        "--store",
+        choices=["local", "supabase"],
+        help="local : data/surprise.db (SQLite) ; supabase : payloads bruts dans raw_records",
+    )
     args = parser.parse_args()
 
     with httpx.Client(timeout=60, follow_redirects=True) as client:
@@ -184,7 +188,14 @@ def main() -> None:
     for reason, count in Counter(r.rejection for r in results if r.rejection).most_common():
         print(f"  rejet — {reason} : {count}")
 
-    if args.store:
+    if args.store == "local":
+        from surprise.local_store import DEFAULT_PATH, LocalStore
+
+        with LocalStore() as store:
+            added = store.save_raw_records([r.raw for r in results])
+            store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
+        print(f"{added} nouveaux payloads bruts dans {DEFAULT_PATH}")
+    elif args.store == "supabase":
         from surprise.store import SupabaseStore
 
         with SupabaseStore.from_env() as store:
