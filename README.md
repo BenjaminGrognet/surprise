@@ -26,6 +26,14 @@ uv run python -m surprise.collectors.paris_friendly --store local --limit 50
 uv run python -m surprise.collectors.paris_city_game --store local --limit 50
 ```
 
+Come to Paris (billetterie : fiches produit en français, hors offres saisonnières et groupes) et Paris Secret
+(média : cartes Fever et blocs pratiques des articles des 60 derniers jours, du plus récent au plus ancien) :
+
+```bash
+uv run python -m surprise.collectors.come_to_paris --store local --limit 50
+uv run python -m surprise.collectors.paris_secret --store local --limit 50
+```
+
 Si `opendata.paris.fr` ne résout pas (DNS d'entreprise), passer par le miroir Opendatasoft :
 
 ```bash
@@ -42,8 +50,16 @@ uv run python -m surprise.enrich
 
 - Image : photo de la source, sinon `og:image` du site officiel, sinon Google Places si `GOOGLE_PLACES_API_KEY`
   est définie (seul l'identifiant du lieu est stocké, la photo est chargée à l'affichage avec son crédit).
+- Lieu : coordonnées, horaires et, s'il manque, adresse depuis OpenStreetMap (Nominatim, 1 requête/s),
+  cherchés par nom et code postal.
+- Réservation : lien « Réserver » du site officiel si la fiche n'en a pas ; si le lien de la fiche mène à la page
+  du spectacle sur le site du lieu, son bouton « Acheter » vers la billetterie.
 - Description : rédigée par Claude si `ANTHROPIC_API_KEY` est définie (modèle : `SURPRISE_LLM_MODEL`,
-  `claude-opus-5-5` par défaut), à partir du texte de la source sous licence ou de l'extrait du site officiel.
+  `claude-opus-5-5` par défaut), à partir du texte de la source (`lead_text` : texte de la fiche ou de l'article,
+  gardé pour ce prototype perso) ou de l'extrait du site officiel.
+
+`--refresh` retraite aussi les activités déjà enrichies, `--source` limite à une source, `--no-descriptions`
+se passe de Claude.
 
 ## Modération
 

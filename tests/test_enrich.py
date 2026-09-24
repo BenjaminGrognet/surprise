@@ -14,6 +14,36 @@ PAGE = """<html><head>
 </head><body></body></html>"""
 
 
+osm_place = enrich.osm_place
+
+
+@pytest.fixture(autouse=True)
+def no_openstreetmap(monkeypatch):
+    monkeypatch.setattr(enrich, "osm_place", lambda *args: None)
+    monkeypatch.setattr(enrich, "NOMINATIM_DELAY", 0)
+
+
+@respx.mock
+def test_osm_place_matches_the_postcode_and_skips_streets():
+    def result(category, postcode, **extra):
+        return {
+            "category": category, "name": "Dipsy", "lat": "48.85", "lon": "2.33", "osm_type": "node", "osm_id": 1,
+            "address": {"postcode": postcode, "house_number": "11", "road": "Rue Guisarde"}, **extra,
+        }
+
+    respx.get(enrich.NOMINATIM_URL).mock(return_value=httpx.Response(200, json=[
+        result("highway", "75006"),
+        result("amenity", "75011"),
+        result("amenity", "75006", extratags={"opening_hours": "Tu-Sa 18:00-02:00"}),
+    ]))
+    with httpx.Client() as client:
+        place = osm_place(client, "Dipsy", "11 rue Guisarde", "75006")
+    assert place == {
+        "latitude": 48.85, "longitude": 2.33, "opening_hours": "Tu-Sa 18:00-02:00",
+        "osm_address": "11 Rue Guisarde", "osm_postal_code": "75006", "osm_url": "https://www.openstreetmap.org/node/1",
+    }
+
+
 def activity(**overrides):
     return {
         "title": "Le Cabaret Imaginaire",
@@ -110,6 +140,35 @@ def test_enrich_one_keeps_the_source_image_and_text():
     assert not site.called
     assert "image_url" not in fields
     assert fields["description"] == "TEXTE ODBL."
+
+
+@respx.mock
+def test_enrich_one_follows_a_show_page_to_its_buy_button():
+    show = "https://gaite.example/spectacles/la-claque/"
+    respx.get(show).mock(return_value=httpx.Response(200, headers={"content-type": "text/html"}, text=(
+        '<a href="https://themisweb.example/fListeManifs.aspx?id=264">Billetterie</a>'
+        '<a href="https://gaite.example/reservation-groupes/">Réservation groupes</a>'
+        '<a href="https://themisweb.example/fEventChoiceIsMade.aspx?idevent=333">ACHETER</a>'
+    )))
+    item = {"activity": activity(image={"url": "https://cdn.paris.fr/x.jpg"}, offers=[{"booking_url": show}]), "source_text": "Texte."}
+    with httpx.Client() as client:
+        fields = enrich.enrich_one(item, client)
+    assert fields["booking_url"] == "https://themisweb.example/fEventChoiceIsMade.aspx?idevent=333"
+
+
+def test_booking_link_skips_another_event_of_the_listing():
+    page = '<a href="/evenements/cyclo-teuf-124231">Réserver</a><a href="https://billets.example/expo">Réservez votre billet</a>'
+    assert enrich.booking_link("https://www.paris.fr/evenements/expo-nature-1", page) == "https://billets.example/expo"
+
+
+@respx.mock
+def test_enrich_one_ignores_a_social_profile_as_official_site():
+    instagram = respx.get(url__startswith="https://www.instagram.com/")
+    item = {"activity": activity(website="https://www.instagram.com/dipsy.paris"), "source_text": None}
+    with httpx.Client() as client:
+        fields = enrich.enrich_one(item, client, describer=lambda act, text: text)
+    assert not instagram.called
+    assert not fields.get("image_url") and not fields.get("description")
 
 
 def test_booking_link_prefers_the_booking_button():

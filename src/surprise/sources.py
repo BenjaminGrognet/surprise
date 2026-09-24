@@ -9,6 +9,8 @@ SOURCES = {
     "funbooker": "Funbooker",
     "paris_friendly": "Paris-Friendly",
     "paris_city_game": "Paris City Game",
+    "come_to_paris": "Come to Paris",
+    "paris_secret": "Paris Secret",
     "manual": "Ajout manuel",
 }
 

@@ -8,10 +8,11 @@ to the official site, venue, address, dates, price and hours, e.g.
     Venue, 5 rue Example, 75009 Paris<br />
     Du 10 septembre au 31 décembre 2026
 
-The site's terms forbid reusing its content: no editorial text is stored, only
-these facts, the article URL as provenance and, for this personal prototype, the
-URL of the article photo shown just above the block (to review before any public use). Articles that give
-the information only in prose are counted and left for LLM extraction.
+The site's terms forbid reusing its content. For this personal prototype the
+article text about each place (lead_text) and the photo shown just above its
+block are kept anyway, for Claude to rewrite a description: to remove before
+any public use. Articles that give the information only in prose are counted
+and left for LLM extraction.
 """
 
 import calendar
@@ -22,7 +23,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterator
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -123,9 +124,14 @@ def parse_article(url: str, page: str, modified: str | None = None) -> list[dict
         if _PHOTO_CLASS.search(tag.group(0)) and (src := _SRC.search(tag.group(0))) and "-150x150." not in src.group(1)
     ]
     blocks = []
+    # The article body starts at its cover photo; each place's text runs from the previous block to its own.
+    text_start = photos[0][0] if photos else 0
+    prose: list[tuple[int, str]] = []
     for match in _PARAGRAPH.finditer(page):
         paragraph = match.group(1)
         if not _BREAK.search(paragraph):
+            if match.start() >= text_start and (text := _text(paragraph)):
+                prose.append((match.start(), text))
             continue
         raw_lines = _BREAK.split(paragraph)
         lines = [_text(line) for line in raw_lines]
@@ -152,8 +158,13 @@ def parse_article(url: str, page: str, modified: str | None = None) -> list[dict
                 "lines": [_labelled(line) for line in lines[1:] if line],
                 # The last photo above the block: the one of this place in a list article.
                 "image_url": next((src for start, src in reversed(photos) if start < match.start()), None),
+                "lead_text": "\n".join(text for start, text in prose if start >= text_start) or None,
             }
         )
+        text_start = match.end()
+    # An article about a single place: its cover photo, not the last one of the body.
+    if len(blocks) == 1 and photos:
+        blocks[0]["image_url"] = photos[0][1]
     return blocks
 
 
@@ -162,7 +173,8 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
     return RawRecord(
         source_id=SOURCE_ID,
         external_id=f"{path}#{_slug(payload['name'])}",
-        url=safe_url(payload["article_url"]),
+        # A list article covers several places: the text fragment scrolls to this one.
+        url=safe_url(f"{payload['article_url']}#:~:text={quote(payload['name'])}"),
         payload=payload,
     )
 

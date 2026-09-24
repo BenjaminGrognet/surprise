@@ -163,6 +163,29 @@ function occurrence(o) {
   return `${dayFmt.format(start)} · ${time}`;
 }
 
+// Open after 20:00 on some day, from OpenStreetMap hours ("Mo-Sa 12:00-14:30,19:00-23:00"); null when unknown.
+function openAt20(hours) {
+  if (!hours) return null;
+  if (hours.includes("24/7")) return true;
+  const ranges = [...hours.matchAll(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/g)]
+    .map(([, h1, m1, h2, m2]) => [h1 * 60 + +m1, h2 * 60 + +m2]);
+  if (!ranges.length) return null;
+  // Still open after 20:00; an end before the start closes after midnight.
+  return ranges.some(([start, end]) => end > 1200 || end <= start);
+}
+
+// ponytail: bars and restaurants without known hours count as evening, except daytime places by name.
+const DAYTIME = /brunch|petit[- ]d[ée]j|salon de th[ée]|coffee|caf[ée]\b|boulangerie|p[âa]tisserie/i;
+
+function isEvening(it) {
+  const a = it.activity;
+  if (a.is_evening != null) return a.is_evening;
+  const osm = openAt20(it.enrichment?.opening_hours);
+  if (osm != null) return osm;
+  const food = (a.categories || []).some((c) => c === "bar" || c === "restaurant");
+  return food && !DAYTIME.test(`${a.title} ${a.venue?.name || ""}`);
+}
+
 function filtered() {
   const q = $("q").value.trim().toLowerCase(), arr = $("arr").value, source = $("source").value, category = $("category").value;
   const out = items.filter((it) => {
@@ -172,7 +195,7 @@ function filtered() {
     if (source && it.source_id !== source) return false;
     if (category === "none" ? (a.categories || []).length : category && !(a.categories || []).includes(category)) return false;
     if (arr && String(v.arrondissement) !== arr) return false;
-    if ($("evening").checked && !a.is_evening) return false;
+    if ($("evening").checked && !isEvening(it)) return false;
     if ($("free").checked && !a.offers[0]?.is_free) return false;
     if ($("changed").checked && !it.changed_since_decision) return false;
     if (q && ![a.title, v.name, v.address].join(" ").toLowerCase().includes(q)) return false;
@@ -222,12 +245,12 @@ function hostname(url) {
 }
 
 function card(it, index) {
-  const a = it.activity, v = a.venue || {}, offer = a.offers[0];
+  const a = it.activity, v = a.venue || {}, offer = a.offers[0], e = it.enrichment || {};
   const badges = [
     h("span", { class: `badge ${{ approved: "ok", rejected: "ko" }[it.status] || ""}` }, STATUS_LABEL[it.status]),
     h("span", { class: "badge source" }, it.source_name),
     it.changed_since_decision && h("span", { class: "badge warn", title: "La source a modifié la fiche depuis la décision" }, "Modifiée"),
-    a.is_evening && h("span", { class: "badge" }, "Soirée"),
+    isEvening(it) && h("span", { class: "badge" }, "Soirée"),
     price(offer) && h("span", { class: "badge", title: offer.label || "" }, truncate(price(offer), 40)),
     v.arrondissement && h("span", { class: "badge" }, `${v.arrondissement}${v.arrondissement === 1 ? "er" : "e"}`),
   ];
@@ -239,8 +262,8 @@ function card(it, index) {
     onclick: (e) => { e.stopPropagation(); decide(it, status); },
   }, label);
   const text = description(it);
-  // The source's booking link, else the one found on the official site.
-  const booking = offer?.booking_url || it.enrichment?.booking_url;
+  // The link found by enrichment (ticketing behind a show page, or the official site's), else the source's.
+  const booking = it.enrichment?.booking_url || offer?.booking_url;
   return h("article", {
     class: `card${index === state.focus ? " focused" : ""}`, "data-key": key(it),
     onclick: () => { state.focus = index; highlight(); },
@@ -248,17 +271,18 @@ function card(it, index) {
     figure(it),
     h("div", {},
       h("h2", {}, a.title),
-      h("div", { class: "meta" }, [v.name !== a.title && v.name, v.address, v.postal_code].filter(Boolean).join(" · ")),
+      h("div", { class: "meta" }, [v.name !== a.title && v.name, v.address || e.osm_address, v.postal_code].filter(Boolean).join(" · ")),
       h("div", { class: "badges" }, badges),
       (a.categories || []).length > 0 && h("div", { class: "badges" },
         a.categories.map((c) => h("span", { class: "badge category" }, META.categories[c] || c))),
       text && h("p", { class: "lead" }, h("span", { class: "origin" }, text.origin), " ", text.value),
       h("div", { class: "meta" }, dates(a)),
+      e.opening_hours && h("div", { class: "meta" }, `Horaires (OpenStreetMap) : ${e.opening_hours}`),
       occ.length ? h("ul", { class: "occ" }, occ)
         : h("p", { class: "occ" }, a.kind === "permanent" ? (booking ? "Sur réservation" : "Lieu permanent") : "Aucun créneau dans les 6 semaines"),
       h("div", { class: "links" },
         booking && h("a", { class: "book", href: booking, target: "_blank", rel: "noopener noreferrer" }, "Réserver"),
-        link(a.website, "Site officiel"), link(it.source_url, `Fiche ${it.source_name}`)),
+        link(a.website, "Site officiel"), link(it.source_url, `Fiche ${it.source_name}`), link(e.osm_url, "Carte")),
     ),
     h("div", { class: "actions" },
       act("approved", "Valider", "approve"), act("rejected", "Rejeter", "reject"), act("proposed", "En attente", "")),

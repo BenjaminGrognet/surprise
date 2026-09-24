@@ -3,7 +3,7 @@
 Listings come from the "other" sitemap, restricted to Paris ones by their URL
 ("…-a-paris-10eme/voir"). Each page gives a schema.org Product (name, lowest
 price), the map block (address, coordinates), the key facts (duration, minimum
-age), the breadcrumb (categories) and the og:image.
+age), the breadcrumb (categories), the og:image and the description (lead_text).
 """
 
 import html
@@ -37,6 +37,7 @@ _OG_IMAGE = re.compile(r'<meta property="og:image" content="([^"]+)"')
 _DURATION = re.compile(r"(?:(\d+)\s*h\s*(\d{2})?)|(\d+)\s*min", re.IGNORECASE)
 _CHILD_AUDIENCE = re.compile(r"\benfants?\b|parent|anniversaire|kids?\b", re.IGNORECASE)
 _TAG = re.compile(r"<[^>]+>")
+_BLOCK_BREAK = re.compile(r"<(?:/?p\b|/?h\d|br|/?li)[^>]*>", re.IGNORECASE)
 # "Atelier mochis à Paris 6ème": the arrondissement is shown apart.
 _IN_PARIS = re.compile(r"[\s,]*\bà Paris(?:\s+\d{1,2}\s*(?:er|ème|e))?\s*$", re.IGNORECASE)
 # The og:image is a 400px square thumbnail: the same Cloudinary image, uncropped and larger.
@@ -67,6 +68,8 @@ def parse_listing(url: str, page: str) -> dict[str, Any]:
         "age": facts.get("child"),
         "categories": [html.unescape(name).strip() for name in _CRUMB.findall(page)],
         "image_url": _THUMBNAIL.sub("/image/upload/f_auto,q_auto,c_limit,w_1200/", html.unescape(image.group(1))) if image else None,
+        # The organiser's text, for Claude to rewrite a description.
+        "lead_text": "\n".join(filter(None, (_text(part) for part in _BLOCK_BREAK.split(product.get("description") or "")))) or None,
     }
 
 
@@ -103,7 +106,7 @@ def normalize(payload: dict[str, Any]) -> Normalized:
             title=title,
             kind=ActivityKind.PERMANENT,
             duration_minutes=duration_minutes(payload.get("duration")),
-            # The listing page is the activity's page: enrichment reads its og:description.
+            # The listing page is the activity's page.
             website=safe_url(payload["url"]),
             image=Image(url=payload["image_url"], license="Funbooker", source_url=raw.url) if payload.get("image_url") else None,
             venue=venue,

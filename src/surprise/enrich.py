@@ -6,9 +6,12 @@
   names, so only the place id is stored; the admin fetches a fresh photo.
 - Booking link: when the activity has none, the official site's "Réserver"
   link (e.g. a theatre page pointing to its ticketing).
+- Place: coordinates, opening hours and, when missing, the address from
+  OpenStreetMap (Nominatim, open data under ODbL), matched by name and postcode.
 - Description: one or two sentences written by Claude when ANTHROPIC_API_KEY is
   set, from the facts and a licensed text: the source's own (Que Faire à Paris,
-  ODbL) or the official site's excerpt. Never from a curation media's text.
+  ODbL; Paris ZigZag's article text for this personal prototype) or the official
+  site's excerpt.
 
 Only activities not enriched yet are processed, so the nightly run stays cheap.
 """
@@ -17,6 +20,8 @@ import argparse
 import html
 import os
 import re
+import threading
+import time
 import unicodedata
 from collections import Counter
 from collections.abc import Callable
@@ -33,6 +38,9 @@ from surprise.local_store import LocalStore
 
 USER_AGENT = "surprise-collector/0.1"
 PLACES_URL = "https://places.googleapis.com/v1"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+# Nominatim's usage policy: at most one request per second.
+NOMINATIM_DELAY = 1.0
 # Around Notre-Dame, covering Paris intra-muros.
 PARIS_CENTER = {"latitude": 48.8566, "longitude": 2.3522}
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -49,6 +57,9 @@ _URL = re.compile(r"https?://[^\s\"'<>\\]+")
 _WORD = re.compile(r"[a-z0-9]{4,}")
 # A site's home page, possibly in a language ("/", "/en", "/fr-fr/").
 _HOME_PAGE = re.compile(r"(?:[a-z]{2}(?:[-_][a-z]{2})?)?", re.IGNORECASE)
+# Social profiles: their og tags describe the account (followers, posts), not the place.
+_SOCIAL = re.compile(r"(?:^|\.)(?:instagram\.com|facebook\.com|tiktok\.com|linktr\.ee|x\.com|twitter\.com)$", re.IGNORECASE)
+_BUY = re.compile(r"^\s*(?:achet(?:er|ez)|r[ée]serv(?:er|ez)|buy|book)\b", re.IGNORECASE)
 _NOT_BOOKING = re.compile(r"cadeau|gift|newsletter|groupe|en-nombre|professionnel|entreprise|privatis|mentions|cgv|conditions", re.IGNORECASE)
 
 SYSTEM_PROMPT = """Tu rédiges les fiches d'un site qui propose des sorties originales en couple à Paris.
@@ -101,9 +112,10 @@ def booking_link(page_url: str, page: str, title: str | None = None) -> str | No
     for href, text in _ANCHOR.findall(page):
         url = urljoin(page_url, html.unescape(href).strip())
         label = _TAG.sub("", html.unescape(text)).strip()
-        if _is_deep_link(url) and not _NOT_BOOKING.search(f"{url} {label}"):
+        if _is_deep_link(url) and not _NOT_BOOKING.search(f"{url} {label}") and not _is_sibling(page_url, url):
             anchors.append((url, label))
-    labelled = [url for url, label in anchors if BOOKING.search(label)]
+    # A buying button ("Acheter", "Réserver") before a menu entry ("Billetterie", the whole programme).
+    labelled = [url for url, label in anchors if _BUY.search(label)] + [url for url, label in anchors if BOOKING.search(label)]
     ticketing = [url for url, _ in anchors if BOOKING.search(urlsplit(url).netloc)]
     if title:
         # JavaScript-built sites keep their links in JSON, not in anchors.
@@ -113,6 +125,13 @@ def booking_link(page_url: str, page: str, title: str | None = None) -> str | No
         if best and len(wanted & _words(best)) >= min(2, len(wanted)):
             return best
     return next(iter(labelled + ticketing), None)
+
+
+def _is_sibling(page_url: str, url: str) -> bool:
+    """Another page of the same listing ("paris.fr/evenements/a" → "/evenements/b"): another event, not this one's booking."""
+    page, link = urlsplit(page_url), urlsplit(url)
+    parent = page.path.rstrip("/").rpartition("/")[0]
+    return bool(parent) and page.netloc == link.netloc and link.path.rstrip("/").rpartition("/")[0] == parent and link.path != page.path
 
 
 def _is_deep_link(url: str) -> bool:
@@ -160,6 +179,46 @@ def place_photo(client: httpx.Client, api_key: str, place_id: str, max_width: in
     return {"photo_uri": media.json()["photoUri"], "attribution": ", ".join(authors)}
 
 
+_nominatim_lock = threading.Lock()
+# OSM results that are areas or roads, not the place itself.
+_PARIS_POSTCODE = re.compile(r"75\d{3}")
+_NOT_A_PLACE = {"highway", "place", "boundary", "landuse", "railway"}
+
+
+def osm_place(client: httpx.Client, name: str, address: str | None, postal_code: str | None) -> dict[str, Any] | None:
+    """The OpenStreetMap place of this name in this postcode (else anywhere in Paris): coordinates, hours, address, OSM link."""
+    queries = [f"{name}, {postal_code} Paris", f"{name}, {address or ''}, {postal_code} Paris"] if postal_code else [f"{name}, Paris"]
+    for query in dict.fromkeys(queries):
+        # ponytail: one global lock across workers, Nominatim allows 1 req/s anyway.
+        with _nominatim_lock:
+            try:
+                response = client.get(
+                    NOMINATIM_URL,
+                    params={"q": query, "format": "jsonv2", "addressdetails": 1, "extratags": 1, "limit": 5, "countrycodes": "fr"},
+                )
+            except httpx.HTTPError:
+                return None
+            finally:
+                time.sleep(NOMINATIM_DELAY)
+        if response.status_code != 200:
+            return None
+        for result in response.json():
+            details = result.get("address") or {}
+            in_place = details.get("postcode") == postal_code if postal_code else _PARIS_POSTCODE.fullmatch(details.get("postcode") or "")
+            if result.get("category") in _NOT_A_PLACE or not in_place or not result.get("name"):
+                continue
+            street = " ".join(filter(None, [details.get("house_number"), details.get("road")]))
+            return {
+                "latitude": float(result["lat"]),
+                "longitude": float(result["lon"]),
+                "opening_hours": (result.get("extratags") or {}).get("opening_hours"),
+                "osm_address": street or None,
+                "osm_postal_code": details.get("postcode"),
+                "osm_url": f"https://www.openstreetmap.org/{result['osm_type']}/{result['osm_id']}",
+            }
+    return None
+
+
 def describe(anthropic_client: Any, model: str, activity: dict[str, Any], source_text: str | None) -> str | None:
     """Short description written by Claude from the facts and a licensed source text."""
     import anthropic
@@ -199,11 +258,13 @@ def enrich_one(
     has_booking = any(offer.get("booking_url") for offer in activity.get("offers") or [])
     # The official site gives the image, the booking link and, when the source has no licensed text, the excerpt to rewrite.
     website = activity.get("website")
+    if website and _SOCIAL.search(urlsplit(website).netloc):
+        website = None
     fetch_site = bool(website) and (not has_image or not has_booking or not item.get("source_text"))
     if fetch_site:
         preview = site_preview(http, website, activity.get("title"))
     if not has_image and preview.image_url:
-        fields.update(image_url=preview.image_url, image_origin=activity["website"])
+        fields.update(image_url=preview.image_url, image_origin=website)
     elif not has_image and places_key:
         venue = activity.get("venue") or {}
         query = " ".join(filter(None, [venue.get("name"), venue.get("address"), venue.get("postal_code"), "Paris"]))
@@ -211,9 +272,22 @@ def enrich_one(
             fields["place_id"] = find_place(http, places_key, query)
         except httpx.HTTPError:
             pass
+    venue = activity.get("venue") or {}
+    if venue and not (venue.get("latitude") and venue.get("opening_hours")):
+        place = osm_place(http, venue["name"], venue.get("address"), venue["postal_code"])
+        if place:
+            fields.update(place)
     # Only what was looked up: a refresh must not erase a value found before.
     if fetch_site and not has_booking:
         fields["booking_url"] = preview.booking_url
+    # A booking link to the show's page on the venue's site: its "Acheter" button leads to the ticketing.
+    show_page = next(
+        (o["booking_url"] for o in activity.get("offers") or [] if o.get("booking_url") and not BOOKING.search(o["booking_url"])), None
+    )
+    if show_page and (ticketing := site_preview(http, show_page, activity.get("title")).booking_url):
+        # Only a ticketing site: another page of the same site is often a generic "book a visit".
+        if BOOKING.search(urlsplit(ticketing).netloc):
+            fields["booking_url"] = ticketing
     # The home page of an event's venue describes the venue, not the event.
     about_venue = activity.get("kind") == "temporary" and website and _HOME_PAGE.fullmatch(urlsplit(website).path.strip("/"))
     excerpt = None if about_venue else preview.description
@@ -280,7 +354,7 @@ def main() -> None:
                     print(f"  {done}/{len(items)}")
     print(
         f"images du site officiel : {counts['image_url']}, liens de réservation : {counts['booking_url']}, lieux Google : {counts['place_id']}, "
-        f"extraits : {counts['site_excerpt']}, descriptions : {counts['description']}"
+        f"extraits : {counts['site_excerpt']}, lieux OpenStreetMap : {counts['osm_url']}, horaires : {counts['opening_hours']}, descriptions : {counts['description']}"
     )
 
 

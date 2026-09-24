@@ -27,15 +27,16 @@ def test_only_practical_blocks_in_paris_are_read():
         "Infos pratiques",
         "Salon Passé",
     ]
-    # Facts only: no editorial paragraph ends up in the payload.
-    assert all("éditorial" not in str(p) for p in payloads)
+    # The editorial text is kept apart, for Claude to rewrite (personal prototype only).
+    assert all("éditorial" not in str({k: v for k, v in p.items() if k != "lead_text"}) for p in payloads)
 
 
 def test_permanent_place_with_bare_address():
     result = results()["Le Cabaret Imaginaire"]
     activity = result.activity
     assert result.raw.external_id == "top-redac/sorties-test#le-cabaret-imaginaire"
-    assert str(result.raw.url) == ARTICLE_URL
+    # The text fragment scrolls a list article to this place.
+    assert str(result.raw.url) == f"{ARTICLE_URL}#:~:text=Le%20Cabaret%20Imaginaire"
     assert activity.kind == "permanent"
     assert (activity.venue.name, activity.venue.address, activity.venue.arrondissement) == (
         "Le Cabaret Imaginaire",
@@ -158,6 +159,30 @@ def test_image_is_the_last_article_photo_above_the_block():
     a, b = (zz.normalize(p, NOW).activity for p in zz.parse_article(ARTICLE_URL, page))
     assert (str(a.image.url), str(b.image.url)) == (f"{uploads}/a.webp", f"{uploads}/b.webp")
     assert results()["Le Cabaret Imaginaire"].activity.image is None
+
+
+def test_single_place_article_takes_the_cover_photo():
+    uploads = "https://www.pariszigzag.fr/wp-content/uploads/2026/08"
+    page = (
+        f'<img class="wp-post-image" src="{uploads}/cover.webp" />'
+        f'<img class="wp-image-1" src="{uploads}/team.webp" />'
+        "<p><strong>Dipsy</strong><br />11 rue Guisarde, 75006 Paris</p>"
+    )
+    [payload] = zz.parse_article(ARTICLE_URL, page)
+    assert payload["image_url"] == f"{uploads}/cover.webp"
+
+
+def test_each_place_keeps_the_article_text_above_its_block():
+    page = (
+        "<p>Newsletter</p>"
+        '<img class="wp-post-image" src="https://www.pariszigzag.fr/wp-content/uploads/2026/08/cover.webp" />'
+        "<p>Un bar à cocktails.</p><p>Des soirées à thème.</p>"
+        "<p><strong>Bar A</strong><br />1 rue Test, 75006 Paris</p>"
+        "<p>Une cave à vins.</p>"
+        "<p><strong>Bar B</strong><br />2 rue Test, 75006 Paris</p>"
+    )
+    a, b = zz.parse_article(ARTICLE_URL, page)
+    assert (a["lead_text"], b["lead_text"]) == ("Un bar à cocktails.\nDes soirées à thème.", "Une cave à vins.")
 
 
 @respx.mock

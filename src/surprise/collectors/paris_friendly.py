@@ -2,8 +2,9 @@
 
 Pages have sequential ids: the RSS feed gives the latest one and the collector
 walks down from it. Only the practical block is read (dates and hours, price,
-venue and its link, booking link), plus the title and the og:image. Pages without a venue in
-Paris (products, trips) are rejected.
+venue and its link, booking link), plus the title, the og:image and, for this
+personal prototype, the article text (lead_text, for Claude to rewrite; to remove
+before any public use). Pages without a venue in Paris (products, trips) are rejected.
 """
 
 import html
@@ -33,6 +34,9 @@ _RSS_ID = re.compile(r"bon_plan_paris_detaille\.php\?id=(\d+)")
 _META = re.compile(r'<meta property="og:(title|image)" content="([^"]*)"')
 _INFO = re.compile(r'<li>\s*<div class="icon">\s*<img[^>]*alt="([^"]*)">\s*</div>(.*?)</li>', re.DOTALL)
 _ITEMPROP = re.compile(r'<span itemprop="(name|address)">(.*?)</span>', re.DOTALL)
+# The article, right after the date block.
+_BODY = re.compile(r'itemprop="startDate".*?<div class="content">(.*?)</div>', re.DOTALL)
+_BLOCK_BREAK = re.compile(r"<(?:/?p\b|/?h\d|br)[^>]*>", re.IGNORECASE)
 _HREF = re.compile(r'href="(https?://[^"]+)"')
 _LABEL = re.compile(r"^.*?\s:\s")
 _TAG = re.compile(r"<[^>]+>")
@@ -53,12 +57,16 @@ def parse_page(page_id: int, url: str, page: str) -> dict[str, Any]:
     for alt, content in _INFO.findall(page):
         infos.setdefault(html.unescape(alt), content)
     place = infos.get("Le lieu", "")
+    body = _BODY.search(page)
+    # "<strong>chocolat</strong>." → "chocolat."
+    paragraphs = [re.sub(r" ([.,])", r"\1", _text(part)) for part in _BLOCK_BREAK.split(body.group(1))] if body else []
     props = {key: _text(value) for key, value in _ITEMPROP.findall(place)}
     return {
         "id": page_id,
         "url": url,
         "title": meta.get("title", ""),
         "image_url": meta.get("image"),
+        "lead_text": "\n".join(filter(None, paragraphs)) or None,
         "dates": _value(infos.get("La date")),
         "price": _value(infos.get("Le tarif")),
         "booking": _value(infos.get("Les informations")),
