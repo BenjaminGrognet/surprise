@@ -4,10 +4,13 @@ import json
 import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from surprise.models import Activity, RawRecord
 
 DEFAULT_PATH = Path("data/surprise.db")
+# "proposed" is the absence of a moderation row: every new activity waits for review.
+STATUSES = ("proposed", "approved", "rejected")
 
 SCHEMA = """
 create table if not exists raw_records (
@@ -26,6 +29,15 @@ create table if not exists normalized (
   activity text,
   rejection text,
   normalized_at text not null default (datetime('now')),
+  primary key (source_id, external_id)
+);
+-- Separate from normalized, which is replaced on every collection run.
+create table if not exists moderation (
+  source_id text not null,
+  external_id text not null,
+  status text not null check (status in ('approved', 'rejected')),
+  content_hash text not null,
+  decided_at text not null default (datetime('now')),
   primary key (source_id, external_id)
 );
 """
@@ -74,3 +86,56 @@ class LocalStore:
                     for raw, activity, rejection in results
                 ],
             )
+
+    def list_for_moderation(self) -> list[dict[str, Any]]:
+        """Kept activities with their moderation status and a little source context."""
+        rows = self._db.execute(
+            """
+            select n.source_id, n.external_id, n.activity, coalesce(m.status, 'proposed'),
+                   m.content_hash is not null and m.content_hash != n.content_hash, m.decided_at,
+                   r.url, json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.cover_url')
+            from normalized n
+            left join moderation m using (source_id, external_id)
+            left join raw_records r
+              on r.source_id = n.source_id and r.external_id = n.external_id and r.content_hash = n.content_hash
+            where n.activity is not null
+            """
+        )
+        return [
+            {
+                "source_id": source_id,
+                "external_id": external_id,
+                "activity": json.loads(activity),
+                "status": status,
+                "changed_since_decision": bool(changed),
+                "decided_at": decided_at,
+                "source_url": source_url,
+                "lead_text": lead_text,
+                "cover_url": cover_url,
+            }
+            for source_id, external_id, activity, status, changed, decided_at, source_url, lead_text, cover_url in rows
+        ]
+
+    def set_status(self, source_id: str, external_id: str, status: str) -> bool:
+        """Record a moderation decision against the current payload. False if the activity is unknown."""
+        if status not in STATUSES:
+            raise ValueError(f"statut inconnu : {status}")
+        with self._db:
+            exists = self._db.execute(
+                "select 1 from normalized where source_id = ? and external_id = ? and activity is not null",
+                (source_id, external_id),
+            ).fetchone()
+            if not exists:
+                return False
+            if status == "proposed":
+                self._db.execute(
+                    "delete from moderation where source_id = ? and external_id = ?", (source_id, external_id)
+                )
+            else:
+                self._db.execute(
+                    "insert or replace into moderation (source_id, external_id, status, content_hash)"
+                    " select source_id, external_id, ?, content_hash from normalized"
+                    " where source_id = ? and external_id = ?",
+                    (status, source_id, external_id),
+                )
+            return True

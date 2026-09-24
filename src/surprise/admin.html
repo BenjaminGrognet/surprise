@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surprise — modération</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --surface: #ffffff; --text: #1d1c1a; --muted: #6b6860; --border: #e3e0d8;
+    --accent: #7a3cff; --ok: #1f8a4c; --ok-bg: #e5f4ea; --ko: #c0392b; --ko-bg: #fbe9e7;
+    --warn: #9a6500; --warn-bg: #fdf1d8; --focus: #7a3cff33;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151413; --surface: #1f1e1c; --text: #ecebe7; --muted: #a09d94; --border: #34322e;
+      --accent: #a98bff; --ok: #5cc88a; --ok-bg: #1b3325; --ko: #ef7a6c; --ko-bg: #3a211d;
+      --warn: #e6b450; --warn-bg: #3a2f17; --focus: #a98bff33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .bar { max-width: 1040px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  h1 { font-size: 17px; margin: 0 12px 0 0; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tab { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; font-size: 14px; }
+  .tab[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .tab .n { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input[type=search], select { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+  input[type=search] { width: 220px; }
+  label.check { font-size: 14px; display: flex; gap: 4px; align-items: center; color: var(--muted); }
+  main { max-width: 1040px; margin: 0 auto; padding: 16px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface); }
+  .card { display: grid; grid-template-columns: 132px 1fr auto; gap: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+  .card.focused { outline: 3px solid var(--focus); border-color: var(--accent); }
+  .cover { width: 132px; height: 96px; border-radius: 6px; object-fit: cover; background: var(--border); }
+  .card h2 { font-size: 16px; margin: 0 0 4px; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .badge { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+  .badge.ko { background: var(--ko-bg); color: var(--ko); border-color: transparent; }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+  .lead { margin: 6px 0; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .occ { font-size: 13px; color: var(--muted); margin: 4px 0; padding: 0; list-style: none; }
+  .links { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; }
+  .links a { color: var(--accent); }
+  .actions { display: flex; flex-direction: column; gap: 6px; min-width: 120px; }
+  .actions button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  .actions .approve { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .actions .reject { color: var(--ko); border-color: var(--ko); }
+  .actions button:disabled { opacity: .4; cursor: default; }
+  .more { display: block; margin: 16px auto; font: inherit; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  .empty { text-align: center; color: var(--muted); padding: 48px 0; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  @media (max-width: 700px) {
+    .card { grid-template-columns: 1fr; }
+    .cover { width: 100%; height: 160px; }
+    .actions { flex-direction: row; }
+    input[type=search] { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Surprise · modération</h1>
+    <div class="tabs" id="tabs"></div>
+  </div>
+  <div class="bar filters">
+    <input type="search" id="q" placeholder="Titre, lieu, adresse…" aria-label="Rechercher">
+    <select id="arr" aria-label="Arrondissement"><option value="">Tous arrondissements</option></select>
+    <select id="sort" aria-label="Tri">
+      <option value="date">Tri : prochaine date</option>
+      <option value="arr">Tri : arrondissement</option>
+      <option value="title">Tri : titre</option>
+    </select>
+    <label class="check"><input type="checkbox" id="evening"> Soirée</label>
+    <label class="check"><input type="checkbox" id="free"> Gratuit</label>
+    <label class="check"><input type="checkbox" id="changed"> Modifiées depuis décision</label>
+  </div>
+</header>
+<main>
+  <p class="hint"><kbd>j</kbd>/<kbd>k</kbd> naviguer · <kbd>v</kbd> valider · <kbd>r</kbd> rejeter · <kbd>a</kbd> remettre en attente · <kbd>o</kbd> ouvrir la fiche source</p>
+  <div id="list"></div>
+  <button class="more" id="more" hidden>Afficher plus</button>
+</main>
+<div id="toast" role="status"></div>
+<script>
+const PAGE_SIZE = 50;
+const TABS = [["proposed", "À valider"], ["approved", "Validées"], ["rejected", "Rejetées"], ["all", "Toutes"]];
+const STATUS_LABEL = { proposed: "À valider", approved: "Validée", rejected: "Rejetée" };
+const TZ = { timeZone: "Europe/Paris" };
+const dayFmt = new Intl.DateTimeFormat("fr-FR", { ...TZ, weekday: "short", day: "numeric", month: "short" });
+const timeFmt = new Intl.DateTimeFormat("fr-FR", { ...TZ, hour: "2-digit", minute: "2-digit" });
+const dateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const euros = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+let items = [];
+let state = { tab: "proposed", shown: PAGE_SIZE, focus: 0 };
+let visible = [];
+
+const $ = (id) => document.getElementById(id);
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v); else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) el.append(c);
+  return el;
+}
+const key = (it) => `${it.source_id}/${it.external_id}`;
+const plainText = (html) => html ? new DOMParser().parseFromString(html, "text/html").body.textContent.trim() : "";
+const TODAY = new Date().toISOString().slice(0, 10);
+// Without a slot in the window, an ongoing event is available from today, not from its original start.
+const nextStart = (it) => it.activity.occurrences[0]?.starts_at
+  || (it.activity.starts_on && (it.activity.starts_on > TODAY ? it.activity.starts_on : TODAY)) || "9999";
+
+function toast(message) {
+  const t = $("toast"); t.textContent = message; t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+function price(offer) {
+  if (!offer) return null;
+  if (offer.is_free) return "Gratuit";
+  const min = offer.price_min != null ? Number(offer.price_min) : null;
+  const max = offer.price_max != null ? Number(offer.price_max) : null;
+  if (min != null && max != null && min !== max) return `${euros.format(min)} – ${euros.format(max)}`;
+  if (min != null) return euros.format(min);
+  return offer.label ? offer.label[0].toUpperCase() + offer.label.slice(1) : null;
+}
+
+function dates(a) {
+  if (!a.starts_on) return null;
+  const s = dateFmt.format(new Date(a.starts_on)), e = a.ends_on && dateFmt.format(new Date(a.ends_on));
+  return !e || e === s ? `le ${s}` : `du ${s} au ${e}`;
+}
+
+function occurrence(o) {
+  const start = new Date(o.starts_at);
+  const time = o.ends_at ? `${timeFmt.format(start)}–${timeFmt.format(new Date(o.ends_at))}` : timeFmt.format(start);
+  return `${dayFmt.format(start)} · ${time}`;
+}
+
+function filtered() {
+  const q = $("q").value.trim().toLowerCase(), arr = $("arr").value;
+  const out = items.filter((it) => {
+    const a = it.activity, v = a.venue || {};
+    if (state.tab !== "all" && it.status !== state.tab) return false;
+    if (arr && String(v.arrondissement) !== arr) return false;
+    if ($("evening").checked && !a.is_evening) return false;
+    if ($("free").checked && !a.offers[0]?.is_free) return false;
+    if ($("changed").checked && !it.changed_since_decision) return false;
+    if (q && ![a.title, v.name, v.address].join(" ").toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const sort = $("sort").value;
+  const cmp = {
+    date: (x, y) => nextStart(x).localeCompare(nextStart(y)),
+    arr: (x, y) => (x.activity.venue?.arrondissement ?? 99) - (y.activity.venue?.arrondissement ?? 99) || nextStart(x).localeCompare(nextStart(y)),
+    title: (x, y) => x.activity.title.localeCompare(y.activity.title, "fr"),
+  }[sort];
+  return out.sort(cmp);
+}
+
+function card(it, index) {
+  const a = it.activity, v = a.venue || {}, offer = a.offers[0];
+  const badges = [
+    h("span", { class: `badge ${{ approved: "ok", rejected: "ko" }[it.status] || ""}` }, STATUS_LABEL[it.status]),
+    it.changed_since_decision && h("span", { class: "badge warn", title: "La source a modifié la fiche depuis la décision" }, "Modifiée"),
+    a.is_evening && h("span", { class: "badge" }, "Soirée"),
+    price(offer) && h("span", { class: "badge" }, price(offer)),
+    v.arrondissement && h("span", { class: "badge" }, `${v.arrondissement}${v.arrondissement === 1 ? "er" : "e"}`),
+  ];
+  const occ = a.occurrences.slice(0, 4).map((o) => h("li", {}, occurrence(o)));
+  if (a.occurrences.length > 4) occ.push(h("li", {}, `+ ${a.occurrences.length - 4} autres créneaux`));
+  const link = (href, label) => href && h("a", { href, target: "_blank", rel: "noopener noreferrer" }, label);
+  const act = (status, label, cls) => h("button", {
+    class: cls, disabled: it.status === status,
+    onclick: (e) => { e.stopPropagation(); decide(it, status); },
+  }, label);
+  const cover = h("img", { class: "cover", alt: "", loading: "lazy", src: it.cover_url });
+  cover.addEventListener("error", () => cover.style.visibility = "hidden");
+  return h("article", {
+    class: `card${index === state.focus ? " focused" : ""}`, "data-key": key(it),
+    onclick: () => { state.focus = index; highlight(); },
+  },
+    it.cover_url ? cover : h("div", { class: "cover" }),
+    h("div", {},
+      h("h2", {}, a.title),
+      h("div", { class: "meta" }, [v.name, v.address, v.postal_code].filter(Boolean).join(" · ")),
+      h("div", { class: "badges" }, badges),
+      it.lead_text && h("p", { class: "lead" }, plainText(it.lead_text)),
+      h("div", { class: "meta" }, dates(a)),
+      occ.length ? h("ul", { class: "occ" }, occ) : h("p", { class: "occ" }, "Aucun créneau dans les 6 semaines"),
+      h("div", { class: "links" },
+        link(it.source_url, "Fiche source"), link(a.website, "Site"), link(offer?.booking_url, "Réservation")),
+    ),
+    h("div", { class: "actions" },
+      act("approved", "Valider", "approve"), act("rejected", "Rejeter", "reject"), act("proposed", "En attente", "")),
+  );
+}
+
+function renderTabs() {
+  const counts = { all: items.length };
+  for (const it of items) counts[it.status] = (counts[it.status] || 0) + 1;
+  $("tabs").replaceChildren(...TABS.map(([id, label]) => h("button", {
+    class: "tab", "aria-pressed": String(state.tab === id),
+    onclick: () => { state.tab = id; state.shown = PAGE_SIZE; state.focus = 0; render(); },
+  }, label, h("span", { class: "n" }, String(counts[id] || 0)))));
+}
+
+function render() {
+  renderTabs();
+  visible = filtered();
+  state.focus = Math.min(state.focus, Math.max(visible.length - 1, 0));
+  const page = visible.slice(0, state.shown);
+  $("list").replaceChildren(...(page.length ? page.map(card) : [h("p", { class: "empty" },
+    items.length ? "Rien à afficher avec ces filtres." : "Aucune activité — lance d'abord le collecteur avec --store local.")]));
+  $("more").hidden = visible.length <= state.shown;
+  $("more").textContent = `Afficher plus (${visible.length - state.shown} restantes)`;
+}
+
+function highlight(scroll = false) {
+  document.querySelectorAll(".card.focused").forEach((c) => c.classList.remove("focused"));
+  const el = $("list").children[state.focus];
+  if (el?.classList.contains("card")) { el.classList.add("focused"); if (scroll) el.scrollIntoView({ block: "nearest" }); }
+}
+
+async function decide(it, status) {
+  const previous = it.status;
+  it.status = status; it.changed_since_decision = false;
+  render(); highlight(true);
+  try {
+    const res = await fetch(`/api/activities/${encodeURIComponent(it.source_id)}/${encodeURIComponent(it.external_id)}/status`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    toast(`${STATUS_LABEL[status]} : ${it.activity.title}`);
+  } catch (err) {
+    it.status = previous; render();
+    toast(`Échec : ${err.message}`);
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.matches("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
+  const it = visible[state.focus];
+  const move = (d) => {
+    state.focus = Math.max(0, Math.min(state.focus + d, visible.length - 1));
+    if (state.focus >= state.shown) { state.shown += PAGE_SIZE; render(); }
+    highlight(true);
+  };
+  const actions = {
+    j: () => move(1), ArrowDown: () => move(1), k: () => move(-1), ArrowUp: () => move(-1),
+    v: () => it && decide(it, "approved"), r: () => it && decide(it, "rejected"), a: () => it && decide(it, "proposed"),
+    o: () => it?.source_url && window.open(it.source_url, "_blank", "noopener"),
+  };
+  if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
+});
+
+for (const id of ["q", "arr", "sort", "evening", "free", "changed"]) {
+  $(id).addEventListener("input", () => { state.shown = PAGE_SIZE; state.focus = 0; render(); });
+}
+$("more").addEventListener("click", () => { state.shown += PAGE_SIZE; render(); });
+
+fetch("/api/activities").then((r) => r.json()).then((data) => {
+  items = data;
+  const arrs = [...new Set(items.map((it) => it.activity.venue?.arrondissement).filter(Boolean))].sort((x, y) => x - y);
+  $("arr").append(...arrs.map((n) => h("option", { value: n }, `${n}${n === 1 ? "er" : "e"} arrondissement`)));
+  render();
+}).catch((err) => toast(`Chargement impossible : ${err.message}`));
+</script>
+</body>
+</html>

@@ -16,3 +16,15 @@ Si `opendata.paris.fr` ne résout pas (DNS d'entreprise), passer par le miroir O
 ```bash
 OPENDATA_PARIS_URL=https://parisdata.opendatasoft.com uv run python -m surprise.collectors.que_faire_a_paris
 ```
+
+## Modération
+
+Interface locale pour relire les activités collectées (`--store local`) et les valider ou les rejeter :
+
+```bash
+uv run python -m surprise.admin
+```
+
+Ouvre http://127.0.0.1:8000 (`--port` pour changer, `--db` pour une autre base). Raccourcis : `j`/`k` naviguer,
+`v` valider, `r` rejeter, `a` remettre en attente, `o` ouvrir la fiche source. Les décisions sont conservées
+d'une collecte à l'autre ; une fiche modifiée par la source après décision est marquée « Modifiée ».
