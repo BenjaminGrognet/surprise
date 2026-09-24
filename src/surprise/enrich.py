@@ -4,6 +4,8 @@
   og:image (origin stored; licence to check before publication), else a Google
   Places photo when GOOGLE_PLACES_API_KEY is set. Google forbids caching photo
   names, so only the place id is stored; the admin fetches a fresh photo.
+- Booking link: when the activity has none, the official site's "Réserver"
+  link (e.g. a theatre page pointing to its ticketing).
 - Description: one or two sentences written by Claude when ANTHROPIC_API_KEY is
   set, from the facts and a licensed text: the source's own (Que Faire à Paris,
   ODbL) or the official site's excerpt. Never from a curation media's text.
@@ -20,24 +22,28 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
 from surprise.categories import CATEGORIES
+from surprise.collectors.common import BOOKING
 from surprise.local_store import LocalStore
 
 USER_AGENT = "surprise-collector/0.1"
 PLACES_URL = "https://places.googleapis.com/v1"
 # Around Notre-Dame, covering Paris intra-muros.
 PARIS_CENTER = {"latitude": 48.8566, "longitude": 2.3522}
-DEFAULT_MODEL = "claude-opus-5"
+DEFAULT_MODEL = "claude-opus-5-5"
 MAX_SOURCE_CHARS = 2000
 MAX_DESCRIPTION_CHARS = 280
 
 _META = re.compile(r"<meta\s[^>]*>", re.IGNORECASE)
 _ATTRIBUTE = re.compile(r"([\w:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
 _TAG = re.compile(r"<[^>]+>")
+_ANCHOR = re.compile(r"<a\s[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL)
+# Links that look like booking but lead elsewhere.
+_NOT_BOOKING = re.compile(r"cadeau|gift|newsletter|groupe|en-nombre|professionnel|entreprise|privatis|mentions|cgv|conditions", re.IGNORECASE)
 
 SYSTEM_PROMPT = """Tu rédiges les fiches d'un site qui propose des sorties originales en couple à Paris.
 Pour chaque activité, écris une description courte en français : une ou deux phrases, 280 caractères maximum.
@@ -51,6 +57,7 @@ Pour chaque activité, écris une description courte en français : une ou deux 
 class SitePreview:
     image_url: str | None = None
     description: str | None = None
+    booking_url: str | None = None
 
 
 def site_preview(client: httpx.Client, url: str) -> SitePreview:
@@ -72,6 +79,21 @@ def site_preview(client: httpx.Client, url: str) -> SitePreview:
     return SitePreview(
         image_url=urljoin(str(response.url), image) if image else None,
         description=description or None,
+        booking_url=booking_link(str(response.url), response.text),
+    )
+
+
+def booking_link(page_url: str, page: str) -> str | None:
+    """The page's booking link: a "Réserver" / "Billetterie" anchor first, else a link to a ticketing site."""
+    anchors = []
+    for href, text in _ANCHOR.findall(page):
+        url = urljoin(page_url, html.unescape(href).strip())
+        label = _TAG.sub("", html.unescape(text)).strip()
+        # A deep link only: a ticketing home page or a same-page anchor is not the activity's booking.
+        if url.startswith("http") and urlsplit(url).path.strip("/") and "#" not in url and not _NOT_BOOKING.search(f"{url} {label}"):
+            anchors.append((url, label))
+    return next((url for url, label in anchors if BOOKING.search(label)), None) or next(
+        (url for url, _ in anchors if BOOKING.search(urlsplit(url).netloc)), None
     )
 
 
@@ -146,8 +168,9 @@ def enrich_one(
     fields: dict[str, str | None] = {}
     preview = SitePreview()
     has_image = bool(activity.get("image"))
-    # The official site gives the image and, when the source has no licensed text, the excerpt to rewrite.
-    if activity.get("website") and (not has_image or not item.get("source_text")):
+    has_booking = any(offer.get("booking_url") for offer in activity.get("offers") or [])
+    # The official site gives the image, the booking link and, when the source has no licensed text, the excerpt to rewrite.
+    if activity.get("website") and (not has_image or not has_booking or not item.get("source_text")):
         preview = site_preview(http, activity["website"])
     if not has_image and preview.image_url:
         fields.update(image_url=preview.image_url, image_origin=activity["website"])
@@ -158,6 +181,8 @@ def enrich_one(
             fields["place_id"] = find_place(http, places_key, query)
         except httpx.HTTPError:
             pass
+    if not has_booking:
+        fields["booking_url"] = preview.booking_url
     fields["site_excerpt"] = preview.description
     source_text = item.get("source_text") or preview.description
     if describer and source_text:
@@ -183,6 +208,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, help="nombre maximum d'activités à traiter")
     parser.add_argument("--refresh", action="store_true", help="retraiter aussi les activités déjà enrichies")
     parser.add_argument("--no-descriptions", action="store_true", help="images et extraits seulement, sans appel à Claude")
+    parser.add_argument("--source", action="append", help="ne traiter que cette source (répétable)")
     parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()
 
@@ -201,7 +227,8 @@ def main() -> None:
         print("Photos Google Places désactivées (GOOGLE_PLACES_API_KEY absente)")
 
     with LocalStore() as store:
-        items = store.pending_enrichment(args.refresh, missing_description=describer is not None)[: args.limit]
+        items = store.pending_enrichment(args.refresh, missing_description=describer is not None)
+        items = [item for item in items if not args.source or item["source_id"] in args.source][: args.limit]
         print(f"{len(items)} activités à enrichir")
         counts: Counter[str] = Counter()
         headers = {"User-Agent": USER_AGENT}
@@ -217,7 +244,7 @@ def main() -> None:
                 if done % 100 == 0:
                     print(f"  {done}/{len(items)}")
     print(
-        f"images du site officiel : {counts['image_url']}, lieux Google : {counts['place_id']}, "
+        f"images du site officiel : {counts['image_url']}, liens de réservation : {counts['booking_url']}, lieux Google : {counts['place_id']}, "
         f"extraits : {counts['site_excerpt']}, descriptions : {counts['description']}"
     )
 

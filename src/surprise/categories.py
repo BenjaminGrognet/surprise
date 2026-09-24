@@ -78,7 +78,7 @@ _SECTIONS = {
 _KEYWORDS = [
     ("humour", r"stand[- ]?up|comedy|humour|humoriste|one[- ](?:wo)?man[- ]show|impro(?:visation)?\b"),
     ("cabaret", r"cabaret|music[- ]hall|burlesque|revue|crazy horse|paradis latin|moulin rouge|lido"),
-    ("jeux", r"escape[- ]game|jeux? de (?:société|piste|rôle)|quiz|blind[- ]test|karaok[ée]|murder party|bowling|billard"),
+    ("jeux", r"escape[- ]game|jeux? de (?:société|piste|rôle)|énigmes?|action game|quiz|blind[- ]test|karaok[ée]|murder party|bowling|billard"),
     ("sensations", r"lancer de hache|hache|laser[- ]?game|trampoline|escalade|karting|réalité virtuelle|\bvr\b|simulateur|parachute|flyboard"),
     ("bien_etre", r"\bspa\b|massage|hammam|bien[- ]être|sauna|méditation|sophrologie"),
     ("croisiere", r"péniche|croisière|bateau|navigation|bateaux[- ]mouches"),

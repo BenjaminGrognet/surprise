@@ -50,6 +50,7 @@ create table if not exists enrichment (
   site_excerpt text,
   description text,
   description_model text,
+  booking_url text,
   enriched_at text not null default (datetime('now')),
   primary key (source_id, external_id)
 );
@@ -61,6 +62,9 @@ class LocalStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path)
         self._db.executescript(SCHEMA)
+        # Column added after the first databases were created.
+        if "booking_url" not in {row[1] for row in self._db.execute("pragma table_info(enrichment)")}:
+            self._db.execute("alter table enrichment add column booking_url text")
 
     def __enter__(self) -> "LocalStore":
         return self
@@ -107,7 +111,7 @@ class LocalStore:
             select n.source_id, n.external_id, n.activity, coalesce(m.status, 'proposed'),
                    m.content_hash is not null and m.content_hash != n.content_hash, m.decided_at,
                    r.url, json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.cover_url'),
-                   e.image_url, e.image_origin, e.place_id, e.site_excerpt, e.description
+                   e.image_url, e.image_origin, e.place_id, e.site_excerpt, e.description, e.booking_url
             from normalized n
             left join moderation m using (source_id, external_id)
             left join enrichment e using (source_id, external_id)
@@ -133,11 +137,12 @@ class LocalStore:
                     "place_id": place_id,
                     "site_excerpt": site_excerpt,
                     "description": description,
+                    "booking_url": booking_url,
                 },
             }
             for (
                 source_id, external_id, activity, status, changed, decided_at, source_url, lead_text, cover_url,
-                image_url, image_origin, place_id, site_excerpt, description,
+                image_url, image_origin, place_id, site_excerpt, description, booking_url,
             ) in rows
         ]
 
@@ -190,10 +195,14 @@ class LocalStore:
         ]
 
     def save_enrichment(self, source_id: str, external_id: str, fields: dict[str, str | None]) -> None:
-        columns = ("image_url", "image_origin", "place_id", "site_excerpt", "description", "description_model")
+        """Upsert the given fields only: a refresh without descriptions keeps the ones already written."""
+        known = ("image_url", "image_origin", "place_id", "site_excerpt", "description", "description_model", "booking_url")
+        columns = [column for column in known if column in fields]
+        updates = ", ".join([f"{column} = excluded.{column}" for column in columns] + ["enriched_at = datetime('now')"])
         with self._db:
             self._db.execute(
-                f"insert or replace into enrichment (source_id, external_id, {', '.join(columns)})"
-                f" values (?, ?, {', '.join('?' for _ in columns)})",
-                (source_id, external_id, *(fields.get(column) for column in columns)),
+                f"insert into enrichment (source_id, external_id{''.join(f', {c}' for c in columns)})"
+                f" values (?, ?{', ?' * len(columns)})"
+                f" on conflict (source_id, external_id) do update set {updates}",
+                (source_id, external_id, *(fields[column] for column in columns)),
             )

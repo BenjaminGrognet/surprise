@@ -6,12 +6,19 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from decimal import Decimal
+from itertools import islice
 
 from pydantic import HttpUrl, TypeAdapter, ValidationError
 
 from surprise.models import Activity, RawRecord
 
 _url = TypeAdapter(HttpUrl)
+# A booking or ticketing link, by its text ("Réservez") or its domain.
+BOOKING = re.compile(
+    r"r[ée]serv|billet|ticket|booking|\bbook\b|tickeasy|fnacspectacles|eventbrite|shotgun|dice\.fm|weezevent|"
+    r"themisweb|seetickets|feverup|placeminute|billetreduc|mapado|billetweb|helloasso",
+    re.IGNORECASE,
+)
 _EUROS = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)", re.IGNORECASE)
 # "de 24 à 45 €": the lower bound carries no currency sign.
 _EURO_RANGE = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:à|-|–)\s*\d+(?:[.,]\d{1,2})?\s*(?:€|euros?)", re.IGNORECASE)
@@ -46,9 +53,10 @@ def run(description: str, collect: Callable[[], Iterable[Normalized]]) -> None:
         choices=["local", "supabase"],
         help="local : data/surprise.db (SQLite) ; supabase : payloads bruts dans raw_records",
     )
+    parser.add_argument("--limit", type=int, help="nombre maximum de fiches lues (les pages suivantes ne sont pas chargées)")
     args = parser.parse_args()
 
-    results = list(collect())
+    results = list(islice(collect(), args.limit))
     kept = [r for r in results if r.activity]
     print(f"{len(results)} fiches, {len(kept)} retenues, {sum(bool(r.activity.is_evening) for r in kept)} en soirée")
     for reason, count in Counter(r.rejection for r in results if r.rejection).most_common():

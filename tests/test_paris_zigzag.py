@@ -127,6 +127,20 @@ def test_venue_written_as_a_label():
     assert (activity.venue.name, activity.venue.postal_code) == ("Le Gratin", "75001")
 
 
+def test_image_is_the_last_article_photo_above_the_block():
+    uploads = "https://www.pariszigzag.fr/wp-content/uploads/2026/08"
+    page = (
+        f'<img class="wp-image-1" src="{uploads}/a.webp" />'
+        "<p><strong>Bar A</strong><br />1 rue Test, 75006 Paris</p>"
+        f'<img src="{uploads}/b.webp" class="size-full wp-image-2" />'
+        "<p><strong>Bar B</strong><br />2 rue Test, 75006 Paris</p>"
+        f'<img class="wp-post-image" src="{uploads}/related-150x150.webp" />'
+    )
+    a, b = (zz.normalize(p, NOW).activity for p in zz.parse_article(ARTICLE_URL, page))
+    assert (str(a.image.url), str(b.image.url)) == (f"{uploads}/a.webp", f"{uploads}/b.webp")
+    assert results()["Le Cabaret Imaginaire"].activity.image is None
+
+
 @respx.mock
 def test_collect_reads_recent_articles_in_scope():
     respx.get(zz.SITEMAP_INDEX).mock(

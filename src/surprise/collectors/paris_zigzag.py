@@ -8,8 +8,9 @@ to the official site, venue, address, dates, price and hours, e.g.
     Venue, 5 rue Example, 75009 Paris<br />
     Du 10 septembre au 31 décembre 2026
 
-The site's terms forbid reusing its content: no editorial text or image is
-stored, only these facts and the article URL as provenance. Articles that give
+The site's terms forbid reusing its content: no editorial text is stored, only
+these facts, the article URL as provenance and, for this personal prototype, the
+URL of the article photo shown just above the block (to review before any public use). Articles that give
 the information only in prose are counted and left for LLM extraction.
 """
 
@@ -27,8 +28,8 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
-from surprise.models import Activity, ActivityKind, Offer, RawRecord, Venue
+from surprise.collectors.common import BOOKING, Normalized, euro_amounts, run, safe_url
+from surprise.models import Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "paris_zigzag"
 BASE_URL = "https://www.pariszigzag.fr"
@@ -50,12 +51,11 @@ _PARAGRAPH = re.compile(r"<p(?:\s[^>]*)?>(.*?)</p>", re.DOTALL)
 _BREAK = re.compile(r"<br[^>]*>", re.IGNORECASE)
 _LINK = re.compile(r"<a\s[^>]*href=\"([^\"]+)\"", re.IGNORECASE)
 _ANCHOR = re.compile(r"<a\s[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL)
-_BOOKING = re.compile(
-    r"r[ée]serv|billet|ticket|booking|\bbook\b|tickeasy|fnacspectacles|eventbrite|shotgun|dice\.fm|weezevent|"
-    r"themisweb|seetickets|feverup|placeminute|billetreduc",
-    re.IGNORECASE,
-)
 _TAG = re.compile(r"<[^>]+>")
+# Article photos (WordPress uploads), not the 150x150 thumbnails of related articles.
+_IMG = re.compile(r"<img\s[^>]*>", re.IGNORECASE)
+_PHOTO_CLASS = re.compile(r"class=\"[^\"]*\bwp-(?:image-\d+|post-image)\b")
+_SRC = re.compile(r"\ssrc=\"(https://www\.pariszigzag\.fr/wp-content/uploads/[^\"]+)\"")
 _LABEL = re.compile(r"^([A-Za-zÀ-ÿ' ]{2,25}?)\s*:\s*(.*)$")
 _POSTAL_CODE = re.compile(r"\b(75\d{3})\b")
 _PARIS_DISTRICT = re.compile(r"\bParis\s+(\d{1,2})\s*(?:e|er|ème)\b", re.IGNORECASE)
@@ -109,9 +109,15 @@ def parse_article(url: str, page: str, modified: str | None = None) -> list[dict
     """Practical blocks of an article, as fact-only payloads (one per place or event)."""
     # Booking links anywhere in the article ("réservez ici"), matched to a block by the official site's domain.
     anchors = [(_clean_url(html.unescape(href)), _text(text)) for href, text in _ANCHOR.findall(page)]
-    booking_links = [link for link, text in anchors if link and (_BOOKING.search(link) or _BOOKING.search(text))]
+    booking_links = [link for link, text in anchors if link and (BOOKING.search(link) or BOOKING.search(text))]
+    photos = [
+        (tag.start(), src.group(1))
+        for tag in _IMG.finditer(page)
+        if _PHOTO_CLASS.search(tag.group(0)) and (src := _SRC.search(tag.group(0))) and "-150x150." not in src.group(1)
+    ]
     blocks = []
-    for paragraph in _PARAGRAPH.findall(page):
+    for match in _PARAGRAPH.finditer(page):
+        paragraph = match.group(1)
         if not _BREAK.search(paragraph):
             continue
         raw_lines = _BREAK.split(paragraph)
@@ -137,6 +143,8 @@ def parse_article(url: str, page: str, modified: str | None = None) -> list[dict
                 "links": links,
                 "booking_links": [link for link in booking_links if domain and _domain(link) == domain],
                 "lines": [_labelled(line) for line in lines[1:] if line],
+                # The last photo above the block: the one of this place in a list article.
+                "image_url": next((src for start, src in reversed(photos) if start < match.start()), None),
             }
         )
     return blocks
@@ -189,6 +197,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             starts_on=starts_on,
             ends_on=ends_on,
             website=safe_url(payload.get("website")),
+            image=Image(url=payload["image_url"], license="Paris ZigZag", source_url=raw.url) if payload.get("image_url") else None,
             is_evening=is_evening(" ".join(filter(None, [fields.get("dates"), fields.get("hours")]))),
             venue=venue,
             categories=categorize(title, venue.name, section=payload.get("section")),
@@ -213,8 +222,8 @@ def booking_link(payload: dict[str, Any]) -> str | None:
     website = payload.get("website")
     others = [link for link in payload["links"] if link != website]
     return (
-        next((link for link in others if _BOOKING.search(link)), None)
-        or (website if website and _BOOKING.search(website) else None)
+        next((link for link in others if BOOKING.search(link)), None)
+        or (website if website and BOOKING.search(website) else None)
         or next(iter(payload.get("booking_links") or []), None)
         or next(iter(others), None)
     )

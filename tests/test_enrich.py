@@ -101,12 +101,35 @@ def test_enrich_one_uses_the_official_site_then_the_describer():
 @respx.mock
 def test_enrich_one_keeps_the_source_image_and_text():
     site = respx.get(SITE).mock(return_value=httpx.Response(200, text=PAGE, headers={"content-type": "text/html"}))
-    item = {"activity": activity(image={"url": "https://cdn.paris.fr/x.jpg"}), "source_text": "Texte ODbL."}
+    item = {
+        "activity": activity(image={"url": "https://cdn.paris.fr/x.jpg"}, offers=[{"booking_url": "https://billets.example/1"}]),
+        "source_text": "Texte ODbL.",
+    }
     with httpx.Client() as client:
         fields = enrich.enrich_one(item, client, describer=lambda act, text: text.upper())
     assert not site.called
     assert "image_url" not in fields
     assert fields["description"] == "TEXTE ODBL."
+
+
+def test_booking_link_prefers_the_booking_button():
+    page = (
+        '<a href="https://billetterie-lepic.mapado.com/">Bon Cadeau</a>'
+        '<a href="/programmation/">Programmation</a>'
+        '<a href="https://billetterie-lepic.mapado.com/event/805990-larmes">Réservez votre place</a>'
+    )
+    assert enrich.booking_link("https://theatrelepic.com/p/", page) == "https://billetterie-lepic.mapado.com/event/805990-larmes"
+    assert enrich.booking_link("https://x.example/", '<a href="https://www.eventbrite.fr/e/123">Infos</a>') == "https://www.eventbrite.fr/e/123"
+    assert enrich.booking_link("https://x.example/", '<a href="#resa">Réserver</a><a href="https://shotgun.live/">Shotgun</a>') is None
+
+
+@respx.mock
+def test_enrich_one_finds_the_official_site_booking_link():
+    page = '<html><a href="https://billets.example/event/42">Réserver</a></html>'
+    respx.get(SITE).mock(return_value=httpx.Response(200, text=page, headers={"content-type": "text/html"}))
+    with httpx.Client() as client:
+        fields = enrich.enrich_one({"activity": activity(image={"url": "https://cdn.example/x.jpg"}), "source_text": None}, client)
+    assert fields["booking_url"] == "https://billets.example/event/42"
 
 
 @respx.mock
@@ -138,16 +161,16 @@ def fake_client(stop_reason="end_turn", text="« Une revue intimiste au cœur du
 
 def test_describe_sends_facts_and_source_and_cleans_the_answer():
     client, messages = fake_client()
-    text = enrich.describe(client, "claude-opus-5", activity(), "<p>Un cabaret &amp; ses revues.</p>")
+    text = enrich.describe(client, "claude-opus-5-5", activity(), "<p>Un cabaret &amp; ses revues.</p>")
     assert text == "Une revue intimiste au cœur du 5e."
     prompt = messages.kwargs["messages"][0]["content"]
     assert "Titre : Le Cabaret Imaginaire" in prompt
     assert "Type : Cabaret / music-hall" in prompt
     assert "Un cabaret & ses revues." in prompt
-    assert messages.kwargs["model"] == "claude-opus-5"
+    assert messages.kwargs["model"] == "claude-opus-5-5"
     assert messages.kwargs["fallbacks"] == "default"
 
 
 def test_describe_ignores_refusals():
     client, _ = fake_client(stop_reason="refusal")
-    assert enrich.describe(client, "claude-opus-5", activity(), "texte") is None
+    assert enrich.describe(client, "claude-opus-5-5", activity(), "texte") is None

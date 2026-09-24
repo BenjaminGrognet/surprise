@@ -238,6 +238,8 @@ function card(it, index) {
     onclick: (e) => { e.stopPropagation(); decide(it, status); },
   }, label);
   const text = description(it);
+  // The source's booking link, else the one found on the official site.
+  const booking = offer?.booking_url || it.enrichment?.booking_url;
   return h("article", {
     class: `card${index === state.focus ? " focused" : ""}`, "data-key": key(it),
     onclick: () => { state.focus = index; highlight(); },
@@ -245,15 +247,16 @@ function card(it, index) {
     figure(it),
     h("div", {},
       h("h2", {}, a.title),
-      h("div", { class: "meta" }, [v.name, v.address, v.postal_code].filter(Boolean).join(" · ")),
+      h("div", { class: "meta" }, [v.name !== a.title && v.name, v.address, v.postal_code].filter(Boolean).join(" · ")),
       h("div", { class: "badges" }, badges),
       (a.categories || []).length > 0 && h("div", { class: "badges" },
         a.categories.map((c) => h("span", { class: "badge category" }, META.categories[c] || c))),
       text && h("p", { class: "lead" }, h("span", { class: "origin" }, text.origin), " ", text.value),
       h("div", { class: "meta" }, dates(a)),
-      occ.length ? h("ul", { class: "occ" }, occ) : h("p", { class: "occ" }, "Aucun créneau dans les 6 semaines"),
+      occ.length ? h("ul", { class: "occ" }, occ)
+        : h("p", { class: "occ" }, a.kind === "permanent" ? (booking ? "Sur réservation" : "Lieu permanent") : "Aucun créneau dans les 6 semaines"),
       h("div", { class: "links" },
-        offer?.booking_url && h("a", { class: "book", href: offer.booking_url, target: "_blank", rel: "noopener noreferrer" }, "Réserver"),
+        booking && h("a", { class: "book", href: booking, target: "_blank", rel: "noopener noreferrer" }, "Réserver"),
         link(a.website, "Site officiel"), link(it.source_url, `Fiche ${it.source_name}`)),
     ),
     h("div", { class: "actions" },

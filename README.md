@@ -11,10 +11,19 @@ uv run python -m surprise.collectors.que_faire_a_paris --store local
 uv run python -m surprise.collectors.que_faire_a_paris --store supabase
 ```
 
-Paris ZigZag (média de curation, faits uniquement : nom, lieu, dates, lien officiel) :
+Paris ZigZag (média de curation : nom, lieu, dates, lien officiel et photo de l'article, pas de texte) :
 
 ```bash
 uv run python -m surprise.collectors.paris_zigzag --store local
+```
+
+Funbooker (annonces parisiennes), Paris-Friendly (bons plans, du plus récent au plus ancien) et Paris City Game
+(annuaire d'activités) : faits, prix et photo de la page. `--limit N` arrête la collecte après N fiches :
+
+```bash
+uv run python -m surprise.collectors.funbooker --store local --limit 50
+uv run python -m surprise.collectors.paris_friendly --store local --limit 50
+uv run python -m surprise.collectors.paris_city_game --store local --limit 50
 ```
 
 Si `opendata.paris.fr` ne résout pas (DNS d'entreprise), passer par le miroir Opendatasoft :
@@ -34,7 +43,7 @@ uv run python -m surprise.enrich
 - Image : photo de la source, sinon `og:image` du site officiel, sinon Google Places si `GOOGLE_PLACES_API_KEY`
   est définie (seul l'identifiant du lieu est stocké, la photo est chargée à l'affichage avec son crédit).
 - Description : rédigée par Claude si `ANTHROPIC_API_KEY` est définie (modèle : `SURPRISE_LLM_MODEL`,
-  `claude-opus-5` par défaut), à partir du texte de la source sous licence ou de l'extrait du site officiel.
+  `claude-opus-5-5` par défaut), à partir du texte de la source sous licence ou de l'extrait du site officiel.
 
 ## Modération
 
