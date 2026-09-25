@@ -13,6 +13,8 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   l'instant ; garder l'origine pour pouvoir changer de stratégie si le produit est commercialisé.
 - Textes : le texte des médias (Paris ZigZag, Paris-Friendly, Paris Secret) est gardé (`lead_text`) pour que Claude en
   rédige la description ; à retirer avant tout usage public.
+- Base : ne garder que des activités possibles pour un couple, vraiment réservables ou gratuites ;
+  les autres sont rejetées à la collecte.
 - Données manquantes d'une fiche (adresse, horaires, coordonnées) : scraping ciblé de sources publiques ;
   OpenStreetMap (Nominatim) d'abord, déjà branché dans l'enrichissement.
 - La base locale `data/surprise.db` n'est pas versionnée : elle se recrée en relançant les collecteurs.

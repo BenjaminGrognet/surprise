@@ -9,11 +9,19 @@
   choosing the date returns its hours and the ticket quantities on sale. Only
   the first step of a bundle ("Conciergerie + Bateaux-Mouches") is checked.
 
-Other sources are not checked: their activities are reported as unknown.
+For the other sources, the booking engine is found in the activity's booking
+link or in the page it leads to, then asked through its public widget API:
+- Zenchef (restaurants): the day's services and times open to 2 guests.
+- SevenRooms (restaurants): the times bookable at once for 2, not the requests.
+- 4escape (escape games, immersive games): each room's sessions with places
+  left for 2, skipping rooms that need more players.
+Bookeo is not checked: its booking pages sit behind a captcha.
 """
 
 import argparse
+import base64
 import html
+import json
 import re
 import time as clock
 from collections import Counter
@@ -32,6 +40,15 @@ DELAY_SECONDS = 1.0
 
 FUNBOOKER_API = f"{funbooker.BASE_URL}/api/user/v1"
 COME_TO_PARIS_AJAX = f"{come_to_paris.BASE_URL}/fre/ajax/booking.json.php"
+ZENCHEF_API = "https://bookings-middleware.zenchef.com/getAvailabilities"
+SEVENROOMS_API = "https://www.sevenrooms.com/api-yoa/availability/widget/range"
+
+# Booking engines found in a link or in the page it leads to, with the venue's id there.
+_ZENCHEF_ID = re.compile(r"bookings\.zenchef\.com/[^\"'\s<>]*?[?&](?:amp;)?rid=(\d+)|data-restaurant(?:-id)?=[\"'](\d+)")
+_SEVENROOMS_VENUE = re.compile(r"sevenrooms\.com/reservations/([\w-]+)")
+_4ESCAPE_SETTINGS = re.compile(r'class="forescape-[\w-]+"[^>]*data-settings="b64\.([A-Za-z0-9+/=]+)"')
+_4ESCAPE_SUBDOMAIN = re.compile(r'class="forescape"[^>]*data-subdomain="([\w-]+)"')
+_4ESCAPE_DOMAIN = re.compile(r"\b(?!www\.)[\w-]+\.4escape\.io\b")
 
 _FORMULA = re.compile(r'<div class="product_box ([^"]*)" data-product_id="(\d+)" data-name="\d+ - ([^"]*)"')
 _LAYOUT_GROUPING = re.compile(r'name="layout_grouping_id"[^>]*value="(\d+)"')
@@ -156,39 +173,158 @@ def _sells(pax_form: str, party: int) -> bool:
     return any(int(value) >= party and "disabled" not in attributes for value, attributes in _PAX_OPTION.findall(main.group(1)))
 
 
-CHECKERS = {
-    funbooker.SOURCE_ID: lambda client, activity, day, party: check_funbooker(client, activity["external_id"], day, party),
-    come_to_paris.SOURCE_ID: lambda client, activity, day, party: check_come_to_paris(client, activity["source_url"], day, party),
-}
+def check_zenchef(client: httpx.Client, restaurant_id: str, day: date, party: int = 2) -> Availability:
+    response = client.get(ZENCHEF_API, params={"restaurantId": restaurant_id, "date_begin": day.isoformat(), "date_end": day.isoformat()})
+    response.raise_for_status()
+    services, slots = [], []
+    for shift in next(iter(response.json()), {}).get("shifts") or []:
+        if shift.get("closed") or shift.get("marked_as_full"):
+            continue
+        times = [
+            slot["name"]
+            for slot in shift.get("shift_slots") or []
+            if not slot.get("closed") and not slot.get("marked_as_full") and party in (slot.get("possible_guests") or [])
+        ]
+        if times:
+            services.append(shift.get("name") or "")
+            slots += times
+    if not slots:
+        return Availability(False, detail="complet ou fermé")
+    return Availability(True, sorted(set(slots)), ", ".join(filter(None, services)))
+
+
+def check_sevenrooms(client: httpx.Client, venue: str, day: date, party: int = 2) -> Availability:
+    response = client.get(
+        SEVENROOMS_API,
+        # The whole day around 19:00, in 15 min steps.
+        params={
+            "venue": venue, "time_slot": "19:00", "party_size": party, "halo_size_interval": 100,
+            "start_date": day.isoformat(), "num_days": 1, "channel": "SEVENROOMS_WIDGET",
+        },
+    )
+    response.raise_for_status()
+    services, slots = [], []
+    for shift in (response.json().get("data") or {}).get("availability", {}).get(day.isoformat()) or []:
+        # "request": a request the restaurant confirms later, not a table.
+        times = [t["time_iso"][11:16] for t in shift.get("times") or [] if t.get("type") == "book" and t.get("time_iso")]
+        if times and not shift.get("is_closed"):
+            services.append(shift.get("name") or "")
+            slots += times
+    if not slots:
+        return Availability(False, detail="complet ou fermé")
+    return Availability(True, sorted(set(slots)), ", ".join(filter(None, services)))
+
+
+def check_4escape(client: httpx.Client, domain: str, day: date, party: int = 2) -> Availability:
+    """Rooms from the venue's settings (names, minimum players), then the day's sessions."""
+    settings = client.get(f"https://{domain}/api/public/settings")
+    settings.raise_for_status()
+    rooms = settings.json().get("rooms") or {}
+    sessions = client.post(f"https://{domain}/booking-data-json", json={"date": day.isoformat(), "viewDuration": 1})
+    sessions.raise_for_status()
+    names, slots = [], []
+    for session in sessions.json().get("results") or []:
+        room = rooms.get(session.get("roomId")) or {}
+        minimum = min((c.get("minimum_players") or 0 for c in room.get("customer_categories_allowed") or []), default=0)
+        # "booked" alone does not close a session: a taken one has no team or player left.
+        if (
+            session.get("disabled")
+            or session.get("remainingTeams") == 0
+            or (session.get("remainingPlayers") or 0) < party
+            or minimum > party
+        ):
+            continue
+        slots.append(session["start"][11:16])
+        if (name := (room.get("name") or "").strip()) and name not in names:
+            names.append(name)
+    if not slots:
+        return Availability(False, detail="complet ou fermé")
+    return Availability(True, sorted(set(slots)), ", ".join(names))
+
+
+ENGINE_CHECKERS = {"zenchef": check_zenchef, "sevenrooms": check_sevenrooms, "4escape": check_4escape}
+
+
+def find_engine(client: httpx.Client, urls: list[str]) -> tuple[str, str] | None:
+    """The booking engine behind the activity's links and its id there: in a link, else in the linked page."""
+    for url in urls:
+        if engine := _engine_in(url):
+            return engine
+    for url in urls:
+        try:
+            page = client.get(url)
+        except httpx.HTTPError:
+            continue
+        if page.is_success and (engine := _engine_in(page.text)):
+            return engine
+    return None
+
+
+def _engine_in(text: str) -> tuple[str, str] | None:
+    if match := _ZENCHEF_ID.search(text):
+        return "zenchef", match.group(1) or match.group(2)
+    if match := _SEVENROOMS_VENUE.search(text):
+        return "sevenrooms", match.group(1)
+    if match := _4ESCAPE_SETTINGS.search(text):
+        try:
+            return "4escape", json.loads(base64.b64decode(match.group(1)))["domain"]
+        except (ValueError, KeyError):
+            pass
+    if match := _4ESCAPE_SUBDOMAIN.search(text):
+        return "4escape", f"{match.group(1)}.4escape.io"
+    if match := _4ESCAPE_DOMAIN.search(text):
+        return "4escape", match.group(0)
+    return None
+
+
+def check(client: httpx.Client, activity: dict[str, Any], day: date, party: int) -> tuple[str, Availability] | None:
+    """The engine checked and its answer; None when the activity's booking goes through no supported engine."""
+    if activity["source_id"] == funbooker.SOURCE_ID:
+        return "Funbooker", check_funbooker(client, activity["external_id"], day, party)
+    if activity["source_id"] == come_to_paris.SOURCE_ID:
+        return "Come to Paris", check_come_to_paris(client, activity["source_url"], day, party)
+    urls = [offer["booking_url"] for offer in activity["activity"].get("offers") or [] if offer.get("booking_url")]
+    urls += [activity["enrichment"]["booking_url"]] if activity["enrichment"].get("booking_url") else []
+    if not (found := find_engine(client, list(dict.fromkeys(urls)))):
+        return None
+    engine, key = found
+    return engine, ENGINE_CHECKERS[engine](client, key, day, party)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("day", type=date.fromisoformat, help="date à vérifier, AAAA-MM-JJ")
     parser.add_argument("--party", type=int, default=2, help="nombre de personnes (2 par défaut)")
-    parser.add_argument("--source", action="append", choices=sorted(CHECKERS), help="ne vérifier que cette source (répétable)")
+    parser.add_argument("--source", action="append", help="ne vérifier que cette source (répétable)")
     parser.add_argument("--limit", type=int, help="nombre maximum d'activités vérifiées")
     args = parser.parse_args()
 
-    sources = args.source or sorted(CHECKERS)
     with LocalStore() as store:
         activities = [
-            a for a in store.list_for_moderation() if a["source_id"] in sources and a["status"] != "rejected"
+            a for a in store.list_for_moderation()
+            if a["status"] != "rejected" and (not args.source or a["source_id"] in args.source)
         ][: args.limit]
 
     results = Counter()
     with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
         for activity in activities:
             try:
-                result = CHECKERS[activity["source_id"]](client, activity, args.day, args.party)
+                checked = check(client, activity, args.day, args.party)
             except (httpx.HTTPError, ValueError) as error:
-                result = Availability(None, detail=f"erreur : {error}")
+                checked = "?", Availability(None, detail=f"erreur : {error}")
+            if not checked:
+                results["sans moteur"] += 1
+                continue
+            engine, result = checked
             mark = {True: "✓", False: "✗", None: "?"}[result.available]
             results[mark] += 1
             slots = ", ".join(result.slots)
-            print(f"{mark} {activity['activity']['title']} — {' · '.join(filter(None, [slots, result.detail]))}")
+            print(f"{mark} [{engine}] {activity['activity']['title']} — {' · '.join(filter(None, [slots, result.detail]))}")
             clock.sleep(DELAY_SECONDS)
-    print(f"{args.day:%d/%m/%Y}, {args.party} personnes : {results['✓']} disponibles, {results['✗']} non, {results['?']} inconnues")
+    print(
+        f"{args.day:%d/%m/%Y}, {args.party} personnes : {results['✓']} disponibles, {results['✗']} non, "
+        f"{results['?']} inconnues ; {results['sans moteur']} sans moteur de réservation pris en charge"
+    )
 
 
 if __name__ == "__main__":

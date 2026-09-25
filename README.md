@@ -63,9 +63,10 @@ se passe de Claude.
 
 ## Disponibilités
 
-Vérifie pour une date si les activités Funbooker et Come to Paris de la base locale sont réservables à 2
-(créneaux horaires et formule), sans compte : API de Funbooker, formulaire de réservation de Come to Paris.
-Les activités rejetées en modération sont ignorées.
+Vérifie pour une date si les activités de la base locale sont réservables à 2 (créneaux horaires et formule),
+sans compte : Funbooker, Come to Paris, puis Zenchef, SevenRooms et 4escape quand le lien de réservation (ou la
+page où il mène) passe par eux. Bookeo n'est pas vérifiable (captcha). Les activités rejetées en modération et
+celles sans moteur pris en charge sont ignorées.
 
 ```bash
 uv run python -m surprise.availability 2026-10-09

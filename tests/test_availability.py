@@ -139,3 +139,90 @@ def test_come_to_paris_closed_day():
     with httpx.Client() as client:
         assert availability.check_come_to_paris(client, CTP_URL, DAY).available is False
     assert booking.call_count == 1
+
+
+def test_engine_in_links_and_pages():
+    assert availability._engine_in("https://bookings.zenchef.com/results?rid=351778&pid=1001") == ("zenchef", "351778")
+    assert availability._engine_in('<a href="https://bookings.zenchef.com/results?lang=fr&amp;rid=353900">') == ("zenchef", "353900")
+    assert availability._engine_in("https://www.sevenrooms.com/reservations/sienarestaurant") == ("sevenrooms", "sienarestaurant")
+    # {"domain":"activeroom-paris.4escape.io"}
+    settings = '<div class="forescape-catalog" data-widget-id="7175" data-settings="b64.eyJkb21haW4iOiJhY3RpdmVyb29tLXBhcmlzLjRlc2NhcGUuaW8ifQ=="></div>'
+    assert availability._engine_in(settings) == ("4escape", "activeroom-paris.4escape.io")
+    assert availability._engine_in('<div class="forescape" data-subdomain="wyb-immersion" data-type="bookings">') == ("4escape", "wyb-immersion.4escape.io")
+    assert availability._engine_in('<a href="https://www.4escape.io">Propulsé par 4escape</a>') is None
+
+
+@respx.mock
+def test_find_engine_reads_the_linked_page():
+    respx.get("https://casa-loca.example/reservation/").mock(
+        return_value=httpx.Response(200, text='<iframe src="https://bookings.zenchef.com/results?rid=353900&amp;pid=1001">')
+    )
+    respx.get("https://down.example/").mock(side_effect=httpx.ConnectError("dns"))
+    with httpx.Client() as client:
+        assert availability.find_engine(client, ["https://down.example/", "https://casa-loca.example/reservation/"]) == ("zenchef", "353900")
+
+
+def zenchef_slot(name, guests=(2, 3, 4), **extra):
+    return {"name": name, "closed": False, "marked_as_full": False, "possible_guests": list(guests), **extra}
+
+
+@respx.mock
+def test_zenchef_services_open_to_two():
+    route = respx.get(availability.ZENCHEF_API).mock(return_value=httpx.Response(200, json=[{"date": "2026-10-09", "shifts": [
+        {"name": "Brunch", "closed": False, "marked_as_full": False, "shift_slots": [zenchef_slot("10:45", guests=(4, 5, 6))]},
+        {"name": "Déjeuner", "closed": False, "marked_as_full": False, "shift_slots": [
+            zenchef_slot("12:00"), zenchef_slot("12:15", marked_as_full=True), zenchef_slot("12:30"),
+        ]},
+        {"name": "Dîner", "closed": False, "marked_as_full": True, "shift_slots": [zenchef_slot("19:00")]},
+    ]}]))
+    with httpx.Client() as client:
+        result = availability.check_zenchef(client, "351778", DAY)
+    assert (result.available, result.slots, result.detail) == (True, ["12:00", "12:30"], "Déjeuner")
+    assert route.calls[0].request.url.params["restaurantId"] == "351778"
+
+
+@respx.mock
+def test_zenchef_closed_day():
+    respx.get(availability.ZENCHEF_API).mock(return_value=httpx.Response(200, json=[{"date": "2026-10-09", "isOpen": "closed", "shifts": []}]))
+    with httpx.Client() as client:
+        assert availability.check_zenchef(client, "351778", DAY).available is False
+
+
+@respx.mock
+def test_sevenrooms_bookable_times_only():
+    def time(hour, kind):
+        return {"type": kind, "time_iso": f"2026-10-09 {hour}:00"}
+
+    route = respx.get(availability.SEVENROOMS_API).mock(return_value=httpx.Response(200, json={"data": {"availability": {"2026-10-09": [
+        {"name": "DEJEUNER", "is_closed": False, "times": [time("11:30", "request"), time("12:00", "book")]},
+        {"name": "DINER", "is_closed": False, "times": [time("18:00", "book"), time("18:15", "request")]},
+    ]}}}))
+    with httpx.Client() as client:
+        result = availability.check_sevenrooms(client, "sienarestaurant", DAY)
+    assert (result.available, result.slots, result.detail) == (True, ["12:00", "18:00"], "DEJEUNER, DINER")
+    assert route.calls[0].request.url.params["party_size"] == "2"
+
+
+@respx.mock
+def test_4escape_sessions_with_places_for_two():
+    respx.get("https://activeroom-paris.4escape.io/api/public/settings").mock(return_value=httpx.Response(200, json={"rooms": {
+        "quiz": {"name": "RIVAL QUIZ", "customer_categories_allowed": [{"minimum_players": 3}]},
+        "grid": {"name": "Grid 1", "customer_categories_allowed": [{"minimum_players": 0}]},
+        "trip": {"name": "The Trip", "customer_categories_allowed": []},
+    }}))
+
+    def session(room, start, **extra):
+        return {"roomId": room, "start": f"2026-10-09 {start}:00", "booked": False, "disabled": False, "private": True,
+                "remainingPlayers": 10, **extra}
+
+    respx.post("https://activeroom-paris.4escape.io/booking-data-json").mock(return_value=httpx.Response(200, json={"results": [
+        session("quiz", "18:00"),  # 3 players minimum
+        session("grid", "18:30"),
+        session("grid", "19:00", booked=True, remainingTeams=0, remainingPlayers=0),  # taken
+        session("grid", "19:30", disabled=True),
+        session("trip", "20:15", booked=True, remainingTeams=4, remainingPlayers=7),  # places left
+        session("trip", "21:00", remainingPlayers=1),
+    ]}))
+    with httpx.Client() as client:
+        result = availability.check_4escape(client, "activeroom-paris.4escape.io", DAY)
+    assert (result.available, result.slots, result.detail) == (True, ["18:30", "20:15"], "Grid 1, The Trip")
