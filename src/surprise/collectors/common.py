@@ -8,10 +8,13 @@ from dataclasses import dataclass
 from decimal import Decimal
 from itertools import islice
 
+import httpx
 from pydantic import HttpUrl, TypeAdapter, ValidationError
 
+from surprise.booking import booking_engine, booking_urls, is_free
 from surprise.models import Activity, RawRecord
 
+USER_AGENT = "surprise-collector/0.1"
 _url = TypeAdapter(HttpUrl)
 # A booking or ticketing link, by its text ("Réservez") or its domain.
 BOOKING = re.compile(
@@ -51,6 +54,14 @@ def euro_amounts(text: str | None) -> list[Decimal]:
     return sorted({Decimal(a.replace(",", ".")) for a in found})
 
 
+def require_booking(client: httpx.Client, result: Normalized) -> Normalized:
+    """Only free activities, or ones bookable through a known ticketing or booking site, are kept."""
+    activity = result.activity
+    if not activity or is_free(activity) or booking_engine(client, booking_urls(activity)):
+        return result
+    return Normalized(result.raw, rejection="ni gratuit ni réservable en ligne")
+
+
 def run(description: str, collect: Callable[[], Iterable[Normalized]]) -> None:
     """Command line shared by the collectors: summary, then optional storage."""
     parser = argparse.ArgumentParser(description=description)
@@ -63,6 +74,8 @@ def run(description: str, collect: Callable[[], Iterable[Normalized]]) -> None:
     args = parser.parse_args()
 
     results = list(islice(collect(), args.limit))
+    with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+        results = [require_booking(client, r) for r in results]
     kept = [r for r in results if r.activity]
     print(f"{len(results)} fiches, {len(kept)} retenues, {sum(bool(r.activity.is_evening) for r in kept)} en soirée")
     for reason, count in Counter(r.rejection for r in results if r.rejection).most_common():

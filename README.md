@@ -40,6 +40,10 @@ Si `opendata.paris.fr` ne résout pas (DNS d'entreprise), passer par le miroir O
 OPENDATA_PARIS_URL=https://parisdata.opendatasoft.com uv run python -m surprise.collectors.que_faire_a_paris
 ```
 
+Seules les activités gratuites ou réservables en ligne sont gardées : lien de réservation (ou site officiel, ou sa
+page « Réserver ») menant à une billetterie ou un moteur de réservation reconnu (`surprise/booking.py`). Les autres
+sont rejetées avec le motif « ni gratuit ni réservable en ligne ».
+
 ## Enrichissement
 
 Images et descriptions courtes des activités collectées (seules les nouvelles sont traitées) :
