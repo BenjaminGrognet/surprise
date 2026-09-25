@@ -10,6 +10,7 @@ before any public use). Pages without a venue in Paris (products, trips) are rej
 import html
 import re
 import time as clock
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
 
@@ -94,13 +95,17 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
     address = payload.get("address") or ""
     if not address:
         return Normalized(raw, rejection="sans lieu")
-    # A venue named just "Paris" is a placeholder, often with another page's address (lanterns on the lac Daumesnil at the Odéon).
-    if (payload.get("venue_name") or "").strip().lower() == "paris":
-        return Normalized(raw, rejection="lieu imprécis")
     # "28 Rue de Monceau, 75008 Paris 75008 Paris"
     _, street = split_venue(re.sub(r"(\s*75\d{3}\s*Paris)+\s*$", "", address), default_name=title)
+    venue_name = payload.get("venue_name") or title
+    # A venue named just "Paris" is a placeholder, sometimes with another page's address (lanterns on the lac Daumesnil
+    # at the Odéon): kept only when the article itself names the street (Les Éditeurs, "4, carrefour de l'Odéon").
+    if venue_name.strip().lower() == "paris":
+        if not _street_in_article(street, f"{title} {payload.get('lead_text') or ''}"):
+            return Normalized(raw, rejection="lieu imprécis")
+        venue_name = title.split(" : ")[0].strip()
     try:
-        venue = Venue(name=payload.get("venue_name") or title, address=street, postal_code=postal_code(address) or "")
+        venue = Venue(name=venue_name, address=street, postal_code=postal_code(address) or "")
     except ValidationError:
         return Normalized(raw, rejection="hors Paris intra-muros")
 
@@ -162,6 +167,22 @@ def _value(fragment: str | None) -> str | None:
 
 def _text(fragment: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(_TAG.sub(" ", fragment))).replace("’", "'").strip()
+
+
+# Street types and abbreviations ("Carr de l'Odéon"), too common to identify a street.
+_STREET_TYPES = {"rue", "avenue", "boulevard", "place", "carr", "carrefour", "quai", "passage", "impasse", "allee",
+                 "cours", "square", "villa", "chemin", "route", "cite", "parvis", "port", "pont", "galerie", "bis", "ter"}
+
+
+def _street_in_article(street: str | None, text: str) -> bool:
+    """'4 Carr de l'Odéon' is in "Installé au 4, carrefour de l'Odéon…": its name words appear in the text."""
+    words = [word for word in re.findall(r"[a-z]{3,}", _fold(street or "")) if word not in _STREET_TYPES | {"des", "les"}]
+    folded = _fold(text)
+    return bool(words) and all(re.search(rf"\b{word}\b", folded) for word in words)
+
+
+def _fold(text: str) -> str:
+    return unicodedata.normalize("NFKD", text.replace("’", "'")).encode("ascii", "ignore").decode().lower()
 
 
 def main() -> None:

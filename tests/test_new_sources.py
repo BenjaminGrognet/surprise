@@ -59,6 +59,14 @@ def test_paris_friendly_page_ignores_the_booking_date():
     no_venue = payload | {"address": None, "venue_name": None}
     assert paris_friendly.normalize(no_venue, NOW).rejection == "sans lieu"
     assert paris_friendly.normalize(payload | {"venue_name": "Paris"}, NOW).rejection == "lieu imprécis"
+    editeurs = payload | {
+        "title": "Les Éditeurs : café-restaurant littéraire au cœur de l'Odéon",
+        "venue_name": "Paris",
+        "address": "4 Carr de l'Odéon 75006 Paris",
+        "lead_text": "Installé au 4, carrefour de l'Odéon, l'établissement compte environ 200 places.",
+    }
+    venue = paris_friendly.normalize(editeurs, NOW).activity.venue
+    assert (venue.name, venue.address, venue.postal_code) == ("Les Éditeurs", "4 Carr de l'Odéon", "75006")
     hydrafacial = payload | {"title": "Hydrafacial : un soin visage chez Skincare Agency"}
     assert paris_friendly.normalize(hydrafacial, NOW).rejection == "hors sujet"
 
