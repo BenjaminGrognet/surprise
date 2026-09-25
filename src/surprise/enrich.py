@@ -219,6 +219,57 @@ def osm_place(client: httpx.Client, name: str, address: str | None, postal_code:
     return None
 
 
+def osm_area(client: httpx.Client, query: str) -> dict[str, Any] | None:
+    """Where a named spot of Paris is (a métro station, a square): its postcode and coordinates."""
+    with _nominatim_lock:
+        try:
+            response = client.get(
+                NOMINATIM_URL, params={"q": f"{query}, Paris", "format": "jsonv2", "addressdetails": 1, "limit": 5, "countrycodes": "fr"}
+            )
+        except httpx.HTTPError:
+            return None
+        finally:
+            time.sleep(NOMINATIM_DELAY)
+    if response.status_code != 200:
+        return None
+    for result in response.json():
+        postcode = (result.get("address") or {}).get("postcode") or ""
+        if _PARIS_POSTCODE.fullmatch(postcode):
+            return {
+                "latitude": float(result["lat"]),
+                "longitude": float(result["lon"]),
+                "osm_postal_code": postcode,
+                "osm_url": f"https://www.openstreetmap.org/{result['osm_type']}/{result['osm_id']}",
+            }
+    return None
+
+
+def osm_address(client: httpx.Client, latitude: float, longitude: float) -> dict[str, Any] | None:
+    """The street address and postcode at these coordinates, on OpenStreetMap."""
+    with _nominatim_lock:
+        try:
+            response = client.get(
+                NOMINATIM_URL.replace("/search", "/reverse"),
+                params={"lat": latitude, "lon": longitude, "format": "jsonv2", "addressdetails": 1, "zoom": 18},
+            )
+        except httpx.HTTPError:
+            return None
+        finally:
+            time.sleep(NOMINATIM_DELAY)
+    if response.status_code != 200:
+        return None
+    result = response.json()
+    details = result.get("address") or {}
+    if not details.get("postcode"):
+        return None
+    street = " ".join(filter(None, [details.get("house_number"), details.get("road") or details.get("pedestrian")]))
+    return {
+        "osm_address": street or None,
+        "osm_postal_code": details["postcode"],
+        "osm_url": f"https://www.openstreetmap.org/{result['osm_type']}/{result['osm_id']}" if result.get("osm_type") else None,
+    }
+
+
 def describe(anthropic_client: Any, model: str, activity: dict[str, Any], source_text: str | None) -> str | None:
     """Short description written by Claude from the facts and a licensed source text."""
     import anthropic

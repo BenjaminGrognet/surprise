@@ -34,6 +34,31 @@ uv run python -m surprise.collectors.come_to_paris --store local --limit 50
 uv run python -m surprise.collectors.paris_secret --store local --limit 50
 ```
 
+Autres sources, chacune par sa voie la plus robuste (même options) :
+
+| Source | Module | Voie |
+|---|---|---|
+| concerts.paris | `concerts_paris` | API JSON ouverte (feed GEO, 30 req/min) |
+| Paris je t'aime (agenda) | `paris_jetaime` | API JSON ouverte `api.parisjetaime.com` |
+| Paris je t'aime (billetterie) | `paris_jetaime_billetterie` | sitemap + état Nuxt de la page |
+| VisitParisRegion | `visit_paris_region` | sitemap + HTML de la fiche |
+| Explore Paris | `explore_paris` | liste des visites + HTML (séances datées), lieu par le métro sur OSM |
+| Wecandoo | `wecandoo` | sitemap + JSON embarqué (`:page-props`) |
+| Fever | `fever` | page Paris + schema.org Event |
+| GetYourGuide | `getyourguide` | sitemaps d'activités + schema.org, point de rendez-vous |
+| Tiqets | `tiqets` | sitemap produits + schema.org, lieu par le nom sur OSM |
+| Civitatis | `civitatis` | sitemap + schema.org, point de rendez-vous (coordonnées) |
+| Eventbrite | `eventbrite` | pages de recherche Paris (ItemList schema.org) + page de l'événement |
+| Shotgun | `shotgun` | pages Paris et genres + schema.org MusicEvent |
+| BilletRéduc | `billetreduc` | page Paris + schema.org Event |
+| Time Out Paris | `time_out` | sitemaps (60 jours) + schema.org Review des lieux |
+| Le Bonbon | `le_bonbon` | sitemaps + blocs pratiques des articles |
+| Articles « couple » (Hati Hati, Ryo, Love'n'Room, LoveCapsule, blog Funbooker, Petit Futé) | `selections_couple` | une idée par intertitre ou lien de réservation, lieu sur OSM |
+
+Sans collecteur : Que faire à Paris (paris.fr) est déjà l'open data collecté, Weezevent n'a pas de catalogue
+public (reconnu comme billetterie), Fnac Spectacles ne répond pas aux robots, Le Petit Journal n'a pas d'édition Paris.
+Les données manquantes (code postal d'un point de rendez-vous, d'un lieu nommé) viennent d'OpenStreetMap (Nominatim).
+
 Si `opendata.paris.fr` ne résout pas (DNS d'entreprise), passer par le miroir Opendatasoft :
 
 ```bash
