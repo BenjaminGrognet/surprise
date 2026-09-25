@@ -61,6 +61,17 @@ uv run python -m surprise.enrich
 `--refresh` retraite aussi les activités déjà enrichies, `--source` limite à une source, `--no-descriptions`
 se passe de Claude.
 
+## Disponibilités
+
+Vérifie pour une date si les activités Funbooker et Come to Paris de la base locale sont réservables à 2
+(créneaux horaires et formule), sans compte : API de Funbooker, formulaire de réservation de Come to Paris.
+Les activités rejetées en modération sont ignorées.
+
+```bash
+uv run python -m surprise.availability 2026-10-09
+uv run python -m surprise.availability 2026-10-09 --source funbooker --party 4 --limit 10
+```
+
 ## Modération
 
 Interface locale pour relire les activités collectées (`--store local`) et les valider ou les rejeter :
