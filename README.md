@@ -93,6 +93,19 @@ uv run python -m surprise.enrich
 `--refresh` retraite aussi les activités déjà enrichies, `--source` limite à une source, `--no-descriptions`
 se passe de Claude.
 
+## Tags et vibes
+
+`surprise/tags.py` décrit chaque activité par des **tags** précis (mini-golf, céramique, rooftop, aux chandelles…),
+en trois facettes : activité, cadre, moment. Les tags donnent les **vibes**, les envies larges du questionnaire client
+(Bouger, Relever un défi, Rire, Créer, Savourer, Se détendre, S'émerveiller, Vibrer en musique, Faire la fête,
+Se cultiver, Prendre l'air, Frissonner, L'insolite, Romantique) : un mini-golf est « Bouger » et « Relever un défi ».
+Calculés à la lecture par des règles sur le titre et le lieu (plus les catégories), ils s'affinent sans recollecter ;
+la modération les affiche et filtre par vibe.
+
+```bash
+uv run python -m surprise.tags --untagged   # couverture par tag et vibe, activités sans vibe
+```
+
 ## Disponibilités
 
 Vérifie pour une date si les activités de la base locale sont réservables à 2 (créneaux horaires et formule),

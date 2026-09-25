@@ -60,6 +60,8 @@
   .toast-action { margin-left: 12px; font: inherit; font-weight: 600; background: none; border: 0; color: inherit; text-decoration: underline; cursor: pointer; }
   .badge.source { font-weight: 600; }
   .badge.category { background: var(--cat-bg); color: var(--accent); border-color: transparent; }
+  .badge.vibe { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  .badge.tag { color: var(--muted); }
   figure { margin: 0; width: 132px; }
   figcaption { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .origin { color: var(--muted); font-size: 12px; font-weight: 600; }
@@ -82,6 +84,7 @@
     <input type="search" id="q" placeholder="Titre, lieu, adresse…" aria-label="Rechercher">
     <select id="source" aria-label="Source"><option value="">Toutes sources</option></select>
     <select id="category" aria-label="Catégorie"><option value="">Toutes catégories</option></select>
+    <select id="vibe" aria-label="Vibe"><option value="">Toutes vibes</option></select>
     <select id="arr" aria-label="Arrondissement"><option value="">Tous arrondissements</option></select>
     <select id="sort" aria-label="Tri">
       <option value="date">Tri : prochaine date</option>
@@ -109,7 +112,7 @@ const timeFmt = new Intl.DateTimeFormat("fr-FR", { ...TZ, hour: "2-digit", minut
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const euros = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
-let META = { categories: {}, sources: {} };
+let META = { categories: {}, sources: {}, tags: {}, facets: {}, vibes: {} };
 let items = [];
 let state = { tab: "proposed", shown: PAGE_SIZE, focus: 0 };
 let visible = [];
@@ -187,13 +190,14 @@ function isEvening(it) {
 }
 
 function filtered() {
-  const q = $("q").value.trim().toLowerCase(), arr = $("arr").value, source = $("source").value, category = $("category").value;
+  const q = $("q").value.trim().toLowerCase(), arr = $("arr").value, source = $("source").value, category = $("category").value, vibe = $("vibe").value;
   const out = items.filter((it) => {
     const a = it.activity, v = a.venue || {};
     if (dismissed.has(key(it))) return false;
     if (state.tab !== "all" && it.status !== state.tab) return false;
     if (source && it.source_id !== source) return false;
     if (category === "none" ? (a.categories || []).length : category && !(a.categories || []).includes(category)) return false;
+    if (vibe === "none" ? it.vibes.length : vibe && !it.vibes.includes(vibe)) return false;
     if (arr && String(v.arrondissement) !== arr) return false;
     if ($("evening").checked && !isEvening(it)) return false;
     if ($("free").checked && !a.offers[0]?.is_free) return false;
@@ -277,6 +281,10 @@ function card(it, index) {
       h("div", { class: "badges" }, badges),
       (a.categories || []).length > 0 && h("div", { class: "badges" },
         a.categories.map((c) => h("span", { class: "badge category" }, META.categories[c] || c))),
+      it.vibes.length > 0 && h("div", { class: "badges" },
+        it.vibes.map((id) => h("span", { class: "badge vibe", title: META.vibes[id]?.question }, META.vibes[id]?.label || id))),
+      it.tags.length > 0 && h("div", { class: "badges" },
+        it.tags.map((id) => h("span", { class: "badge tag", title: META.facets[META.tags[id]?.facet] }, `#${META.tags[id]?.label || id}`))),
       text && h("p", { class: "lead" }, h("span", { class: "origin" }, text.origin), " ", text.value),
       h("div", { class: "meta" }, dates(a)),
       e.opening_hours && h("div", { class: "meta" }, `Horaires (OpenStreetMap) : ${e.opening_hours}`),
@@ -381,7 +389,7 @@ document.addEventListener("keydown", (e) => {
   if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
 });
 
-for (const id of ["q", "source", "category", "arr", "sort", "evening", "free", "changed"]) {
+for (const id of ["q", "source", "category", "vibe", "arr", "sort", "evening", "free", "changed"]) {
   $(id).addEventListener("input", resetView);
 }
 $("more").addEventListener("click", () => { state.shown += PAGE_SIZE; render(); });
@@ -394,6 +402,12 @@ Promise.all([fetch("/api/meta").then((r) => r.json()), fetch("/api/activities").
   $("category").append(
     ...Object.entries(META.categories).filter(([id]) => counts[id]).map(([id, label]) => h("option", { value: id }, `${label} (${counts[id]})`)),
     h("option", { value: "none" }, `Sans catégorie (${items.filter((it) => !(it.activity.categories || []).length).length})`),
+  );
+  const vibeCounts = {};
+  for (const it of items) for (const id of it.vibes) vibeCounts[id] = (vibeCounts[id] || 0) + 1;
+  $("vibe").append(
+    ...Object.entries(META.vibes).map(([id, v]) => h("option", { value: id }, `${v.label} (${vibeCounts[id] || 0})`)),
+    h("option", { value: "none" }, `Sans vibe (${items.filter((it) => !it.vibes.length).length})`),
   );
   const sources = new Map(items.map((it) => [it.source_id, it.source_name]));
   $("source").append(...[...sources].sort((x, y) => x[1].localeCompare(y[1], "fr")).map(([id, name]) => h("option", { value: id }, name)));

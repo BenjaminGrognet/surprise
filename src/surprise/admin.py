@@ -21,6 +21,7 @@ from surprise.categories import CATEGORIES
 from surprise.enrich import place_photo
 from surprise.local_store import DEFAULT_PATH, STATUSES, LocalStore
 from surprise.sources import SOURCES, source_name
+from surprise.tags import FACETS, TAGS, VIBES, describe
 
 PAGE = files("surprise").joinpath("admin.html")
 _PLACE_ID = re.compile(r"^[A-Za-z0-9_-]{10,300}$")
@@ -35,9 +36,13 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
             elif path == "/api/activities":
                 with LocalStore(db_path) as store:
                     items = store.list_for_moderation()
-                self._send_json(HTTPStatus.OK, [item | {"source_name": source_name(item["source_id"])} for item in items])
+                self._send_json(
+                    HTTPStatus.OK,
+                    [item | {"source_name": source_name(item["source_id"])} | describe(item["activity"]) for item in items],
+                )
             elif path == "/api/meta":
-                self._send_json(HTTPStatus.OK, {"categories": CATEGORIES, "sources": SOURCES})
+                vibes = {key: {"label": v["label"], "question": v["question"]} for key, v in VIBES.items()}
+                self._send_json(HTTPStatus.OK, {"categories": CATEGORIES, "sources": SOURCES, "tags": TAGS, "facets": FACETS, "vibes": vibes})
             elif path == "/api/place-photo":
                 self._place_photo(parse_qs(urlsplit(self.path).query).get("place_id", [""])[0])
             else:

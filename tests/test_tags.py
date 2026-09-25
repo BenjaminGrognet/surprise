@@ -1,0 +1,50 @@
+import pytest
+
+from surprise.tags import TAGS, VIBES, describe, tag
+
+
+def activity(title, venue=None, categories=()):
+    return {"title": title, "venue": {"name": venue} if venue else None, "categories": list(categories)}
+
+
+@pytest.mark.parametrize(
+    ("title", "venue", "categories", "tags", "vibes"),
+    [
+        ("Mad Golf", None, [], {"mini_golf"}, {"bouger", "defi"}),
+        ("Escape Game \"The Greenhouse\"", None, ["jeux"], {"escape_game"}, {"defi"}),
+        ("Massages en duo", None, ["bien_etre"], {"massage", "en_duo"}, {"detente", "romantique"}),
+        ("Candlelight : hommage à Adele", "Maison de l'Océan", [], {"classique", "chandelles"}, {"musique", "emerveiller", "romantique"}),
+        ("Catacombes de Paris : Billet d'entrée + Audioguide", None, ["lieu_insolite"], {"souterrain", "frisson"}, {"frisson", "insolite"}),
+        ("Atelier tournage & peinture sur céramique en duo", None, ["atelier"], {"ceramique", "peinture_dessin"}, {"creer"}),
+    ],
+)
+def test_tags_and_vibes(title, venue, categories, tags, vibes):
+    found = describe(activity(title, venue, categories))
+    assert tags <= set(found["tags"])
+    assert vibes <= set(found["vibes"])
+
+
+@pytest.mark.parametrize(
+    ("title", "venue", "absent"),
+    [
+        ("Billets pour Disneyland® Paris + Transport en RER", None, "sport"),  # "sport" inside "transport"
+        ("Tragedy Club – Murder Party Paris", None, "electro"),
+        ("Atelier Madeleine", None, "eglise"),
+        ("Bruges : Excursion autoguidée au départ de Paris", None, "art"),  # "art" inside "départ"
+        ("Hello Kitty : Beyond Cute - Paris", "Galerie Joseph", "frisson"),
+        ("Dj Krush + Guest", "La Machine du Moulin Rouge", "cabaret"),
+    ],
+)
+def test_rules_avoid_false_matches(title, venue, absent):
+    assert absent not in tag(activity(title, venue))
+
+
+def test_category_implies_tag_when_the_title_says_little():
+    assert "sur_l_eau" in tag(activity("Péniche River's King", categories=["croisiere"]))
+    assert "spa" in tag(activity("Le Sevrien", categories=["bien_etre"]))
+
+
+def test_every_tag_leads_to_a_vibe_or_describes_a_setting():
+    used = set().union(*(vibe["tags"] for vibe in VIBES.values()))
+    orphans = {key for key, info in TAGS.items() if key not in used and info["facet"] == "activite"}
+    assert orphans == set()
