@@ -122,10 +122,14 @@ class LocalStore:
             )
 
     def list_for_moderation(self) -> list[dict[str, Any]]:
-        """Kept activities with their moderation status and a little source context."""
+        """Normalized activities with their moderation status and a little source context.
+
+        Activities rejected at collection are "filtered", with their reason, until a moderator decides.
+        """
         rows = self._db.execute(
             """
-            select n.source_id, n.external_id, n.activity, coalesce(m.status, 'proposed'),
+            select n.source_id, n.external_id, n.activity,
+                   coalesce(m.status, case when n.rejection is null then 'proposed' else 'filtered' end), n.rejection,
                    m.content_hash is not null and m.content_hash != n.content_hash, m.decided_at,
                    r.url, json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.cover_url'),
                    e.image_url, e.image_origin, e.place_id, e.site_excerpt, e.description, e.booking_url,
@@ -144,6 +148,7 @@ class LocalStore:
                 "external_id": external_id,
                 "activity": json.loads(activity),
                 "status": status,
+                "rejection": rejection,
                 "changed_since_decision": bool(changed),
                 "decided_at": decided_at,
                 "source_url": source_url,
@@ -162,7 +167,7 @@ class LocalStore:
                 },
             }
             for (
-                source_id, external_id, activity, status, changed, decided_at, source_url, lead_text, cover_url,
+                source_id, external_id, activity, status, rejection, changed, decided_at, source_url, lead_text, cover_url,
                 image_url, image_origin, place_id, site_excerpt, description, booking_url,
                 opening_hours, osm_address, osm_url,
             ) in rows
@@ -202,7 +207,9 @@ class LocalStore:
             left join raw_records r
               on r.source_id = n.source_id and r.external_id = n.external_id and r.content_hash = n.content_hash
             left join enrichment e using (source_id, external_id)
-            where n.activity is not null and (? or e.source_id is null or (? and e.description is null))
+            left join moderation m using (source_id, external_id)
+            -- Activities rejected at collection only once a moderator keeps them.
+            where n.activity is not null and (n.rejection is null or m.status = 'approved') and (? or e.source_id is null or (? and e.description is null))
             """,
             (refresh, missing_description),
         )

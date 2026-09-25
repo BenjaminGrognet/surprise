@@ -302,7 +302,7 @@ def main() -> None:
     with LocalStore() as store:
         activities = [
             a for a in store.list_for_moderation()
-            if a["status"] != "rejected" and (not args.source or a["source_id"] in args.source)
+            if a["status"] not in ("rejected", "filtered") and (not args.source or a["source_id"] in args.source)
         ][: args.limit]
 
     results = Counter()

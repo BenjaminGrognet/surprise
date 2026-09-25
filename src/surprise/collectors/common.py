@@ -1,6 +1,7 @@
 """Pieces shared by the collectors: normalization result, parsing helpers, command line."""
 
 import argparse
+import json
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable
@@ -11,8 +12,8 @@ from itertools import islice
 import httpx
 from pydantic import HttpUrl, TypeAdapter, ValidationError
 
-from surprise.booking import booking_engine, booking_urls, is_free
-from surprise.models import Activity, RawRecord
+from surprise.booking import booking_engine, booking_urls, is_free, is_open, is_walk_in
+from surprise.models import Activity, Offer, RawRecord
 
 USER_AGENT = "surprise-collector/0.1"
 _url = TypeAdapter(HttpUrl)
@@ -55,11 +56,22 @@ def euro_amounts(text: str | None) -> list[Decimal]:
 
 
 def require_booking(client: httpx.Client, result: Normalized) -> Normalized:
-    """Only free activities, or ones bookable through a known ticketing or booking site, are kept."""
+    """Only free activities, or ones bookable through a known ticketing or booking site, are kept.
+
+    Bars, clubs and restaurants are kept while open, marked not bookable online when they are not.
+    Rejected activities keep their normalization, to be reviewed apart in moderation.
+    """
     activity = result.activity
-    if not activity or is_free(activity) or booking_engine(client, booking_urls(activity)):
+    if not activity or result.rejection or is_free(activity):
         return result
-    return Normalized(result.raw, rejection="ni gratuit ni réservable en ligne")
+    if booking_engine(client, booking_urls(activity)):
+        return result
+    if is_walk_in(activity):
+        if not is_open(client, activity, json.dumps(result.raw.payload, ensure_ascii=False)):
+            return Normalized(result.raw, activity, "fermé définitivement")
+        offers = [offer.model_copy(update={"online_booking": False}) for offer in activity.offers] or [Offer(online_booking=False)]
+        return Normalized(result.raw, activity.model_copy(update={"offers": offers}))
+    return Normalized(result.raw, activity, "ni gratuit ni réservable en ligne")
 
 
 def run(description: str, collect: Callable[[], Iterable[Normalized]]) -> None:
@@ -76,7 +88,7 @@ def run(description: str, collect: Callable[[], Iterable[Normalized]]) -> None:
     results = list(islice(collect(), args.limit))
     with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
         results = [require_booking(client, r) for r in results]
-    kept = [r for r in results if r.activity]
+    kept = [r for r in results if r.activity and not r.rejection]
     print(f"{len(results)} fiches, {len(kept)} retenues, {sum(bool(r.activity.is_evening) for r in kept)} en soirée")
     for reason, count in Counter(r.rejection for r in results if r.rejection).most_common():
         print(f"  rejet — {reason} : {count}")

@@ -42,7 +42,10 @@ OPENDATA_PARIS_URL=https://parisdata.opendatasoft.com uv run python -m surprise.
 
 Seules les activités gratuites ou réservables en ligne sont gardées : lien de réservation (ou site officiel, ou sa
 page « Réserver ») menant à une billetterie ou un moteur de réservation reconnu (`surprise/booking.py`). Les autres
-sont rejetées avec le motif « ni gratuit ni réservable en ligne ».
+sont rejetées avec le motif « ni gratuit ni réservable en ligne » : elles restent en base, à part dans la modération
+(onglet « Écartées à la collecte »), pour affiner les règles ou en repêcher. Exception : bars, clubs et restaurants sont gardés
+tant qu'ils sont ouverts (rejet « fermé définitivement » si la source ou le site le dit), marqués « Non réservable »
+quand ils n'ont pas de réservation en ligne.
 
 ## Enrichissement
 

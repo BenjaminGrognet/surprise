@@ -91,3 +91,20 @@ def test_enrichment_is_listed_and_survives_recollection(tmp_path):
         [item] = [i for i in store.list_for_moderation() if i["external_id"] == "4"]
     assert item["enrichment"]["image_url"] == "https://site.example/a.jpg"
     assert item["enrichment"]["description"] is None
+
+
+def test_activities_rejected_at_collection_are_listed_apart(tmp_path):
+    store, results = _store_with_fixture(tmp_path / "surprise.db")
+    kept = next(r for r in results if r.raw.external_id == "12345")
+    with store:
+        store.save_normalized([(kept.raw, kept.activity, "ni gratuit ni réservable en ligne")])
+        items = {i["external_id"]: i for i in store.list_for_moderation()}
+        pending = {i["external_id"] for i in store.pending_enrichment()}
+        # A moderator can still keep it.
+        assert store.set_status("que_faire_a_paris", "12345", "approved")
+        approved = {i["external_id"]: i["status"] for i in store.list_for_moderation()}
+        pending_after = {i["external_id"] for i in store.pending_enrichment()}
+    assert (items["12345"]["status"], items["12345"]["rejection"]) == ("filtered", "ni gratuit ni réservable en ligne")
+    assert "12345" not in pending
+    assert approved["12345"] == "approved"
+    assert "12345" in pending_after

@@ -4,6 +4,8 @@ A booking link counts when it leads to a ticketing or booking platform (Fever,
 Billetweb, Zenchef…), a venue's own ticketing ("billetterie.", "tickets."
 subdomains), or a venue page that embeds a booking widget (Bookeo, 4escape,
 Zenchef…). A link to a venue's home page or information page does not.
+
+Bars, clubs and restaurants need no booking: a couple can walk in while they are open.
 """
 
 import re
@@ -53,6 +55,14 @@ ENGINES = {
 }
 _ENGINE_PATTERNS = {name: re.compile(pattern, re.IGNORECASE) for name, pattern in ENGINES.items()}
 # A venue's own ticketing: "billetterie.opera-comique.com", "tickets.monuments-nationaux.fr".
+# Places a couple can walk into without booking.
+WALK_IN_CATEGORIES = {"bar", "nuit", "restaurant"}
+# The source or the official site says the place has closed for good.
+CLOSED = re.compile(
+    r"ferm[ée]e?s? d[ée]finitivement|d[ée]finitivement ferm[ée]|fermeture d[ée]finitive|a ferm[ée] ses portes|"
+    r"permanently closed|closed permanently",
+    re.IGNORECASE,
+)
 _TICKETING_HOST = re.compile(r"^(?:www\.)?(?:billetterie|billeterie|tickets?|booking|reservations?|resa)[.-]", re.IGNORECASE)
 
 
@@ -95,6 +105,19 @@ def _get(client: httpx.Client, url: str) -> httpx.Response | None:
 
 def is_free(activity: Activity) -> bool:
     return any(offer.is_free for offer in activity.offers)
+
+
+def is_walk_in(activity: Activity) -> bool:
+    """A bar, club or restaurant: being open is enough."""
+    return bool(WALK_IN_CATEGORIES & set(activity.categories))
+
+
+def is_open(client: httpx.Client, activity: Activity, source_text: str = "") -> bool:
+    """Neither the source nor the official site says the place has closed for good."""
+    if CLOSED.search(source_text):
+        return False
+    page = _get(client, str(activity.website)) if activity.website else None
+    return not (page and CLOSED.search(page.text))
 
 
 def booking_urls(activity: Activity) -> list[str]:

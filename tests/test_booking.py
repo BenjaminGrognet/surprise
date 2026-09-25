@@ -46,5 +46,25 @@ def test_require_booking_keeps_free_or_bookable():
         assert require_booking(client, normalized(is_free=True)).activity
         assert require_booking(client, normalized(booking_url="https://shotgun.live/fr/events/guinguette")).activity
         rejected = require_booking(client, normalized(booking_url="https://salle.example/", price_min=20))
-        assert (rejected.activity, rejected.rejection) == (None, "ni gratuit ni réservable en ligne")
+        # Kept with its reason, to be reviewed apart in moderation.
+        assert (rejected.activity.title, rejected.rejection) == ("Un lieu", "ni gratuit ni réservable en ligne")
         assert require_booking(client, normalized()).rejection == "ni gratuit ni réservable en ligne"
+
+
+@respx.mock
+def test_require_booking_keeps_open_walk_in_places():
+    respx.get("https://bar.example/").mock(return_value=httpx.Response(200, text="<p>Ouvert du mardi au samedi</p>"))
+    respx.get("https://ferme.example/").mock(return_value=httpx.Response(200, text="<p>Le bar est fermé définitivement.</p>"))
+
+    def place(website, category="bar"):
+        raw = RawRecord(source_id="paris_zigzag", external_id=website, payload={})
+        activity = Activity(title="Un bar", kind="permanent", website=website, categories=[category], offers=[{"price_min": 8}])
+        return Normalized(raw, activity=activity)
+
+    with httpx.Client() as client:
+        kept = require_booking(client, place("https://bar.example/"))
+        assert kept.activity.offers[0].online_booking is False
+        assert require_booking(client, place("https://bar.example/", "restaurant")).activity
+        assert require_booking(client, place("https://ferme.example/")).rejection == "fermé définitivement"
+        # Not a walk-in place: still needs online booking.
+        assert require_booking(client, place("https://bar.example/", "expo")).rejection == "ni gratuit ni réservable en ligne"
