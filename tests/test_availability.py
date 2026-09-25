@@ -226,3 +226,19 @@ def test_4escape_sessions_with_places_for_two():
     with httpx.Client() as client:
         result = availability.check_4escape(client, "activeroom-paris.4escape.io", DAY)
     assert (result.available, result.slots, result.detail) == (True, ["18:30", "20:15"], "Grid 1, The Trip")
+
+
+@respx.mock
+def test_wecandoo_keeps_sessions_with_two_seats_left():
+    url = "https://wecandoo.fr/atelier/paris-parfum"
+    respx.get(url).mock(return_value=httpx.Response(200, text='<div :page-props="{&quot;workshop&quot;:{&quot;id&quot;:4512,">'))
+    event = lambda start, end, taken, **extra: {"start": f"2026-10-09T{start}:00+02:00", "end": f"2026-10-09T{end}:00+02:00", "capacity": 10, "taken_seats": taken, "is_full": False, **extra}
+    events = respx.get(availability.WECANDOO_EVENTS.format(4512)).mock(return_value=httpx.Response(200, json={"data": [
+        event("10:30", "12:30", 9),
+        event("14:00", "16:00", 3, is_full=True),
+        event("19:00", "21:00", 8),
+    ]}))
+    with httpx.Client() as client:
+        result = availability.check_wecandoo(client, url, DAY)
+    assert (result.available, result.slots) == (True, ["19:00-21:00"])
+    assert events.calls[0].request.url.params["start"] == "2026-10-09T00:00:00+02:00"

@@ -1,10 +1,12 @@
 """Collector for Shotgun (club nights, concerts and festivals ticketing, tier 2: bookable offers).
 
-Events are discovered on the Paris pages (the city and its music genres, listed
-in the "cities/music-genres" sitemap) and read from their page's schema.org
+Events are discovered on the Paris page, soonest first: it is cumulative
+(`?page=N` lists the first (N+1)×14 events), so it is asked larger and larger
+until it has no next page. Each event is read from its page's schema.org
 MusicEvent: name, start and end, venue with address and coordinates, price,
-photo and description (lead_text). The site answers bots with a 429: requests
-look like a browser's, one a second.
+photo and description (lead_text). Reading stops once the events leave the
+collection window. The site answers bots with a 429: requests look like a
+browser's, one a second.
 """
 
 import re
@@ -15,35 +17,30 @@ from typing import Any, Iterator
 import httpx
 
 from surprise.collectors.common import Normalized, run, safe_url
-from surprise.collectors.facts import BROWSER_HEADERS, ld_address, ld_node, normalize_facts, sitemap, utc_now
+from surprise.collectors.facts import BROWSER_HEADERS, ld_address, ld_node, normalize_facts, utc_now
 from surprise.models import RawRecord
 
 SOURCE_ID = "shotgun"
 BASE_URL = "https://shotgun.live"
-GENRES_SITEMAP = f"{BASE_URL}/api/sitemaps/cities/music-genres/sitemap/0.xml"
+PARIS_PAGE = f"{BASE_URL}/fr/cities/paris"
+MAX_PAGE = 1600  # about 22,000 events: far beyond Paris's
 DELAY_SECONDS = 1.0
+# Events are listed by date: after this many beyond the window in a row, the rest is too.
+OUT_OF_WINDOW_STOP = 20
 
 _EVENT = re.compile(r'href="/fr/events/([\w-]+)"')
-_PARIS_PAGE = re.compile(r"^https://shotgun\.live/(?:en|fr)/cities/paris(?:/[\w-]+)?$")
 
 
-def fetch_event_slugs(client: httpx.Client, delay: float = DELAY_SECONDS) -> Iterator[str]:
-    """Events of the Paris page, then of its genre pages, each once."""
-    try:
-        genre_pages = [loc for loc, _ in sitemap(client, GENRES_SITEMAP) if _PARIS_PAGE.match(loc)]
-    except httpx.HTTPError:
-        genre_pages = []
-    pages = [f"{BASE_URL}/fr/cities/paris"] + sorted({re.sub(r"/en/", "/fr/", page) for page in genre_pages})
-    seen: set[str] = set()
-    for page in dict.fromkeys(pages):
-        response = client.get(page)
+def fetch_event_slugs(client: httpx.Client, delay: float = DELAY_SECONDS) -> list[str]:
+    """Events of the Paris page, soonest first, each once."""
+    page = 25
+    while True:
+        response = client.get(PARIS_PAGE, params={"page": page})
+        response.raise_for_status()
+        if f"page={page + 1}" not in response.text or page >= MAX_PAGE:
+            return list(dict.fromkeys(_EVENT.findall(response.text)))
+        page *= 2
         clock.sleep(delay)
-        if response.status_code != 200:
-            continue
-        for slug in _EVENT.findall(response.text):
-            if slug not in seen:
-                seen.add(slug)
-                yield slug
 
 
 def parse_event(slug: str, page: str) -> dict[str, Any]:
@@ -82,11 +79,17 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
+    beyond = 0
     for slug in fetch_event_slugs(client, delay):
         clock.sleep(delay)
         response = client.get(f"{BASE_URL}/fr/events/{slug}")
-        if response.status_code == 200:
-            yield normalize(parse_event(slug, response.text), now)
+        if response.status_code != 200:
+            continue
+        normalized = normalize(parse_event(slug, response.text), now)
+        yield normalized
+        beyond = beyond + 1 if normalized.rejection == "hors fenêtre" else 0
+        if beyond >= OUT_OF_WINDOW_STOP:
+            return
 
 
 def main() -> None:

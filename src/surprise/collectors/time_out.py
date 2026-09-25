@@ -8,7 +8,6 @@ verdict (reviewBody) is kept as lead_text. List articles have no Review and
 are skipped.
 """
 
-import re
 import time as clock
 from datetime import datetime, timedelta
 from typing import Any, Iterator

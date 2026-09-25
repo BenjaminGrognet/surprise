@@ -5,6 +5,7 @@ SQLite store. Standard library only.
 """
 
 import argparse
+import gzip
 import json
 import os
 import re
@@ -13,6 +14,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import httpx
@@ -20,6 +22,7 @@ import httpx
 from surprise.categories import CATEGORIES
 from surprise.enrich import place_photo
 from surprise.local_store import DEFAULT_PATH, STATUSES, LocalStore
+from surprise.originality import Scorer
 from surprise.sources import SOURCES, source_name
 from surprise.tags import FACETS, TAGS, VIBES, describe
 
@@ -27,19 +30,38 @@ PAGE = files("surprise").joinpath("admin.html")
 _PLACE_ID = re.compile(r"^[A-Za-z0-9_-]{10,300}$")
 
 
+def activities_json(db_path: Path) -> bytes:
+    """Every activity with its tags, vibes and originality, as JSON."""
+    with LocalStore(db_path) as store:
+        items = store.list_for_moderation()
+    scorer = Scorer(items)
+    payload = []
+    for item in items:
+        found = describe(item["activity"])
+        originality = scorer.score(item, found)
+        payload.append(
+            item | found | {
+                "source_name": source_name(item["source_id"]),
+                "originality": {"score": originality.score, "reasons": originality.reasons},
+            }
+        )
+    return json.dumps(payload, ensure_ascii=False).encode()
+
+
 def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
+    # The list takes seconds to build: kept until the database file changes.
+    cache: dict[str, Any] = {}
+
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
             if path == "/":
                 self._send(HTTPStatus.OK, PAGE.read_bytes(), "text/html; charset=utf-8")
             elif path == "/api/activities":
-                with LocalStore(db_path) as store:
-                    items = store.list_for_moderation()
-                self._send_json(
-                    HTTPStatus.OK,
-                    [item | {"source_name": source_name(item["source_id"])} | describe(item["activity"]) for item in items],
-                )
+                stamp = db_path.stat().st_mtime_ns
+                if cache.get("stamp") != stamp:
+                    cache.update(stamp=stamp, body=activities_json(db_path))
+                self._send(HTTPStatus.OK, cache["body"], "application/json; charset=utf-8")
             elif path == "/api/meta":
                 vibes = {key: {"label": v["label"], "question": v["question"]} for key, v in VIBES.items()}
                 self._send_json(HTTPStatus.OK, {"categories": CATEGORIES, "sources": SOURCES, "tags": TAGS, "facets": FACETS, "vibes": vibes})
@@ -90,6 +112,10 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
         def _send(self, code: HTTPStatus, body: bytes, content_type: str) -> None:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
+            # The activity list weighs tens of megabytes: about six times less compressed.
+            if len(body) > 100_000 and "gzip" in self.headers.get("Accept-Encoding", ""):
+                body = gzip.compress(body, compresslevel=5)
+                self.send_header("Content-Encoding", "gzip")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()

@@ -7,7 +7,7 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
 - Collecte : lancer toutes les sources (que_faire_a_paris, paris_zigzag, funbooker, paris_friendly,
   paris_city_game, come_to_paris, paris_secret, concerts_paris, paris_jetaime, paris_jetaime_billetterie,
   visit_paris_region, explore_paris, wecandoo, fever, getyourguide, tiqets, civitatis, eventbrite, shotgun,
-  billetreduc, time_out, le_bonbon, selections_couple), chacune avec `--store local --limit 50`. Jamais sans limite : on valide le
+  billetreduc, time_out, le_bonbon, selections_couple, osm_restaurants), chacune avec `--store local --limit 50`. Jamais sans limite : on valide le
   fonctionnement ensemble, source par source, sur un petit volume.
 - Enrichissement : `--no-descriptions` tant que les descriptions Claude ne sont pas demandées ;
   `--source` pour ne retraiter que les sources modifiées.

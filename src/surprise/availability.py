@@ -4,6 +4,8 @@
   and the day's slots for the chosen quantities, without an account. The
   items that seat two are tried in turn: a per-person item for 2, or a plan
   for 2 people ("Formule duo", "2 joueurs").
+- Wecandoo: the workshop's id is in its page, its public API lists the
+  day's sessions with their seats taken.
 - Come to Paris: the page lists the formulas; the booking form keeps its state
   in the session (cookie). Choosing a formula returns its bookable dates,
   choosing the date returns its hours and the ticket quantities on sale. Only
@@ -26,13 +28,13 @@ import re
 import time as clock
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from surprise.collectors import come_to_paris, funbooker
+from surprise.collectors import come_to_paris, funbooker, wecandoo
 from surprise.local_store import LocalStore
 
 USER_AGENT = "Mozilla/5.0 (compatible; surprise-availability/0.1)"
@@ -41,6 +43,7 @@ DELAY_SECONDS = 1.0
 FUNBOOKER_API = f"{funbooker.BASE_URL}/api/user/v1"
 COME_TO_PARIS_AJAX = f"{come_to_paris.BASE_URL}/fre/ajax/booking.json.php"
 ZENCHEF_API = "https://bookings-middleware.zenchef.com/getAvailabilities"
+WECANDOO_EVENTS = "https://wecandoo.fr/api/ateliers/{}/events"
 SEVENROOMS_API = "https://www.sevenrooms.com/api-yoa/availability/widget/range"
 
 # Booking engines found in a link or in the page it leads to, with the venue's id there.
@@ -50,6 +53,8 @@ _4ESCAPE_SETTINGS = re.compile(r'class="forescape-[\w-]+"[^>]*data-settings="b64
 _4ESCAPE_SUBDOMAIN = re.compile(r'class="forescape"[^>]*data-subdomain="([\w-]+)"')
 _4ESCAPE_DOMAIN = re.compile(r"\b(?!www\.)[\w-]+\.4escape\.io\b")
 
+_WECANDOO_ID = re.compile(r"&quot;workshop&quot;:\{&quot;id&quot;:(\d+)")
+_LEAST_PLAYERS = re.compile(r"\b(\d+)\s*(?:à|-)\s*\d+\s*(?:joueurs|personnes|pers\b)|à partir de (\d+)", re.IGNORECASE)
 _FORMULA = re.compile(r'<div class="product_box ([^"]*)" data-product_id="(\d+)" data-name="\d+ - ([^"]*)"')
 _LAYOUT_GROUPING = re.compile(r'name="layout_grouping_id"[^>]*value="(\d+)"')
 _HOUR = re.compile(r'<input type="radio" value="(\d{2}:\d{2}):\d{2}" name="booking_hour"([^>]*)>')
@@ -104,11 +109,38 @@ def _funbooker_capacities(items: list[dict[str, Any]], party: int) -> list[tuple
         if item.get("isOption") or item.get("isDisabled"):
             continue
         label = (item.get("label") or "").strip()
+        # "Tarif 4 à 6 joueurs", "à partir de 4 personnes": the label asks more players than its capacities say.
+        if (least := _LEAST_PLAYERS.search(label)) and int(least.group(1) or least.group(2)) > party:
+            continue
         if item.get("priceType") == "per_person" and (item.get("minCapacity") or 0) <= party <= (item.get("maxCapacity") or 0):
             candidates.append((label, {str(item["id"]): party}))
         elif item.get("priceType") == "plan" and item.get("numberOfPersons") == party:
             candidates.append((label, {str(item["id"]): 1}))
     return candidates
+
+
+def check_wecandoo(client: httpx.Client, url: str, day: date, party: int = 2) -> Availability:
+    page = client.get(url)
+    page.raise_for_status()
+    if not (workshop := _WECANDOO_ID.search(page.text)):
+        return Availability(None, detail="atelier introuvable")
+    midnight = datetime(day.year, day.month, day.day, tzinfo=_PARIS)
+    response = client.get(
+        WECANDOO_EVENTS.format(workshop.group(1)),
+        params={"start": midnight.isoformat(), "end": (midnight + timedelta(days=1)).isoformat()},
+        headers={"Accept": "application/json"},
+    )
+    response.raise_for_status()
+    slots = [
+        f"{event['start'][11:16]}-{event['end'][11:16]}" if event.get("end") else event["start"][11:16]
+        for event in response.json().get("data") or []
+        if event.get("start", "")[:10] == day.isoformat()
+        and not event.get("is_full")
+        and (event.get("capacity") or 0) - (event.get("taken_seats") or 0) >= party
+    ]
+    if not slots:
+        return Availability(False, detail="complet ou pas de séance")
+    return Availability(True, sorted(slots))
 
 
 def check_come_to_paris(client: httpx.Client, url: str, day: date, party: int = 2) -> Availability:
@@ -281,10 +313,14 @@ def check(client: httpx.Client, activity: dict[str, Any], day: date, party: int)
     """The engine checked and its answer; None when the activity's booking goes through no supported engine."""
     if activity["source_id"] == funbooker.SOURCE_ID:
         return "Funbooker", check_funbooker(client, activity["external_id"], day, party)
+    if activity["source_id"] == wecandoo.SOURCE_ID:
+        return "Wecandoo", check_wecandoo(client, activity["source_url"], day, party)
     if activity["source_id"] == come_to_paris.SOURCE_ID:
         return "Come to Paris", check_come_to_paris(client, activity["source_url"], day, party)
     urls = [offer["booking_url"] for offer in activity["activity"].get("offers") or [] if offer.get("booking_url")]
     urls += [activity["enrichment"]["booking_url"]] if activity["enrichment"].get("booking_url") else []
+    # The official site often embeds the widget (a restaurant's Zenchef button).
+    urls += [activity["activity"]["website"]] if activity["activity"].get("website") else []
     if not (found := find_engine(client, list(dict.fromkeys(urls)))):
         return None
     engine, key = found

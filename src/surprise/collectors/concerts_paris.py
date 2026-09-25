@@ -74,6 +74,14 @@ def facts(event: dict[str, Any]) -> dict[str, Any]:
         "starts_at": event.get("nextDate") if single else None,
         "starts_on": None if single else event.get("startDate"),
         "ends_on": None if single else event.get("endDate"),
+        # A run's shows, to know which evenings it plays; sold out or cancelled ones are left out.
+        "sessions": [
+            show["startDate"]
+            for show in event.get("showDates") or []
+            if show.get("startDate")
+            and show.get("eventStatus") != "EventCancelled"
+            and (show.get("offers") or {}).get("availability") != "SoldOut"
+        ],
         "price_min": offers.get("price"),
         "free": practical.get("priceType") == "gratuit",
         "price_label": practical.get("priceType"),

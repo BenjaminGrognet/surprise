@@ -27,6 +27,7 @@ SOURCES = {
     "time_out": "Time Out Paris",
     "le_bonbon": "Le Bonbon",
     "selections_couple": "Sélections couple (blogs)",
+    "osm_restaurants": "Restaurants OpenStreetMap",
     "manual": "Ajout manuel",
 }
 

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Votre profil de couple</title>
+<style>
+:root {
+  --bg: #faf7f4; --surface: #ffffff; --text: #231c1a; --muted: #6f6360; --line: #e8dfd9;
+  --accent: #b3264b; --accent-soft: #f7e4e9; --accent-text: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #171314; --surface: #221c1e; --text: #f3ecea; --muted: #b3a7a4; --line: #3a3033; --accent: #f06b8f; --accent-soft: #3b1f28; --accent-text: #1a0d11; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
+main { max-width: 620px; margin: 0 auto; padding: 24px 16px 48px; }
+.brand { font-family: Georgia, "Times New Roman", serif; font-size: 18px; color: var(--accent); margin: 0 0 20px; }
+.progress { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-bottom: 28px; }
+.progress span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s ease; }
+.step-count { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 600; font-size: clamp(26px, 6vw, 34px); line-height: 1.2; margin: 0 0 8px; }
+.hint { color: var(--muted); margin: 0 0 22px; }
+.options { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.option { display: flex; align-items: center; gap: 12px; text-align: left; padding: 16px; border-radius: 14px; border: 1.5px solid var(--line);
+  background: var(--surface); color: var(--text); font: inherit; cursor: pointer; transition: border-color .15s, transform .1s; min-height: 64px; }
+.option:hover { border-color: var(--accent); }
+.option:active { transform: scale(.98); }
+.option[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.option .emoji { font-size: 26px; line-height: 1; }
+.scale { display: flex; justify-content: space-between; gap: 8px; }
+.scale .option { flex: 1; flex-direction: column; justify-content: center; gap: 6px; padding: 14px 4px; text-align: center; min-width: 0; }
+.scale .option small { font-size: 12px; color: var(--muted); min-height: 1em; }
+.field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.field label { font-weight: 600; font-size: 14px; }
+input[type=date], input[type=text] { font: inherit; padding: 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); color: var(--text); }
+input:focus-visible, .option:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips .option { min-height: 0; padding: 10px 16px; border-radius: 999px; }
+nav { display: flex; justify-content: space-between; align-items: center; margin-top: 28px; gap: 12px; }
+button.primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 999px; padding: 14px 26px; font: inherit; font-weight: 600; cursor: pointer; }
+button.primary:disabled { opacity: .45; cursor: not-allowed; }
+button.link { background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; padding: 8px 0; }
+.persona { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; margin-top: 8px; }
+.persona .eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--accent); font-weight: 700; margin: 0; }
+.persona h2 { font-family: Georgia, "Times New Roman", serif; font-size: 32px; margin: 6px 0 8px; }
+.tag { display: inline-block; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; margin: 0 6px 6px 0; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 18px 0 0; padding: 0; list-style: none; }
+.facts li { border-top: 1px solid var(--line); padding-top: 8px; font-size: 14px; color: var(--muted); }
+.facts strong { display: block; color: var(--text); font-size: 16px; }
+.meter { height: 8px; border-radius: 999px; background: var(--line); margin-top: 6px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--accent); }
+.loading { display: flex; align-items: center; gap: 12px; color: var(--muted); margin-top: 20px; }
+.spinner { width: 20px; height: 20px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">Surprise · votre profil de couple</p>
+  <div class="progress" aria-hidden="true"><span id="bar"></span></div>
+  <section id="screen" aria-live="polite"></section>
+</main>
+<script>
+const state = { questions: [], vibes: {}, index: 0, answers: {} };
+const $ = (id) => document.getElementById(id);
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v); else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) el.append(c);
+  return el;
+}
+
+// Local dates: toISOString() would give the UTC day, the day before around midnight.
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function nextFriday() {
+  const d = new Date(); d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7 || 7));
+  return isoDay(d);
+}
+
+function answered(q) {
+  const a = state.answers[q.id];
+  if (q.kind === "multi" || q.kind === "text") return true;  // "none" is an answer
+  if (q.kind === "when") return !!(a && a.day && a.start);
+  return a != null;
+}
+
+function render() {
+  const q = state.questions[state.index];
+  $("bar").style.width = `${(state.index / state.questions.length) * 100}%`;
+  if (!q) return renderProfile();
+  const screen = $("screen");
+  screen.replaceChildren(
+    h("p", { class: "step-count" }, `Question ${state.index + 1} sur ${state.questions.length}`),
+    h("h1", { id: "q-title" }, q.question),
+    q.hint && h("p", { class: "hint" }, q.hint),
+    body(q),
+    h("nav", {},
+      state.index > 0 ? h("button", { class: "link", onclick: () => { state.index--; render(); } }, "← Retour") : h("span"),
+      q.kind !== "single" && q.kind !== "scale" && h("button", { class: "primary", disabled: !answered(q), onclick: next }, "Suivant")),
+  );
+  screen.querySelector(".option, input")?.focus({ preventScroll: true });
+}
+
+function next() { state.index++; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+
+function body(q) {
+  const current = state.answers[q.id];
+  if (q.kind === "single" || q.kind === "scale") {
+    return h("div", { class: q.kind === "scale" ? "scale" : "options", role: "group", "aria-labelledby": "q-title" },
+      q.options.map((o) => h("button", {
+        class: "option", "aria-pressed": String(current === o.value),
+        onclick: () => { state.answers[q.id] = o.value; setTimeout(next, 150); render(); },
+      }, h("span", { class: "emoji", "aria-hidden": "true" }, o.emoji), q.kind === "scale" ? h("small", {}, o.label || String(o.value)) : h("span", {}, o.label))));
+  }
+  if (q.kind === "multi") {
+    const chosen = new Set(current || []);
+    return h("div", { class: "options", role: "group", "aria-labelledby": "q-title" },
+      q.options.map((o) => h("button", {
+        class: "option", "aria-pressed": String(chosen.has(o.value)),
+        onclick: () => {
+          if (chosen.has(o.value)) chosen.delete(o.value);
+          else if (!q.max || chosen.size < q.max) chosen.add(o.value);
+          state.answers[q.id] = [...chosen]; render();
+        },
+      }, h("span", { class: "emoji", "aria-hidden": "true" }, o.emoji), h("span", {}, o.label))));
+  }
+  if (q.kind === "when") {
+    const a = state.answers[q.id] ||= { day: nextFriday(), start: "19:00" };
+    const today = isoDay(new Date());
+    return h("div", {},
+      h("div", { class: "field" }, h("label", { for: "day" }, "Le jour"),
+        h("input", { type: "date", id: "day", min: today, value: a.day, oninput: (e) => { a.day = e.target.value; } })),
+      h("div", { class: "field" }, h("span", { style: "font-weight:600;font-size:14px" }, "À partir de"),
+        h("div", { class: "chips", role: "group" }, ["18:00", "18:30", "19:00", "19:30", "20:00", "21:00"].map((t) =>
+          h("button", { class: "option", "aria-pressed": String(a.start === t), onclick: () => { a.start = t; render(); } }, t)))));
+  }
+  return h("div", { class: "field" },
+    h("input", { type: "text", id: "names", placeholder: "Léa & Sam", maxlength: 80, value: current || "", "aria-labelledby": "q-title",
+      oninput: (e) => { state.answers[q.id] = e.target.value; } }));
+}
+
+async function renderProfile() {
+  const screen = $("screen");
+  screen.replaceChildren(h("div", { class: "loading" }, h("div", { class: "spinner" }), "On dessine votre profil…"));
+  let saved;
+  try {
+    const r = await fetch("/api/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers: state.answers }) });
+    if (!r.ok) throw new Error(r.status);
+    saved = await r.json();
+  } catch (e) {
+    screen.replaceChildren(h("p", { class: "error" }, "Le profil n'a pas pu être enregistré. Réessayez."), h("button", { class: "primary", onclick: renderProfile }, "Réessayer"));
+    return;
+  }
+  history.replaceState(null, "", `#p=${saved.id}`);
+  showProfile(saved.id, saved.profile);
+}
+
+function showProfile(id, p) {
+  $("bar").style.width = "100%";
+  const when = p.day ? new Date(`${p.day}T12:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }) : "vendredi ou samedi prochain";
+  const status = h("div");
+  $("screen").replaceChildren(
+    h("div", { class: "persona" },
+      h("p", { class: "eyebrow" }, p.names ? `${p.names}, vous êtes…` : "Vous êtes…"),
+      h("h2", {}, p.persona.name),
+      h("p", {}, p.persona.text),
+      h("div", {}, p.vibes.map((v) => h("span", { class: "tag" }, state.vibes[v] || v))),
+      h("ul", { class: "facts" },
+        h("li", {}, h("strong", {}, when), `dès ${p.start}, jusqu'à ${p.end}`),
+        h("li", {}, h("strong", {}, `${p.budget >= 350 ? "sans compter" : `≈ ${p.budget} €`}`), "pour deux"),
+        h("li", {}, h("strong", {}, "Audace"), h("div", { class: "meter", role: "img", "aria-label": `${Math.round(p.audace * 100)} %` }, h("span", { style: `width:${p.audace * 100}%` }))),
+      ),
+    ),
+    h("nav", {},
+      h("button", { class: "link", onclick: () => { state.index = 0; history.replaceState(null, "", "#"); render(); } }, "Recommencer"),
+      h("button", { class: "primary", onclick: () => compose(id, status) }, "Composer nos soirées")),
+    status,
+  );
+}
+
+async function compose(id, status) {
+  status.replaceChildren(h("div", { class: "loading" }, h("div", { class: "spinner" }), "On vérifie les disponibilités et on compose vos soirées… (une minute environ)"));
+  try {
+    const r = await fetch(`/api/profiles/${id}/parcours`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    if (!r.ok) throw new Error(r.status);
+    const { url } = await r.json();
+    window.location.href = url;
+  } catch (e) {
+    status.replaceChildren(h("p", { class: "error" }, "La composition a échoué. Réessayez dans un instant."));
+  }
+}
+
+(async () => {
+  const data = await (await fetch("/api/quiz")).json();
+  state.questions = data.questions; state.vibes = data.vibes;
+  const saved = location.hash.match(/p=([\w-]+)/);
+  if (saved) {
+    const r = await fetch(`/api/profiles/${saved[1]}`);
+    if (r.ok) { const found = await r.json(); state.answers = found.answers; return showProfile(found.id, found.profile); }
+  }
+  render();
+})();
+</script>
+</body>
+</html>

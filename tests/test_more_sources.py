@@ -2,6 +2,9 @@ import html
 import json
 from datetime import datetime, timezone
 
+import httpx
+import respx
+
 from surprise.collectors import (
     billetreduc,
     concerts_paris,
@@ -9,6 +12,7 @@ from surprise.collectors import (
     paris_jetaime,
     paris_jetaime_billetterie,
     selections_couple,
+    shotgun,
     wecandoo,
 )
 from surprise.collectors.facts import address_in_text, ld_node, normalize_facts, nuxt_data
@@ -75,6 +79,28 @@ def test_concerts_paris_event():
     assert activity.is_evening and activity.occurrences[0].starts_at.hour == 18
     assert str(activity.offers[0].booking_url) == "https://www.tiqets.com/x"
     assert "concert" in activity.categories
+
+
+def test_concerts_paris_run_keeps_its_shows():
+    show = lambda start, **extra: {"startDate": start, "eventStatus": "EventScheduled", "offers": {"availability": "InStock"}, **extra}
+    event = {
+        "slug": "serie-x",
+        "title": "Comédie",
+        "startDate": "2026-10-01T18:30:00.000Z",
+        "endDate": "2026-10-20T18:30:00.000Z",
+        "venue": {"title": "Salle", "address": {"streetAddress": "3 rue de Lisbonne", "postalCode": "75008"}, "geo": {}},
+        "offers": {"price": 20},
+        "practical": {"priceType": "payant"},
+        "vertical": "theatre",
+        "showDates": [
+            show("2026-10-01T18:30:00.000Z"),
+            show("2026-10-02T18:30:00.000Z", offers={"availability": "SoldOut"}),
+            show("2026-10-03T18:30:00.000Z", eventStatus="EventCancelled"),
+            show("2026-10-09T18:30:00.000Z"),
+        ],
+    }
+    activity = concerts_paris.normalize(event, NOW).activity
+    assert [o.starts_at.day for o in activity.occurrences] == [1, 9]
 
 
 def test_paris_jetaime_event():
@@ -175,3 +201,15 @@ def test_couple_selection_article():
     assert [idea["name"] for idea in ideas] == ["Speakeasy : Le Moonshiner", "Escape Game Fantastique : 60 minutes", "Session Tir à l'Arc en duo"]
     assert ideas[0]["address"] == "5 Rue Sedaine, 75011 Paris"
     assert ideas[1]["venue_name"] == "Escape Game Fantastique"
+
+
+@respx.mock
+def test_shotgun_asks_the_cumulative_page_until_it_ends():
+    page = lambda slugs, more: "".join(f'<a href="/fr/events/{s}">' for s in slugs) + ('<a href="?page=51">' if more else "")
+    route = respx.get(shotgun.PARIS_PAGE).mock(side_effect=[
+        httpx.Response(200, text=page(["a", "b"], more=True) + '<a href="?page=26">'),
+        httpx.Response(200, text=page(["a", "b", "c", "b"], more=False)),
+    ])
+    with httpx.Client() as client:
+        assert shotgun.fetch_event_slugs(client, delay=0) == ["a", "b", "c"]
+    assert [call.request.url.params["page"] for call in route.calls] == ["25", "50"]

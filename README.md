@@ -49,11 +49,12 @@ Autres sources, chacune par sa voie la plus robuste (même options) :
 | Tiqets | `tiqets` | sitemap produits + schema.org, lieu par le nom sur OSM |
 | Civitatis | `civitatis` | sitemap + schema.org, point de rendez-vous (coordonnées) |
 | Eventbrite | `eventbrite` | pages de recherche Paris (ItemList schema.org) + page de l'événement |
-| Shotgun | `shotgun` | pages Paris et genres + schema.org MusicEvent |
+| Shotgun | `shotgun` | page Paris cumulative (`?page=N`, agrandie jusqu'à la fin) + schema.org MusicEvent, arrêt hors fenêtre |
 | BilletRéduc | `billetreduc` | page Paris + schema.org Event |
 | Time Out Paris | `time_out` | sitemaps (60 jours) + schema.org Review des lieux |
 | Le Bonbon | `le_bonbon` | sitemaps + blocs pratiques des articles |
 | Articles « couple » (Hati Hati, Ryo, Love'n'Room, LoveCapsule, blog Funbooker, Petit Futé) | `selections_couple` | une idée par intertitre ou lien de réservation, lieu sur OSM |
+| Restaurants OpenStreetMap | `osm_restaurants` | Overpass (restaurants de Paris avec site) + site du restaurant : gardé s'il passe par un moteur de réservation (Zenchef, SevenRooms, TheFork…), sur sa page ou sa page « Réserver » |
 
 Sans collecteur : Que faire à Paris (paris.fr) est déjà l'open data collecté, Weezevent n'a pas de catalogue
 public (reconnu comme billetterie), Fnac Spectacles ne répond pas aux robots, Le Petit Journal n'a pas d'édition Paris.
@@ -106,16 +107,77 @@ la modération les affiche et filtre par vibe.
 uv run python -m surprise.tags --untagged   # couverture par tag et vibe, activités sans vibe
 ```
 
+## Mots-clés et originalité
+
+`surprise/keywords.py` relève dans tous les textes d'une activité (titre, lieu, texte de la source, extrait du site,
+description) les mots qui disent son ambiance, en facettes : ambiance (intimiste, secret, rétro…), cadre (vue
+panoramique, cave voûtée, au bord de l'eau…), expérience (immersif, fait main, en duo…), moment, cuisine. Ils sont
+stockés (table `keywords`) et affichés en modération et dans les parcours.
+
+`surprise/originality.py` note chaque activité de 0 (vue partout) à 100 (une histoire à raconter), avec ses raisons :
+cadre ou expérience insolite, rareté de son genre dans la base, mots-clés (« secret », « éphémère »…), repérage par un
+média de curation ; pénalités pour les classiques touristiques, les grandes salles, les chaînes. Calculé à la lecture ;
+la modération le montre et trie dessus, les parcours le pondèrent par l'audace du couple.
+
+```bash
+uv run python -m surprise.keywords       # calcule et enregistre les mots-clés
+uv run python -m surprise.originality    # répartition, les plus originales et les plus classiques
+```
+
 ## Disponibilités
 
 Vérifie pour une date si les activités de la base locale sont réservables à 2 (créneaux horaires et formule),
-sans compte : Funbooker, Come to Paris, puis Zenchef, SevenRooms et 4escape quand le lien de réservation (ou la
-page où il mène) passe par eux. Bookeo n'est pas vérifiable (captcha). Les activités rejetées en modération et
+sans compte : Funbooker, Wecandoo, Come to Paris, puis Zenchef, SevenRooms et 4escape quand le lien de réservation
+ou le site officiel (ou la page où ils mènent) passe par eux. Bookeo n'est pas vérifiable (captcha). Les activités rejetées en modération et
 celles sans moteur pris en charge sont ignorées.
 
 ```bash
 uv run python -m surprise.availability 2026-10-09
 uv run python -m surprise.availability 2026-10-09 --source funbooker --party 4 --limit 10
+```
+
+## Parcours de soirée
+
+À partir d'une date, d'un budget approximatif pour deux, d'une plage horaire et d'envies (vibes), propose trois
+soirées différentes, chaque étape enchaînable (durée, trajet à pied ou en métro, attente courte) et gratuite ou
+réservable ce soir-là :
+
+```bash
+uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 --vibes romantique,musique,savourer
+```
+
+- Étapes retenues : séance datée ce soir-là avec billetterie (séances concerts.paris, Que Faire à Paris, Shotgun…),
+  créneau libre pour 2 vérifié en direct (Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms, 4escape ; réponses
+  gardées 6 h), lieu gratuit ouvert à cette heure, ou bar / club sans réservation (marqué comme tel, `--strict` les
+  exclut). Un dîner n'est proposé qu'avec une table confirmée ; une pièce « jusqu'en décembre » sans ses dates, jamais.
+- Choix : envies demandées, romantisme, originalité (sources de curation, lieux insolites), photo ; budget au plus
+  +20 % ; pas deux sorties du même genre ; trois parcours sans étape ni lieu communs, dans des quartiers différents.
+- Trame imposée et plusieurs soirs : `--trame apero,insolite,fete` fixe les étapes dans l'ordre (`apero`, `diner`,
+  `fete` ou une vibe), `--parcours N` le nombre de parcours, plusieurs dates les répartissent sur ces soirs (sans
+  étape commune), `--trajet-max` borne les trajets. Un bar d'apéro peut être écourté (45 min au moins) pour attraper
+  une séance ; on reste en club jusqu'à la fin de la soirée :
+
+  ```bash
+  uv run python -m surprise.parcours 2026-10-02 2026-10-03 2026-10-09 2026-10-10 --budget 150 --de 19:00 --a 04:00 \
+    --vibes insolite,fete --trame apero,insolite,fete --parcours 10 --trajet-max 30
+  ```
+- `--checks N` : vérifications en direct au plus (60 par défaut, 0 = cache seul). Titres et pitchs rédigés par Claude
+  si `ANTHROPIC_API_KEY` est définie (`--no-claude` sinon).
+- Page : `data/parcours/<date>.html`, ouverte à la fin — trois frises (photos, horaires, trajets vers Google Maps,
+  bouton « Réserver » sous chaque étape).
+
+Vibes possibles : bouger, defi, rire, creer, savourer, detente, emerveiller, musique, fete, cultiver, flaner,
+frisson, insolite, romantique.
+
+## Questionnaire client
+
+Douze questions ludiques (occasion, énergie, ce qui fait une soirée réussie, audace, assiette, musique, fin de
+soirée, ce qu'on évite, budget, date, prénoms) dessinent le profil du couple : vibes pondérées, persona
+(« Les Explorateurs », « Les Épicuriens »…), audace, refus, genres préférés, envie d'un dîner, budget et horaires.
+Profil et réponses sont stockés (table `profiles`) ; « Composer nos soirées » lance les parcours avec ce profil.
+
+```bash
+uv run python -m surprise.quiz    # http://127.0.0.1:8001
 ```
 
 ## Modération

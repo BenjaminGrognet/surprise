@@ -59,6 +59,34 @@ create table if not exists enrichment (
   enriched_at text not null default (datetime('now')),
   primary key (source_id, external_id)
 );
+-- Keywords found in the texts of each activity (surprise.keywords), recomputed at will.
+create table if not exists keywords (
+  source_id text not null,
+  external_id text not null,
+  keywords text not null,
+  computed_at text not null default (datetime('now')),
+  primary key (source_id, external_id)
+);
+-- Couples' answers to the questionnaire (surprise.quiz) and the profile drawn from them.
+create table if not exists profiles (
+  id text primary key,
+  answers text not null,
+  profile text not null,
+  created_at text not null default (datetime('now'))
+);
+-- Last answer of the booking engines for a date and a party size (surprise.availability).
+create table if not exists availability (
+  source_id text not null,
+  external_id text not null,
+  day text not null,
+  party integer not null,
+  engine text,
+  available integer,
+  slots text not null,
+  detail text not null,
+  checked_at text not null default (datetime('now')),
+  primary key (source_id, external_id, day, party)
+);
 """
 
 
@@ -133,10 +161,11 @@ class LocalStore:
                    m.content_hash is not null and m.content_hash != n.content_hash, m.decided_at,
                    r.url, json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.cover_url'),
                    e.image_url, e.image_origin, e.place_id, e.site_excerpt, e.description, e.booking_url,
-                   e.opening_hours, e.osm_address, e.osm_url
+                   e.opening_hours, e.osm_address, e.osm_url, e.latitude, e.longitude, k.keywords
             from normalized n
             left join moderation m using (source_id, external_id)
             left join enrichment e using (source_id, external_id)
+            left join keywords k using (source_id, external_id)
             left join raw_records r
               on r.source_id = n.source_id and r.external_id = n.external_id and r.content_hash = n.content_hash
             where n.activity is not null
@@ -164,12 +193,15 @@ class LocalStore:
                     "opening_hours": opening_hours,
                     "osm_address": osm_address,
                     "osm_url": osm_url,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "keywords": json.loads(keywords) if keywords is not None else None,  # None: never computed
                 },
             }
             for (
                 source_id, external_id, activity, status, rejection, changed, decided_at, source_url, lead_text, cover_url,
                 image_url, image_origin, place_id, site_excerpt, description, booking_url,
-                opening_hours, osm_address, osm_url,
+                opening_hours, osm_address, osm_url, latitude, longitude, keywords,
             ) in rows
         ]
 
@@ -223,6 +255,29 @@ class LocalStore:
             for source_id, external_id, activity, lead_text, description in rows
         ]
 
+    def save_profile(self, profile_id: str, answers: dict[str, Any], profile: dict[str, Any]) -> None:
+        with self._db:
+            self._db.execute(
+                "insert or replace into profiles (id, answers, profile) values (?, ?, ?)",
+                (profile_id, json.dumps(answers, ensure_ascii=False), json.dumps(profile, ensure_ascii=False)),
+            )
+
+    def get_profile(self, profile_id: str) -> dict[str, Any] | None:
+        row = self._db.execute("select answers, profile, created_at from profiles where id = ?", (profile_id,)).fetchone()
+        return row and {"id": profile_id, "answers": json.loads(row[0]), "profile": json.loads(row[1]), "created_at": row[2]}
+
+    def list_profiles(self) -> list[dict[str, Any]]:
+        rows = self._db.execute("select id, profile, created_at from profiles order by created_at desc")
+        return [{"id": profile_id, "profile": json.loads(profile), "created_at": created_at} for profile_id, profile, created_at in rows]
+
+    def save_keywords(self, keywords: dict[tuple[str, str], str]) -> None:
+        """Store each activity's keywords (JSON list), replacing the previous ones."""
+        with self._db:
+            self._db.executemany(
+                "insert or replace into keywords (source_id, external_id, keywords) values (?, ?, ?)",
+                [(source_id, external_id, words) for (source_id, external_id), words in keywords.items()],
+            )
+
     def save_enrichment(self, source_id: str, external_id: str, fields: dict[str, str | None]) -> None:
         """Upsert the given fields only: a refresh without descriptions keeps the ones already written."""
         columns = [column for column in _ENRICHMENT_COLUMNS if column in fields]
@@ -233,4 +288,32 @@ class LocalStore:
                 f" values (?, ?{', ?' * len(columns)})"
                 f" on conflict (source_id, external_id) do update set {updates}",
                 (source_id, external_id, *(fields[column] for column in columns)),
+            )
+
+    def cached_availability(self, day: str, party: int, max_age_hours: float) -> dict[tuple[str, str], dict[str, Any]]:
+        """Availability answers for the date checked less than `max_age_hours` ago; engine None: no supported engine."""
+        rows = self._db.execute(
+            "select source_id, external_id, engine, available, slots, detail from availability"
+            " where day = ? and party = ? and checked_at >= datetime('now', ?)",
+            (day, party, f"-{max_age_hours * 3600:.0f} seconds"),
+        )
+        return {
+            (source_id, external_id): {
+                "engine": engine,
+                "available": None if available is None else bool(available),
+                "slots": json.loads(slots),
+                "detail": detail,
+            }
+            for source_id, external_id, engine, available, slots, detail in rows
+        }
+
+    def save_availability(
+        self, source_id: str, external_id: str, day: str, party: int,
+        engine: str | None, available: bool | None, slots: list[str], detail: str,
+    ) -> None:
+        with self._db:
+            self._db.execute(
+                "insert or replace into availability (source_id, external_id, day, party, engine, available, slots, detail)"
+                " values (?, ?, ?, ?, ?, ?, ?, ?)",
+                (source_id, external_id, day, party, engine, available, json.dumps(slots), detail),
             )
