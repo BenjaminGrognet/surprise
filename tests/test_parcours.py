@@ -295,3 +295,23 @@ def test_changing_a_step_never_gives_it_back_under_another_listing():
     # Only the twin left besides the step itself: nothing to offer rather than the same show.
     others = [c for c in candidates if c.key[1] != "autre"]
     assert parcours.replace_step(route, 1, others, req, {("test", "immersif")}) is None
+
+
+def test_an_ordinary_play_comes_after_the_unusual_the_more_so_for_a_daring_couple():
+    play = item("piece", "Une comédie de boulevard", ["theatre"], occurrences=[at(20)])
+    workshop = item("atelier", "Atelier cocktails", ["atelier"], occurrences=[at(20)])
+    def gap(**extra):
+        req = request(vibes=["rire"], **extra)
+        c = {e["external_id"]: parcours.build_candidate(e, req, None) for e in (play, workshop)}
+        for candidate in c.values():
+            candidate.vibes = ["rire"]  # both answer the wish; only the kind of outing differs
+        return parcours.score(c["atelier"], req) - parcours.score(c["piece"], req)
+    assert gap(audace=1.0) > gap(audace=0.0) > 0
+    # Stand-up stays a good answer when they asked to laugh.
+    club = item("club", "Comedy club", ["humour"], occurrences=[at(20)])
+    req = request(vibes=["rire"], audace=1.0)
+    candidate = parcours.build_candidate(club, req, None)
+    candidate.vibes = ["rire"]
+    ordinary = parcours.build_candidate(item("club2", "Comedy club", ["theatre"], occurrences=[at(20)]), req, None)
+    ordinary.vibes = ["rire"]
+    assert parcours.score(candidate, req) > parcours.score(ordinary, req)

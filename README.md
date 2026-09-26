@@ -149,11 +149,15 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
 ```
 
 - Étapes retenues : séance datée ce soir-là avec billetterie (séances concerts.paris, Que Faire à Paris, Shotgun…),
-  créneau libre pour 2 vérifié en direct (Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms, 4escape ; réponses
-  gardées 6 h), lieu gratuit ouvert à cette heure, ou bar / club sans réservation (marqué comme tel, `--strict` les
+  créneau libre pour 2 vérifié (Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms, 4escape ; réponses
+  gardées 30 h), lieu gratuit ouvert à cette heure, ou bar / club sans réservation (marqué comme tel, `--strict` les
   exclut). Un dîner n'est proposé qu'avec une table confirmée ; une pièce « jusqu'en décembre » sans ses dates, jamais.
-- Choix : envies demandées, romantisme, originalité (sources de curation, lieux insolites), photo ; budget au plus
-  +20 % ; pas deux sorties du même genre ; trois parcours sans étape ni lieu communs, dans des quartiers différents.
+- Créneaux vérifiés d'avance : `uv run python -m surprise.prefetch --jours 14`, chaque nuit après la collecte,
+  demande aux moteurs toutes les activités sans séances datées (ateliers, spas, escape games, tables) pour les 14
+  prochains soirs ; une soirée composée ne vérifie plus en direct que ce qui manque.
+- Choix : envies demandées, romantisme, originalité (sources de curation, lieux insolites), photo ; une pièce ou un
+  stand-up ordinaire (originalité < 45) passe après l'insolite, d'autant plus que le couple est audacieux (sauf le
+  stand-up quand il veut rire) ; budget au plus +20 % ; pas deux sorties du même genre ; trois parcours sans étape ni lieu communs, dans des quartiers différents.
 - Trame imposée et plusieurs soirs : `--trame apero,insolite,fete` fixe les étapes dans l'ordre (`apero`, `diner`,
   `fete` ou une vibe), `--parcours N` le nombre de parcours, plusieurs dates les répartissent sur ces soirs (sans
   étape commune), `--trajet-max` borne les trajets. Un bar d'apéro peut être écourté (45 min au moins) pour attraper

@@ -56,7 +56,7 @@ from surprise.tags import TAGS, VIBES, describe
 
 PARIS = ZoneInfo("Europe/Paris")
 OUTPUT_DIR = Path("data/parcours")
-CACHE_HOURS = 6
+CACHE_HOURS = 30  # engine answers kept a day and a bit: surprise.prefetch asks them all each night
 CHECK_WORKERS = 8  # booking engines asked at once
 WALK_KM = 1.3  # about 20 minutes on foot
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -86,6 +86,10 @@ _USUAL_HOURS = {"verre": (time(18), time(1, 30)), "club": (time(23), time(5))}
 _ROMANTIC_TAGS = {"chandelles", "vue", "sur_l_eau", "en_duo", "cache", "chic", "jazz", "classique", "eglise", "dans_le_noir", "gastronomique", "massage"}
 _ROMANTIC_WORDS = {"romantique", "intimiste", "cosy", "aux chandelles", "vue panoramique", "coucher de soleil", "en duo"}
 _DULL = {"salon", "conference"}
+# Plays and stand-up fill every evening (hundreds a night): an ordinary one comes after the unusual, the more so as
+# the couple dares; stand-up keeps its place when they asked to laugh.
+_PLENTIFUL = {"theatre", "humour"}
+_PLENTIFUL_BELOW = 45  # originality from which a play or a comedy club stands out
 _CHECKED_SOURCES = {funbooker.SOURCE_ID, come_to_paris.SOURCE_ID, wecandoo.SOURCE_ID}
 _PLATFORMS = _CHECKED_SOURCES | {"getyourguide", "tiqets", "civitatis", "explore_paris", "fever", "paris_jetaime_billetterie", "eventbrite", "shotgun", "billetreduc"}
 # Links that point straight at a restaurant or game booking engine checked by surprise.availability.
@@ -481,8 +485,11 @@ def score(candidate: Candidate, request: Request) -> float:
         value += 1
     # Originality counts more for a daring couple (surprise.originality: offbeat, rare, curated, not a classic).
     value += (candidate.originality - 35) / 25 * (0.5 + request.audace)
-    if _DULL & set(activity.get("categories") or []):
+    categories = set(activity.get("categories") or [])
+    if _DULL & categories:
         value -= 1.5
+    if _PLENTIFUL & categories and candidate.originality < _PLENTIFUL_BELOW and not ("rire" in matched and "humour" in categories):
+        value -= 0.8 + 1.2 * request.audace
     if item["enrichment"].get("image_url") or activity.get("image"):
         value += 0.6
     else:
