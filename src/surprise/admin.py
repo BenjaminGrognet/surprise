@@ -15,10 +15,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import httpx
 
+from surprise import images
 from surprise.categories import CATEGORIES
 from surprise.enrich import place_photo
 from surprise.local_store import DEFAULT_PATH, STATUSES, LocalStore
@@ -39,6 +40,9 @@ def activities_json(db_path: Path) -> bytes:
     for item in items:
         found = describe(item["activity"])
         originality = scorer.score(item, found)
+        image = (item["activity"].get("image") or {}).get("url") or item["enrichment"].get("image_url")
+        if images.needs_copy(image):
+            item = item | {"image_copy": f"/api/image?url={quote(image, safe='')}"}
         payload.append(
             item | found | {
                 "source_name": source_name(item["source_id"]),
@@ -65,6 +69,8 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
             elif path == "/api/meta":
                 vibes = {key: {"label": v["label"], "question": v["question"]} for key, v in VIBES.items()}
                 self._send_json(HTTPStatus.OK, {"categories": CATEGORIES, "sources": SOURCES, "tags": TAGS, "facets": FACETS, "vibes": vibes})
+            elif path == "/api/image":
+                self._image_copy(parse_qs(urlsplit(self.path).query).get("url", [""])[0])
             elif path == "/api/place-photo":
                 self._place_photo(parse_qs(urlsplit(self.path).query).get("place_id", [""])[0])
             else:
@@ -89,6 +95,12 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
             if not found:
                 return self._send_json(HTTPStatus.NOT_FOUND, {"error": "activité inconnue"})
             self._send_json(HTTPStatus.OK, {"status": status})
+
+        def _image_copy(self, url: str) -> None:
+            copy = images.local_copy(url) if images.needs_copy(url) else None
+            if not copy:
+                return self._send_json(HTTPStatus.NOT_FOUND, {"error": "pas d'image"})
+            self._send(HTTPStatus.OK, copy.read_bytes(), images.MEDIA_TYPES[copy.suffix])
 
         def _place_photo(self, place_id: str) -> None:
             """Fresh Google photo of a place: Google forbids storing photo names, so it is fetched on display."""

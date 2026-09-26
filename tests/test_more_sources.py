@@ -171,9 +171,15 @@ def test_wecandoo_duo_workshop():
 def test_billetreduc_run_of_shows():
     page = """<script type="application/ld&#x2B;json">{"@type":"Event","name":"Tout va bien","startDate":"2026-10-16T21:15:00+02:00",
     "endDate":"2027-05-03T21:15:00+02:00","location":{"@type":"Place","name":"Comédie Saint Martin","address":{"streetAddress":
-    "33 boulevard Saint Martin","postalCode":"75003"}},"offers":[{"price":"19"},{"price":"32"}]}</script>"""
+    "33 boulevard Saint Martin","postalCode":"75003"}},"offers":[{"price":"19"},{"price":"32"}],"description":"Une comédie."}</script>
+    <div class="event-description-text is-collapsed" id="event-description-text">
+      <div>Samy et Manon se marient dans 24&nbsp;heures.</div><div><br></div><div>Tout va bien se passer !</div>
+    </div>
+    <button type="button" class="event-description-toggle">Lire la suite</button>"""
     url = "https://www.billetreduc.com/spectacle/tout-va-bien-414255"
-    activity = billetreduc.normalize(billetreduc.parse_show(url, page), NOW).activity
+    payload = billetreduc.parse_show(url, page)
+    assert payload["lead_text"] == "Une comédie.\nSamy et Manon se marient dans 24 heures.\nTout va bien se passer !"
+    activity = billetreduc.normalize(payload, NOW).activity
     assert activity.kind == "temporary" and activity.is_evening
     assert (float(activity.offers[0].price_min), float(activity.offers[0].price_max)) == (19, 32)
 

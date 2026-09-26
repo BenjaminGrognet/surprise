@@ -28,6 +28,7 @@ import html
 import json
 import math
 import os
+import pickle
 import re
 import sys
 import time as clock
@@ -42,7 +43,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from surprise import availability
+from surprise import availability, images
 from surprise.collectors import come_to_paris, funbooker, wecandoo
 from surprise.local_store import DEFAULT_PATH, LocalStore
 from surprise.originality import Scorer
@@ -653,9 +654,13 @@ def _route_score(steps: list[Step], request: Request, partial: bool = False) -> 
     return value
 
 
-def pick(routes: list[Route], count: int = 3) -> list[Route]:
-    """The best routes that share no activity nor venue, and differ in area and in kind of outing."""
-    chosen: list[Route] = []
+def pick(routes: list[Route], count: int = 3, taken: list[Route] | None = None) -> list[Route]:
+    """The best routes that share no activity nor venue, and differ in area and in kind of outing.
+
+    `taken`: routes already on the page, which the new ones must differ from.
+    """
+    chosen: list[Route] = list(taken or [])
+    count += len(chosen)
     remaining = routes[:5000]
     while remaining and len(chosen) < count:
         best, best_value = None, -math.inf
@@ -671,7 +676,7 @@ def pick(routes: list[Route], count: int = 3) -> list[Route]:
             break
         chosen.append(best)
         remaining = [r for r in remaining if r is not best]
-    return chosen
+    return chosen[len(taken or []):]
 
 
 def _similarity(a: Route, b: Route) -> float:
@@ -688,6 +693,80 @@ def _centre(route: Route) -> tuple[float, float]:
         sum(s.candidate.lat for s in route.steps) / len(route.steps),
         sum(s.candidate.lon for s in route.steps) / len(route.steps),
     )
+
+
+def replace_step(route: Route, position: int, candidates: list[Candidate], request: Request, excluded: set) -> list[Step] | None:
+    """The route's steps with another activity at this position, the others kept; None if nothing fits.
+
+    The new activity plays the same part (the trame's step, or else the same role), chains with
+    the steps around it in time and distance, and keeps the evening within budget. A bar or club
+    around it is left earlier, or joined later, to make room.
+    """
+    steps = route.steps
+    old = steps[position]
+    others = steps[:position] + steps[position + 1 :]
+    previous = steps[position - 1] if position else None
+    following = steps[position + 1] if position + 1 < len(steps) else None
+    slot = request.trame[position] if position < len(request.trame) else None
+    roles = Counter(s.candidate.role for s in others)
+    venues = {s.candidate.venue.lower() for s in others}
+    budget = request.budget * 1.2 - sum(s.candidate.price for s in others)
+    wait = timedelta(minutes=90 if slot == "fete" else 60 if request.trame else 50)
+    best, best_value = None, -math.inf
+    for candidate in candidates:
+        if candidate.key in excluded or candidate.venue.lower() in venues or candidate.price > budget:
+            continue
+        if (slot is None and candidate.role != old.candidate.role) or not _role_fits(candidate, roles, others, bool(request.trame)):
+            continue
+        km_in = distance_km((previous.candidate.lat, previous.candidate.lon), (candidate.lat, candidate.lon)) if previous else 0.0
+        travel_in = travel_minutes(km_in) if previous else 0
+        km_out = distance_km((candidate.lat, candidate.lon), (following.candidate.lat, following.candidate.lon)) if following else 0.0
+        travel_out = travel_minutes(km_out) if following else 0
+        if travel_in > request.max_travel or travel_out > request.max_travel:
+            continue
+        if previous:
+            # A bar before can be left after 45 minutes, or stayed in longer.
+            full = _step(previous.candidate, previous.start, request).end
+            ready = (previous.start + timedelta(minutes=45) if previous.candidate.flexible else previous.end) + timedelta(minutes=travel_in + 5)
+            latest = (full if previous.candidate.flexible else previous.end) + timedelta(minutes=travel_in + 5) + wait
+        else:
+            ready, latest = request.start, request.start + timedelta(minutes=90)
+        for start in (s for s in candidate.starts if ready <= s <= latest and (not slot or fits_slot(candidate, slot, s))):
+            if candidate.flexible and start.minute % 15:
+                continue
+            step = _step(candidate, start, request, travel_in, km_in)
+            new_previous = previous
+            if previous and previous.candidate.flexible:
+                leave = min(full, start - timedelta(minutes=travel_in + 5))
+                leave -= timedelta(minutes=leave.minute % 5)
+                new_previous = Step(previous.candidate, previous.start, leave, previous.travel, previous.distance)
+            new_following = following
+            if following:
+                needed = step.end + timedelta(minutes=travel_out + 5)
+                if needed > following.start and candidate.flexible:
+                    step.end = following.start - timedelta(minutes=travel_out + 5)
+                    step.end -= timedelta(minutes=step.end.minute % 5)
+                elif needed > following.start and following.candidate.flexible:
+                    joined = needed + timedelta(minutes=-needed.minute % 5)
+                    if following.end - joined < timedelta(minutes=45):
+                        continue
+                    new_following = Step(following.candidate, joined, following.end, travel_out, km_out)
+                elif needed > following.start:
+                    continue
+                if new_following is following:
+                    new_following = Step(following.candidate, following.start, following.end, travel_out, km_out)
+                if new_following.start - step.end - timedelta(minutes=travel_out + 5) > wait:
+                    continue
+            elif step.end > request.end + timedelta(minutes=20):
+                continue
+            if step.end - step.start < timedelta(minutes=40):
+                continue
+            chain = steps[: max(0, position - 1)] + ([new_previous] if previous else []) + [step] + ([new_following] if following else []) + steps[position + 2 :]
+            value = _route_score(chain, request)
+            if value > best_value:
+                best, best_value = chain, value
+            break  # the earliest session that fits: later ones only add waiting
+    return best
 
 
 # Names and pitches ----------------------------------------------------------
@@ -765,8 +844,11 @@ def name_with_claude(routes: list[Route], request: Request) -> bool:
 # Page -----------------------------------------------------------------------
 
 
-def render(routes: list[Route], request: Request, days: list[date] | None = None) -> str:
-    """The routes as timelines; with several evenings, each route says its date."""
+def render(routes: list[Route], request: Request, days: list[date] | None = None, name: str = "") -> str:
+    """The routes as timelines; with several evenings, each route says its date.
+
+    Served by surprise.quiz, the page (its `name`) offers to draw a route or a step again.
+    """
     days = days or [request.day]
     vibes = "".join(f'<span class="chip">{html.escape(VIBES[v]["label"])}</span>' for v in request.vibes)
     vibes += "".join(f'<span class="chip plain">{i + 1}. {html.escape(_SLOT_LABELS.get(s, VIBES.get(s, {}).get("label", s)))}</span>' for i, s in enumerate(request.trame))
@@ -781,6 +863,8 @@ def render(routes: list[Route], request: Request, days: list[date] | None = None
         budget=f"{request.budget:.0f} €",
         vibes=vibes,
         body=body,
+        name=html.escape(name),
+        script=_SCRIPT,
     )
 
 
@@ -796,13 +880,14 @@ def _render_route(index: int, route: Route, asked: list[str], dated: bool = Fals
             icon = "🚶" if mode == "walking" else "🚇"
             label = f"{step.travel} min" + (f" · {step.distance * 1000:.0f} m" if step.distance < 1 else f" · {step.distance:.1f} km")
             steps.append(f'<a class="hop" href="{html.escape(maps)}" target="_blank" rel="noopener"><span>{icon}</span>{label}</a>')
-        steps.append(_render_step(step, asked))
+        steps.append(_render_step(step, asked, f"routes/{index}/steps/{position}"))
     total = route.price
     estimated = any(s.candidate.price_estimated for s in route.steps)
     return f"""
-<section class="route">
+<section class="route" id="parcours-{index + 1}">
   <header>
-    <p class="eyebrow">Parcours {index + 1}{f" · {_weekday(route.steps[0].start.date())} {route.steps[0].start:%d/%m}" if dated else ""}</p>
+    <p class="eyebrow">Parcours {index + 1}{f" · {_weekday(route.steps[0].start.date())} {route.steps[0].start:%d/%m}" if dated else ""}
+      <button type="button" class="redo" data-redo="routes/{index}" title="Composer une autre soirée à la place de celle-ci">↻ Tout le parcours</button></p>
     <h2>{html.escape(route.title)}</h2>
     <p class="pitch">{html.escape(route.pitch)}</p>
     <p class="meta"><span>{route.steps[0].start:%H:%M} → {route.steps[-1].end:%H:%M}</span>
@@ -813,12 +898,15 @@ def _render_route(index: int, route: Route, asked: list[str], dated: bool = Fals
 </section>"""
 
 
-def _render_step(step: Step, asked: list[str]) -> str:
+def _render_step(step: Step, asked: list[str], redo: str = "") -> str:
     c = step.candidate
     item = c.item
     image = item["enrichment"].get("image_url") or ((item["activity"].get("image") or {}).get("url"))
+    if images.needs_copy(image):
+        copy = images.local_copy(image)
+        image = f"../{copy.parent.name}/{copy.name}" if copy else None
     picture = f'<img src="{html.escape(image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' if image else ""
-    text = item["enrichment"].get("description") or (item.get("lead_text") or "").split("\n")[0]
+    text = item["enrichment"].get("description") or " ".join((item.get("lead_text") or "").split())
     if len(text) > 180:
         text = text[:177].rsplit(" ", 1)[0] + "…"
     price = "Gratuit" if c.price == 0 else f"{'≈ ' if c.price_estimated else ''}{c.price:.0f} € à deux"
@@ -840,7 +928,7 @@ def _render_step(step: Step, asked: list[str]) -> str:
 <li class="step">
   <div class="time">{step.start:%H:%M}<small>→ {step.end:%H:%M}</small></div>
   <article class="card">
-    <div class="photo">{picture}<span class="role">{_ROLE_LABELS[c.role]}</span></div>
+    <div class="photo">{picture}<span class="role">{_ROLE_LABELS[c.role]}</span>{f'<button type="button" class="redo on-photo" data-redo="{redo}" title="Proposer une autre activité à cette étape">↻ Changer</button>' if redo else ''}</div>
     <div class="content">
       <h3>{html.escape(c.title)}</h3>
       <p class="place">{html.escape(place)}</p>
@@ -931,6 +1019,17 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 sys
 .hop span {{ font-size: 18px; }}
 .hop:hover {{ color: var(--accent); }}
 .empty {{ margin-top: 48px; color: var(--muted); }}
+.redo {{ display: none; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 999px; padding: 4px 12px;
+  border: 1px solid var(--accent); background: var(--surface); color: var(--accent); text-transform: none; letter-spacing: 0; }}
+.live .redo {{ display: inline-block; }}
+.eyebrow .redo {{ margin-left: 12px; vertical-align: middle; }}
+.redo.on-photo {{ position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.6); color: #fff; border-color: transparent; }}
+.redo:hover:not(:disabled) {{ filter: brightness(1.1); }}
+.redo:disabled {{ opacity: .5; cursor: wait; }}
+.redo.busy {{ opacity: 1; }}
+.redo:focus-visible {{ outline: 2px solid var(--accent); outline-offset: 2px; }}
+.flash {{ animation: flash 1.6s ease-out; }}
+@keyframes flash {{ from {{ box-shadow: 0 0 0 3px var(--accent); }} to {{ box-shadow: 0 0 0 3px transparent; }} }}
 @media (max-width: 720px) {{
   .timeline {{ flex-direction: column; overflow: visible; border-left: 2px solid var(--accent-soft); margin-left: 6px; padding-left: 18px; }}
   .step {{ flex: none; }}
@@ -941,7 +1040,7 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 sys
 </style>
 </head>
 <body>
-<main class="page">
+<main class="page" data-page="{name}">
   <section class="hero">
     <h1>{count} soirées pour vous deux</h1>
     <p>Chaque étape est gratuite ou réservable ce soir-là ; les trajets se font à pied quand c'est possible.</p>
@@ -951,9 +1050,50 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 sys
   </section>
   {body}
 </main>
+{script}
 </body>
 </html>
 """
+
+# Served by surprise.quiz, the page redraws a route or a step, then reloads on it.
+# Opened as a file, it has no server: the buttons stay hidden.
+_SCRIPT = """<script>
+(() => {
+  const page = document.querySelector("main").dataset.page;
+  if (!page || location.protocol === "file:") return;
+  document.body.classList.add("live");
+  const back = sessionStorage.getItem("redone");
+  if (back) {
+    sessionStorage.removeItem("redone");
+    const target = document.querySelector(back)?.closest(".card, .route");
+    if (target) { target.scrollIntoView({ block: "center" }); target.classList.add("flash"); }
+  }
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-redo]");
+    if (!button) return;
+    const buttons = document.querySelectorAll("[data-redo]");
+    const label = button.textContent;
+    buttons.forEach((b) => { b.disabled = true; });
+    button.classList.add("busy");
+    button.textContent = "Recherche…";
+    try {
+      const response = await fetch(`/api/parcours/${page}/${button.dataset.redo}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      });
+      const answer = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(answer.error || "la recherche a échoué");
+      const card = button.closest(".card");
+      sessionStorage.setItem("redone", card ? `[data-redo="${button.dataset.redo}"]` : `#${button.closest(".route").id}`);
+      location.reload();
+    } catch (error) {
+      alert(`Pas de nouvelle proposition : ${error.message}`);
+      buttons.forEach((b) => { b.disabled = false; });
+      button.classList.remove("busy");
+      button.textContent = label;
+    }
+  });
+})();
+</script>"""
 
 
 # Command line ---------------------------------------------------------------
@@ -979,6 +1119,14 @@ def plan(store: LocalStore, request: Request, checks: int = 60, count: int = 3, 
 
 def evening_routes(store: LocalStore, base: Base, request: Request, checks: int = 60) -> list[Route]:
     """Every route found for the evening, best first."""
+    routes = compose(candidates_for(store, base, request, checks), request)
+    for route in routes:
+        route.request = request
+    return routes
+
+
+def candidates_for(store: LocalStore, base: Base, request: Request, checks: int = 60) -> list[Candidate]:
+    """The activities that can be a step that evening, scored."""
     items = base.items
     prescore = {key: quick_score(i, request, base.originality[key]) for i in items if (key := (i["source_id"], i["external_id"]))}
     checked = check_engines(store, items, request, checks, prescore) if checks else store.cached_availability(
@@ -997,10 +1145,7 @@ def evening_routes(store: LocalStore, base: Base, request: Request, checks: int 
         f"{len(candidates)} étapes possibles ce soir-là : {kinds['seance']} séances, {kinds['verifie']} créneaux vérifiés, "
         f"{kinds['gratuit']} gratuites, {kinds['sans_resa']} sans réservation"
     )
-    routes = compose(candidates, request)
-    for route in routes:
-        route.request = request
-    return routes
+    return candidates
 
 
 def main() -> None:
@@ -1070,11 +1215,72 @@ def generate(
     if claude:
         name_with_claude(routes, requests[0])
     days = [request.day for request in requests]
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     name = name or (days[0].isoformat() if len(days) == 1 else f"{days[0].isoformat()}_{days[-1].isoformat()}")
+    state = {"routes": routes, "requests": requests, "seen": {s.candidate.key for r in routes for s in r.steps}}
+    return routes, save(name, state)
+
+
+# Regeneration ----------------------------------------------------------------
+# The page's routes are kept next to it (data/parcours/<name>.pkl), so that one route, or one step
+# of a route, can be drawn again from the page. Activities already shown are not proposed again
+# while others fit.
+
+
+def save(name: str, state: dict[str, Any]) -> Path:
+    """The page and its routes, written under this name."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUTPUT_DIR / f"{name}.pkl").write_bytes(pickle.dumps(state))
     path = OUTPUT_DIR / f"{name}.html"
-    path.write_text(render(routes, requests[0], days), encoding="utf-8")
-    return routes, path
+    requests = state["requests"]
+    path.write_text(render(state["routes"], requests[0], [r.day for r in requests], name), encoding="utf-8")
+    return path
+
+
+def load(name: str) -> dict[str, Any] | None:
+    path = OUTPUT_DIR / f"{name}.pkl"
+    try:
+        return pickle.loads(path.read_bytes()) if path.exists() else None
+    except (pickle.UnpicklingError, AttributeError, EOFError, TypeError):
+        return None  # written by an older version of this module
+
+
+def regenerate(
+    store: LocalStore, base: Base, name: str, index: int, position: int | None = None, checks: int = 10, claude: bool = True,
+) -> str | None:
+    """Draws route `index` again, or only its step `position`, and rewrites the page; the error, if any."""
+    state = load(name)
+    if state is None:
+        return "parcours introuvable : relancez la composition"
+    routes = state["routes"]
+    if not 0 <= index < len(routes) or (position is not None and not 0 <= position < len(routes[index].steps)):
+        return "étape inconnue"
+    route = routes[index]
+    request = route.request or state["requests"][0]
+    candidates = candidates_for(store, base, request, checks)
+    on_page = {s.candidate.key for r in routes for s in r.steps}
+    if position is None:
+        found = compose([c for c in candidates if c.key not in {s.candidate.key for s in route.steps}], request)
+        others = [r for r in routes if r is not route]
+        fresh = [r for r in found if not {s.candidate.key for s in r.steps} & state["seen"]]
+        chosen = pick(fresh, 1, others) or pick(found, 1, others)
+        if not chosen:
+            return "aucun autre parcours complet ce soir-là"
+        new = chosen[0]
+    else:
+        steps = replace_step(route, position, candidates, request, state["seen"] | on_page) or replace_step(
+            route, position, candidates, request, on_page
+        )
+        if not steps:
+            return "aucune autre activité ne s'enchaîne à cette étape"
+        new = Route(steps, _route_score(steps, request))
+    new.request = request
+    name_by_rules(new, request)
+    if claude:
+        name_with_claude([new], request)
+    routes[index] = new
+    state["seen"] |= {s.candidate.key for s in new.steps}
+    save(name, state)
+    return None
 
 if __name__ == "__main__":
     main()

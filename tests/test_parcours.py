@@ -151,3 +151,57 @@ def test_trame_orders_the_steps_and_lets_the_bar_end_early():
     # The bar is left in time for the show, after 45 minutes at least.
     assert bar.end - bar.start >= timedelta(minutes=45) and bar.end + timedelta(minutes=show.travel) <= show.start
     assert club.start == at(23)
+
+
+def _scored(entries, req):
+    candidates = []
+    for entry in entries:
+        candidate = parcours.build_candidate(entry, req, None)
+        candidate.score = parcours.score(candidate, req)
+        candidates.append(candidate)
+    return candidates
+
+
+def _night():
+    req = request(vibes=["insolite", "fete"], trame=["apero", "insolite", "fete"], end=at(4, 0, date(2026, 10, 10)))
+    entries = [
+        item("bar", "Bar à cocktails", ["bar"], kind="permanent", hours="Mo-Su 18:00-02:00", venue="Bar"),
+        item("club", "Soirée techno", ["nuit"], occurrences=[at(23)], lat=48.862, venue="Club"),
+        item("immersif", "Expérience immersive", ["lieu_insolite"], occurrences=[at(20, 15)], lat=48.861, venue="Salle"),
+        item("autre", "Parcours sensoriel dans le noir", ["lieu_insolite"], occurrences=[at(21)], lat=48.8615, venue="Noir"),
+        item("loin", "Expérience lointaine", ["lieu_insolite"], occurrences=[at(21)], lat=48.95, lon=2.5, venue="Loin"),
+    ]
+    candidates = _scored(entries, req)
+    [route] = parcours.pick(parcours.compose([c for c in candidates if c.key[1] != "autre"], req), 1)
+    return req, candidates, route
+
+
+def test_one_step_is_replaced_and_the_evening_still_chains():
+    req, candidates, route = _night()
+    assert route.steps[1].candidate.key[1] == "immersif"
+    steps = parcours.replace_step(route, 1, candidates, req, {("test", "immersif")})
+    assert [s.candidate.key[1] for s in steps] == ["bar", "autre", "club"]
+    bar, show, club = steps
+    # The bar stays longer before the later show; the club is kept.
+    assert bar.end + timedelta(minutes=show.travel) <= show.start and bar.end > route.steps[0].end
+    assert show.start == at(21) and club.start == at(23) and show.end + timedelta(minutes=club.travel) <= club.start
+    # Nothing else of its kind nearby: no replacement.
+    assert parcours.replace_step(route, 1, candidates, req, {("test", "immersif"), ("test", "autre")}) is None
+
+
+def test_regenerate_rewrites_the_page(tmp_path, monkeypatch):
+    req, candidates, route = _night()
+    monkeypatch.setattr(parcours, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(parcours, "candidates_for", lambda store, base, request, checks: candidates)
+    parcours.name_by_rules(route, req)
+    route.request = req
+    page = parcours.save("essai", {"routes": [route], "requests": [req], "seen": {s.candidate.key for s in route.steps}})
+    assert 'data-page="essai"' in page.read_text(encoding="utf-8") and 'data-redo="routes/0/steps/1"' in page.read_text(encoding="utf-8")
+
+    assert parcours.regenerate(None, None, "essai", 0, 1, claude=False) is None
+    state = parcours.load("essai")
+    assert [s.candidate.key[1] for s in state["routes"][0].steps] == ["bar", "autre", "club"]
+    assert ("test", "autre") in state["seen"] and "Parcours sensoriel dans le noir" in page.read_text(encoding="utf-8")
+    # The only other evening would repeat a step: the whole route has no other draw.
+    assert parcours.regenerate(None, None, "essai", 0, claude=False) == "aucun autre parcours complet ce soir-là"
+    assert parcours.regenerate(None, None, "absent", 0, claude=False) == "parcours introuvable : relancez la composition"

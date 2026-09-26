@@ -17,6 +17,7 @@ import re
 import secrets
 import sys
 import threading
+import time as clock
 import webbrowser
 from datetime import date, timedelta
 from http import HTTPStatus
@@ -26,7 +27,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from surprise import parcours
+from surprise import images, parcours
 from surprise.local_store import DEFAULT_PATH, LocalStore
 from surprise.tags import VIBES
 
@@ -228,11 +229,21 @@ def new_id() -> str:
 
 
 _ID = re.compile(r"^[\w-]{4,20}$")
+# /api/parcours/<page>/routes/<index>[/steps/<position>]: draw a route, or one of its steps, again.
+_REDO = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)(?:/steps/(?P<step>\d+))?$")
+BASE_MINUTES = 15
 
 
 def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
     # One composition at a time: it checks booking engines and writes the page.
     composing = threading.Lock()
+    # The activities take seconds to load: kept a quarter of an hour between two redraws.
+    loaded: dict[str, Any] = {}
+
+    def base(store: LocalStore) -> parcours.Base:
+        if clock.monotonic() - loaded.get("at", -BASE_MINUTES * 60) > BASE_MINUTES * 60:
+            loaded.update(at=clock.monotonic(), base=parcours.Base.load(store))
+        return loaded["base"]
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
@@ -246,12 +257,14 @@ def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
                 with LocalStore(db_path) as store:
                     found = store.get_profile(path.rsplit("/", 1)[1])
                 self._send_json(HTTPStatus.OK if found else HTTPStatus.NOT_FOUND, found or {"error": "profil inconnu"})
-            elif path.startswith("/parcours/") and re.match(r"^/parcours/profil-[\w-]+\.html$", path):
+            elif re.match(r"^/parcours/[\w-]+\.html$", path):
                 page = parcours.OUTPUT_DIR / path.removeprefix("/parcours/")
                 if page.exists():
                     self._send(HTTPStatus.OK, page.read_bytes(), "text/html; charset=utf-8")
                 else:
                     self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
+            elif re.match(r"^/images/\w+\.\w+$", path) and (image := images.DIRECTORY / path.removeprefix("/images/")).exists():
+                self._send(HTTPStatus.OK, image.read_bytes(), images.MEDIA_TYPES.get(image.suffix, "application/octet-stream"))
             else:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
 
@@ -273,6 +286,8 @@ def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
             parts = path.strip("/").split("/")
             if len(parts) == 4 and parts[:2] == ["api", "profiles"] and parts[3] == "parcours" and _ID.match(parts[2]):
                 return self._compose(parts[2])
+            if redo := _REDO.match(path):
+                return self._redo(redo["name"], int(redo["route"]), None if redo["step"] is None else int(redo["step"]))
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
 
         def _compose(self, profile_id: str) -> None:
@@ -285,6 +300,14 @@ def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
                         store, requests_for(found["profile"]), count=3, checks=checks, name=f"profil-{profile_id}",
                     )
             self._send_json(HTTPStatus.OK, {"url": f"/parcours/{page.name}", "count": len(routes)})
+
+        def _redo(self, name: str, index: int, position: int | None) -> None:
+            """Another route in place of route `index`, or another activity at its step `position`."""
+            with LocalStore(db_path) as store, composing:
+                error = parcours.regenerate(store, base(store), name, index, position, checks=min(checks, 10))
+            if error:
+                return self._send_json(HTTPStatus.CONFLICT, {"error": error})
+            self._send_json(HTTPStatus.OK, {"url": f"/parcours/{name}.html"})
 
         def _send_json(self, code: HTTPStatus, payload: Any) -> None:
             self._send(code, json.dumps(payload, ensure_ascii=False).encode(), "application/json; charset=utf-8")

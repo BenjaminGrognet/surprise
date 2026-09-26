@@ -3,7 +3,8 @@
 Shows are discovered on the Paris page (links "/spectacle/<slug>-<id>") and
 read from their page's schema.org Event (its script type is written
 "application/ld&#x2B;json"): name, first and last show, venue with address,
-prices, photo and description (lead_text).
+prices and photo; the description (lead_text) is the page's full text, its
+schema.org one being only the headline.
 """
 
 import re
@@ -14,7 +15,7 @@ from typing import Any, Iterator
 import httpx
 
 from surprise.collectors.common import Normalized, run, safe_url
-from surprise.collectors.facts import BROWSER_HEADERS, parse_datetime, ld_address, ld_node, normalize_facts, utc_now
+from surprise.collectors.facts import BROWSER_HEADERS, parse_datetime, ld_address, ld_node, lines, normalize_facts, utc_now
 from surprise.collectors.paris_zigzag import PARIS
 from surprise.models import RawRecord
 
@@ -24,6 +25,7 @@ LIST_URL = f"{BASE_URL}/paris/"
 DELAY_SECONDS = 1.0
 
 _SHOW = re.compile(r'href="(?:https://www\.billetreduc\.com)?(/spectacle/[\w-]+-\d+)"')
+_DESCRIPTION = re.compile(r'id="event-description-text"[^>]*>(.*?)</div>\s*<button', re.DOTALL)
 
 
 def fetch_show_urls(client: httpx.Client) -> list[str]:
@@ -53,10 +55,16 @@ def parse_show(url: str, page: str) -> dict[str, Any]:
         "price_max": max(prices) if prices else None,
         "image_url": image[0] if isinstance(image, list) and image else image,
         "category_text": "spectacle théâtre",
-        "lead_text": event.get("description"),
+        "lead_text": _description(page, event.get("description")),
         "website": url,
         "booking_url": url,
     }
+
+
+def _description(page: str, headline: str | None) -> str | None:
+    """The headline, then the text shown under "Lire la suite"."""
+    found = _DESCRIPTION.search(page)
+    return "\n".join(filter(None, [headline, lines(found.group(1)) if found else None])) or None
 
 
 def to_raw_record(payload: dict[str, Any]) -> RawRecord:

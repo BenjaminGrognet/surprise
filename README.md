@@ -165,6 +165,13 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
   si `ANTHROPIC_API_KEY` est définie (`--no-claude` sinon).
 - Page : `data/parcours/<date>.html`, ouverte à la fin — trois frises (photos, horaires, trajets vers Google Maps,
   bouton « Réserver » sous chaque étape).
+- Régénérer : servie par le questionnaire (`http://127.0.0.1:8001/parcours/<nom>.html`), la page propose
+  « ↻ Tout le parcours » (une autre soirée, différente des deux autres) et « ↻ Changer » sur chaque étape (une autre
+  activité du même rôle ou de la même étape de la trame, qui s'enchaîne avec ses voisines ; un bar voisin est écourté
+  ou prolongé). Les activités déjà proposées ne reviennent pas tant que d'autres conviennent. Les parcours sont gardés
+  à côté de la page (`<nom>.pkl`).
+- Images : BilletRéduc interdit l'affichage de ses affiches ailleurs que chez lui (`Cross-Origin-Resource-Policy`) ;
+  elles sont copiées une fois dans `data/images` (800 px) et servies de là, en modération comme dans les parcours.
 
 Vibes possibles : bouger, defi, rire, creer, savourer, detente, emerveiller, musique, fete, cultiver, flaner,
 frisson, insolite, romantique.

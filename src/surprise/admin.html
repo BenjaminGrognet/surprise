@@ -235,7 +235,8 @@ function figure(it) {
   const a = it.activity, e = it.enrichment || {};
   const url = a.image?.url || e.image_url;
   const credit = a.image ? a.image.license : e.image_url ? `Image du site officiel (${hostname(e.image_origin)}) — licence à vérifier` : "";
-  const img = h("img", { class: "cover", alt: "", loading: "lazy", src: url });
+  // Some sites forbid showing their images elsewhere: those go through a local copy.
+  const img = h("img", { class: "cover", alt: "", loading: "lazy", src: it.image_copy || url });
   const caption = h("figcaption", { title: credit }, credit);
   img.addEventListener("error", () => { img.style.visibility = "hidden"; });
   if (!url && e.place_id) {

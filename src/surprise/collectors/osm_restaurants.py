@@ -12,6 +12,7 @@ unlike the media's picks, which keep walk-in restaurants.
 
 import html
 import re
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -37,6 +38,9 @@ area["ISO3166-2"="FR-75C"]->.paris;
 (nwr["amenity"="restaurant"]["name"]["website"](area.paris);
  nwr["amenity"="restaurant"]["name"]["contact:website"](area.paris););
 out center tags;"""
+# Busy mirrors answer 504 for minutes: all of them are tried again, a little later each round.
+OVERPASS_ROUNDS = 4
+OVERPASS_PAUSE = 60
 USER_AGENT = "surprise-collector/0.1"
 # Websites are on as many hosts as restaurants: a few at a time, each host asked once or twice.
 WORKERS = 8
@@ -50,13 +54,19 @@ _ASSET = re.compile(r"\.(?:js|css|png|svg|jpe?g|woff2?)(?:[?#]|$)", re.IGNORECAS
 
 def fetch_restaurants(client: httpx.Client) -> list[dict[str, Any]]:
     """Named restaurants of Paris with a website, in a stable order."""
-    for url in OVERPASS_URLS:
-        try:
-            response = client.post(url, data={"data": OVERPASS_QUERY}, timeout=240)
-            response.raise_for_status()
+    response = None
+    for attempt in range(OVERPASS_ROUNDS):
+        if attempt:
+            time.sleep(OVERPASS_PAUSE * attempt)
+        for url in OVERPASS_URLS:
+            try:
+                response = client.post(url, data={"data": OVERPASS_QUERY}, timeout=240)
+                response.raise_for_status()
+                break
+            except httpx.HTTPError as error:
+                failure, response = error, None
+        if response is not None:
             break
-        except httpx.HTTPError as error:
-            failure = error
     else:
         raise failure
     places = [e for e in response.json().get("elements") or [] if _website(e.get("tags") or {})]
