@@ -178,13 +178,21 @@ frisson, insolite, romantique.
 
 ## Questionnaire client
 
-Douze questions ludiques (occasion, énergie, ce qui fait une soirée réussie, audace, assiette, musique, fin de
-soirée, ce qu'on évite, budget, date, prénoms) dessinent le profil du couple : vibes pondérées, persona
-(« Les Explorateurs », « Les Épicuriens »…), audace, refus, genres préférés, envie d'un dîner, budget et horaires.
-Profil et réponses sont stockés (table `profiles`) ; « Composer nos soirées » lance les parcours avec ce profil.
+Douze questions ludiques sur ce qui dure (où en est le couple, énergie, ce qui fait une soirée réussie, audace,
+assiette, musique, fin de soirée habituelle, ce qu'on ne veut jamais, budget, jour de la première sortie, prénoms)
+dessinent le profil du couple : vibes pondérées, persona (« Les Explorateurs », « Les Épicuriens »…), audace, refus,
+genres préférés, envie d'un dîner, budget. Aucune heure précise n'est demandée. Profil et réponses sont stockés
+(table `profiles`).
+
+Chaque soirée se prépare à part, sur sa propre page (`/soiree`, avec `#p=<profil>` ou sans profil) : jusqu'à trois
+envies (« Faire la fête », « Cocooning », « Romantique », « Surprenez-nous »…), une occasion éventuelle et le jour.
+Les envies se mêlent : chacune apporte ses vibes à tour de rôle, la soirée commence à l'heure la plus tôt et finit à
+la plus tardive, et ce qu'une envie écarte revient si une autre le demande (cocooning puis fête : le club reste).
+Les refus, le budget, l'audace et les goûts sont ceux du profil, ou des réglages par défaut sans profil. Les refus
+(« être en maillot de bain », « le vide », « la foule »…) visent des tags, des mots-clés ou des catégories.
 
 ```bash
-uv run python -m surprise.quiz    # http://127.0.0.1:8001
+uv run python -m surprise.quiz    # quiz : http://127.0.0.1:8001, soirée : http://127.0.0.1:8001/soiree
 ```
 
 ## Modération

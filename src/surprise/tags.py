@@ -80,6 +80,7 @@ _TAG_RULES = [
     ("spa", "Spa / hammam", "activite", r"\bspa\b|hammam|sauna|bassin|beer spa"),
     ("flottaison", "Flottaison", "activite", r"flottaison|isolation sensorielle"),
     ("relaxation", "Yoga / méditation", "activite", r"yoga|méditation|relaxation|sophrologie"),
+    ("baignade", "Baignade / piscine", "activite", r"piscine|baignade|natation|aquagym|jacuzzi|bains? nordiques?|maillot de bain"),
     # Cadre
     ("sur_l_eau", "Sur l'eau", "cadre", r"croisière|péniche|bateau|barque|seine|canal|river|boat|cruise|akwa|\bflots?\b"),
     ("vue", "Vue panoramique", "cadre", r"rooftop|accès au toit|panoramique|ballon de paris|tour eiffel|\bt7\b|vue spectaculaire"),
@@ -90,6 +91,8 @@ _TAG_RULES = [
     ("eglise", "Église / lieu sacré", "cadre", r"église|eglise|chapelle|saint-sulpice|notre-dame|cathédrale|pagode|temples? hindou"),
     ("chandelles", "Aux chandelles", "cadre", r"candlelight|aux chandelles|bougies"),
     ("dans_le_noir", "Dans le noir", "cadre", r"dans le noir"),
+    ("hauteur", "En hauteur (vide, nacelle)", "cadre", r"montgolfi|ballon de paris|escalade|accrobranche|tyrolienne|grande roue|chute libre|parachut|via ferrata"),
+    ("grande_salle", "Grande salle / foule", "cadre", r"accor arena|z[ée]nith|stade de france|défense arena|parc des princes|bercy arena"),
     # Moment
     ("nocturne", "Nocturne / soirée", "moment", r"nocturne|nuit|night|soirée|sunset|midnight|halloween|apéro|happy hour"),
     ("diner", "Dîner", "moment", r"dîner|diner|déjeuner|repas"),
@@ -149,7 +152,7 @@ VIBES = {
     "detente": {
         "label": "Se détendre",
         "question": "Se détendre, prendre soin de nous",
-        "tags": {"massage", "spa", "flottaison", "relaxation"},
+        "tags": {"massage", "spa", "flottaison", "relaxation", "baignade"},
         "categories": {"bien_etre"},
     },
     "emerveiller": {

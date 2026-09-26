@@ -1,12 +1,19 @@
 """Client questionnaire: a short, playful quiz that draws the couple's profile, then their evenings.
 
-Each answer weighs on the vibes (surprise.tags.VIBES) and sets the couple's
-appetite for the unusual (audace), what they refuse, the music they like, the
-budget and the hours. The profile keeps the weighted vibes, the main ones, a
-persona to tell them who they are ("Les Explorateurs"), and is stored with the
-answers (table profiles). From it, surprise.parcours composes their evenings.
+The quiz asks what lasts: each answer weighs on the vibes (surprise.tags.VIBES)
+and sets the couple's appetite for the unusual (audace), what they never want,
+the music they like, the budget, their usual end of evening and the day of their
+first outing; no precise hour. The profile keeps the weighted vibes, the main
+ones, a persona to tell them who they are ("Les Explorateurs"), and is stored
+with the answers (table profiles).
 
-    uv run python -m surprise.quiz            # http://127.0.0.1:8001
+Each evening is asked apart, on its own page (/soiree): up to three wishes
+(ENVIES: party tonight, cocooning another night) and maybe an occasion
+(OCCASIONS) set that evening's vibes and hours, while refusals, budget, audace
+and tastes come from the profile, when there is one. From both,
+surprise.parcours composes the evening.
+
+    uv run python -m surprise.quiz            # http://127.0.0.1:8001, the evening at /soiree
 
 Served on 127.0.0.1 with the standard library, like the moderation page.
 """
@@ -31,20 +38,27 @@ from surprise import images, parcours
 from surprise.local_store import DEFAULT_PATH, LocalStore
 from surprise.tags import VIBES
 
-PAGE = files("surprise").joinpath("quiz.html")
+RESOURCES = files("surprise")
+# Pages and the style and script they share.
+STATIC = {
+    "/": ("quiz.html", "text/html; charset=utf-8"),
+    "/soiree": ("soiree.html", "text/html; charset=utf-8"),
+    "/client.css": ("client.css", "text/css; charset=utf-8"),
+    "/client.js": ("client.js", "text/javascript; charset=utf-8"),
+}
 
-# id, question, hint, kind ("single", "multi", "scale", "when", "text"), options.
+# The profile's questions: what lasts from one evening to the next, no precise hour.
+# id, question, hint, kind ("single", "multi", "scale", "date", "text"), options.
 # An option: value, label, emoji, and what it does: vibe weights, audace, avoid, prefer, end, budget, dinner.
 QUESTIONS: list[dict[str, Any]] = [
     {
-        "id": "occasion", "kind": "single",
-        "question": "Qu'est-ce qu'on fête ?", "hint": "Il n'y a pas de mauvaise raison de sortir.",
+        "id": "couple", "kind": "single",
+        "question": "Votre histoire en est où ?", "hint": "Pour viser juste dès la première soirée.",
         "options": [
-            {"value": "envie", "label": "Rien, juste l'envie", "emoji": "✨", "vibes": {"insolite": 1}},
-            {"value": "anniversaire", "label": "Un anniversaire", "emoji": "🎂", "vibes": {"romantique": 2, "savourer": 1}, "dinner": True},
-            {"value": "debut", "label": "Nos premiers rendez-vous", "emoji": "🌱", "vibes": {"rire": 1, "defi": 1}, "avoid": ["dans_le_noir"]},
-            {"value": "retrouvailles", "label": "Se retrouver, enfin", "emoji": "🫶", "vibes": {"detente": 2, "romantique": 1}},
-            {"value": "grande", "label": "Une grande occasion", "emoji": "💍", "vibes": {"romantique": 3, "emerveiller": 1}, "dinner": True, "audace": 0.1},
+            {"value": "debut", "label": "On se découvre", "emoji": "🌱", "vibes": {"rire": 1, "defi": 1}, "avoid": ["dans_le_noir"]},
+            {"value": "complices", "label": "Complices depuis un moment", "emoji": "🤝", "vibes": {"rire": 1, "insolite": 1}},
+            {"value": "installes", "label": "Installés, envie de pimenter", "emoji": "🌶️", "vibes": {"insolite": 1, "romantique": 1}},
+            {"value": "longue", "label": "Une longue histoire à célébrer", "emoji": "💞", "vibes": {"romantique": 2, "savourer": 1}},
         ],
     },
     {
@@ -116,23 +130,31 @@ QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "id": "fin", "kind": "single",
-        "question": "La fin de soirée idéale ?", "hint": None,
+        "question": "D'habitude, vos soirées finissent…", "hint": "Un soir de fête pourra aller plus loin.",
         "options": [
-            {"value": "tot", "label": "Rentrer avant minuit", "emoji": "🌙", "end": "23:30"},
-            {"value": "verre", "label": "Un dernier verre", "emoji": "🍸", "end": "00:30", "vibes": {"savourer": 1}},
-            {"value": "danser", "label": "Danser jusqu'au bout de la nuit", "emoji": "🌃", "end": "03:30", "vibes": {"fete": 3}},
+            {"value": "tot", "label": "Avant minuit", "emoji": "🌙", "end": "23:30"},
+            {"value": "verre", "label": "Sur un dernier verre", "emoji": "🍸", "end": "00:30", "vibes": {"savourer": 1}},
+            {"value": "danser", "label": "Au bout de la nuit", "emoji": "🌃", "end": "03:30", "vibes": {"fete": 3}},
         ],
     },
     {
         "id": "eviter", "kind": "multi",
-        "question": "Ce que vous préférez éviter", "hint": "Tout est permis, sauf ça.",
+        "question": "Ce que vous ne voulez jamais", "hint": "Aucune soirée ne vous le proposera. Autant de réponses que vous voulez.",
         "options": [
+            {"value": "maillot", "label": "Être en maillot de bain", "emoji": "🩱", "avoid": ["spa", "flottaison", "baignade"]},
             {"value": "noir", "label": "Le noir complet", "emoji": "🌑", "avoid": ["dans_le_noir"]},
             {"value": "peur", "label": "Les frissons, la peur", "emoji": "😱", "avoid": ["frisson", "souterrain", "murder_party"]},
-            {"value": "effort", "label": "Transpirer", "emoji": "🥵", "avoid": ["sport", "jeu_actif", "defouloir"]},
+            {"value": "enfermes", "label": "Être enfermés, sous terre", "emoji": "🔒", "avoid": ["escape_game", "souterrain", "dans_le_noir", "flottaison"]},
+            {"value": "hauteur", "label": "Le vide, la hauteur", "emoji": "🧗", "avoid": ["hauteur"]},
+            {"value": "effort", "label": "Transpirer", "emoji": "🥵", "avoid": ["sport", "jeu_actif", "defouloir", "sensations"]},
             {"value": "alcool", "label": "L'alcool", "emoji": "🚱", "avoid": ["mixologie", "vin", "cocktails", "vins nature"]},
             {"value": "scene", "label": "Être mis en scène", "emoji": "🎭", "avoid": ["interactif", "karaoke"]},
+            {"value": "danser", "label": "Danser", "emoji": "🙅", "avoid": ["danse"]},
+            {"value": "foule", "label": "La foule, les boîtes bondées", "emoji": "👥", "avoid": ["grande_salle", "nuit"]},
+            {"value": "assis", "label": "Rester assis deux heures", "emoji": "🪑", "avoid": ["theatre", "cinema", "lecture", "comedie_musicale"]},
             {"value": "eau", "label": "Les bateaux", "emoji": "⛵", "avoid": ["sur_l_eau"]},
+            {"value": "animaux", "label": "Les animaux", "emoji": "🐾", "avoid": ["animaux"]},
+            {"value": "ecrans", "label": "Les écrans, le virtuel", "emoji": "🥽", "avoid": ["jeu_video"]},
         ],
     },
     {
@@ -145,8 +167,37 @@ QUESTIONS: list[dict[str, Any]] = [
             {"value": "folie", "label": "On ne compte pas", "emoji": "💎", "budget": 350},
         ],
     },
-    {"id": "quand", "kind": "when", "question": "Quand sortez-vous ?", "hint": "Le jour et l'heure du premier rendez-vous de la soirée."},
+    {"id": "premiere", "kind": "date", "question": "Votre première sortie ?", "hint": "Le jour qui vous tente ; l'envie de la soirée, on vous la demandera juste avant."},
     {"id": "prenoms", "kind": "text", "question": "Et vous êtes ?", "hint": "Vos prénoms, pour personnaliser vos soirées (facultatif)."},
+]
+
+# The wishes of one evening, MAX_ENVIES at most, asked each time: they set that evening's vibes and hours,
+# the profile the rest. value, label, emoji, vibes (none: the profile's), and optionally start, end, dinner,
+# audace, avoid (dropped when another wish of the evening asks for it: party and cocooning go together).
+MAX_ENVIES = 3
+ENVIES: list[dict[str, Any]] = [
+    {"value": "nous", "label": "Fidèles à nous-mêmes", "emoji": "💫", "vibes": []},
+    {"value": "fete", "label": "Faire la fête", "emoji": "🪩", "vibes": ["fete", "musique"], "start": "20:00", "end": "03:30"},
+    {"value": "cocooning", "label": "Cocooning", "emoji": "🧸", "vibes": ["detente", "romantique", "savourer"], "end": "23:30",
+     "avoid": ["nuit", "electro", "danse", "sport", "jeu_actif", "defouloir", "grande_salle", "frisson"]},
+    {"value": "romantique", "label": "Romantique", "emoji": "🕯️", "vibes": ["romantique", "savourer", "emerveiller"], "dinner": True},
+    {"value": "rire", "label": "Rire aux éclats", "emoji": "😂", "vibes": ["rire", "defi"]},
+    {"value": "jouer", "label": "Jouer, relever un défi", "emoji": "🧩", "vibes": ["defi", "bouger"]},
+    {"value": "curieux", "label": "Apprendre, s'émerveiller", "emoji": "🏛️", "vibes": ["cultiver", "emerveiller"]},
+    {"value": "creer", "label": "Créer de nos mains", "emoji": "🎨", "vibes": ["creer", "savourer"]},
+    {"value": "gourmand", "label": "Se régaler", "emoji": "🍽️", "vibes": ["savourer"], "dinner": True},
+    {"value": "musique", "label": "Vibrer en musique", "emoji": "🎷", "vibes": ["musique", "emerveiller"]},
+    {"value": "air", "label": "Prendre l'air", "emoji": "🌿", "vibes": ["flaner", "savourer"], "start": "18:30"},
+    {"value": "frissons", "label": "Frissonner", "emoji": "👻", "vibes": ["frisson", "insolite"]},
+    {"value": "surprise", "label": "Surprenez-nous", "emoji": "🎁", "vibes": [], "audace": 0.3},
+]
+
+# What the evening celebrates, if anything: added to its wishes.
+OCCASIONS: list[dict[str, Any]] = [
+    {"value": "anniversaire", "label": "Un anniversaire", "emoji": "🎂", "vibes": ["romantique"], "dinner": True},
+    {"value": "retrouvailles", "label": "Des retrouvailles", "emoji": "🫶", "vibes": ["romantique"]},
+    {"value": "grande", "label": "Une grande occasion", "emoji": "💍", "vibes": ["romantique", "emerveiller"], "dinner": True},
+    {"value": "rien", "label": "Rien, juste l'envie", "emoji": "✨", "vibes": []},
 ]
 
 # Persona: the vibes that make it, its name and how it describes the couple.
@@ -160,12 +211,12 @@ PERSONAS = [
     ({"creer"}, "Les Créatifs", "Vous aimez repartir avec quelque chose fait de vos mains."),
     ({"flaner"}, "Les Flâneurs", "Paris à pied, au fil de l'eau, sans se presser."),
 ]
-DEFAULT_START = "19:00"
+DEFAULT_START = "19:00"  # an evening's first step, unless its wish says otherwise
 DEFAULT_END = "00:30"
 
 
 def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
-    """The couple's profile from their answers: weighted vibes, main vibes, persona, audace, refusals, budget, hours."""
+    """The couple's profile from their answers: weighted vibes, main vibes, persona, audace, refusals, budget, usual end."""
     weights = {key: 0.0 for key in VIBES}
     audace, avoid, prefer, dinner = 0.5, set(), set(), False
     budget, end = 120, DEFAULT_END
@@ -188,7 +239,6 @@ def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
     # The main vibes: those weighing at least a third of the strongest, four at most.
     main = [v for v in ranked if weights[v] >= top / 3][:4] or ["romantique"]
     persona = max(PERSONAS, key=lambda p: sum(weights[v] for v in p[0]) / len(p[0]) ** 0.5)
-    when = answers.get("quand") or {}
     return {
         "vibes": main,
         "weights": {v: weights[v] for v in ranked},
@@ -198,28 +248,74 @@ def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
         "prefer": sorted(prefer),
         "dinner": dinner,
         "budget": budget,
-        "day": when.get("day"),
-        "start": when.get("start") or DEFAULT_START,
+        "first_day": valid_day(answers.get("premiere")),
         "end": end,
         "names": (answers.get("prenoms") or "").strip()[:80] or None,
     }
 
 
-def requests_for(profile: dict[str, Any], days: list[date] | None = None) -> list[parcours.Request]:
-    """The evenings to plan for a profile: its date, else the next Friday and Saturday."""
+def valid_day(value: Any) -> str | None:
+    """A day as the page sends it (2026-10-09), or None."""
+    try:
+        return date.fromisoformat(value).isoformat() if isinstance(value, str) and len(value) == 10 else None
+    except ValueError:
+        return None
+
+
+ENVIE_KEYS = {envie["value"]: envie for envie in ENVIES}
+OCCASION_KEYS = {occasion["value"]: occasion for occasion in OCCASIONS}
+
+
+MAX_VIBES = 5
+
+
+def _late(hour: str) -> str:
+    """An hour as the evening sees it: 03:30 comes after 23:30."""
+    return f"{int(hour[:2]) + 24}{hour[2:]}" if hour < "12:00" else hour
+
+
+def evening(profile: dict[str, Any], envies: list[str] | None = None, occasion: str | None = None) -> dict[str, Any]:
+    """One evening's settings: its wishes and occasion over the profile, which keeps refusals, budget and tastes."""
+    wishes = [ENVIE_KEYS[e] for e in dict.fromkeys(envies or []) if e in ENVIE_KEYS][:MAX_ENVIES] or [ENVIES[0]]
+    event = OCCASION_KEYS.get(occasion or "rien", OCCASION_KEYS["rien"])
+    # Each wish's vibes, the profile's for "nous" and "surprise"; taken in turn so that every wish has its share.
+    lists = [(["insolite"] if w["value"] == "surprise" else []) + (w["vibes"] or list(profile["vibes"])) for w in wishes]
+    turns = [vibes[i] for i in range(max(map(len, lists))) for vibes in lists if i < len(vibes)]
+    vibes = list(dict.fromkeys(turns + event["vibes"]))[:MAX_VIBES]
+    # A wish's refusals give way to what another wish asks for (cocooning then party: the club stays).
+    wanted = set().union(*(VIBES[v]["tags"] | VIBES[v]["categories"] for v in vibes))
+    avoid = set().union(*(w.get("avoid") or [] for w in wishes)) - wanted
+    ends = [w["end"] for w in wishes if "end" in w]
+    return {
+        "envies": [w["value"] for w in wishes],
+        "occasion": event["value"],
+        "vibes": vibes,
+        "audace": min(1.0, profile["audace"] + max(w.get("audace", 0) for w in wishes)),
+        "avoid": sorted(set(profile["avoid"]) | avoid),
+        "dinner": profile["dinner"] or any(w.get("dinner") for w in wishes) or bool(event.get("dinner")),
+        "start": min((w["start"] for w in wishes if "start" in w), default=DEFAULT_START),
+        "end": max(ends, key=_late) if ends else profile.get("end") or DEFAULT_END,
+    }
+
+
+def requests_for(
+    profile: dict[str, Any], days: list[date] | None = None, envies: list[str] | None = None, occasion: str | None = None,
+) -> list[parcours.Request]:
+    """The evenings to plan for a profile and wishes: the days given, its first outing, else the next Friday and Saturday."""
     if not days:
-        if profile.get("day"):
-            days = [date.fromisoformat(profile["day"])]
+        if profile.get("first_day"):
+            days = [date.fromisoformat(profile["first_day"])]
         else:
             today = date.today()
             friday = today + timedelta(days=(4 - today.weekday()) % 7)
             days = [friday, friday + timedelta(days=1)]
+    night = evening(profile, envies, occasion)
     requests = []
     for day in days:
-        begin, finish = parcours.window(day, profile["start"], profile["end"])
+        begin, finish = parcours.window(day, night["start"], night["end"])
         requests.append(parcours.Request(
-            day, profile["budget"], begin, finish, profile["vibes"],
-            audace=profile["audace"], avoid=set(profile["avoid"]), prefer=set(profile["prefer"]), dinner=profile["dinner"],
+            day, profile["budget"], begin, finish, night["vibes"],
+            audace=night["audace"], avoid=set(night["avoid"]), prefer=set(profile["prefer"]), dinner=night["dinner"],
         ))
     return requests
 
@@ -248,11 +344,14 @@ def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
-            if path == "/":
-                self._send(HTTPStatus.OK, PAGE.read_bytes(), "text/html; charset=utf-8")
+            if path in STATIC:
+                name, content_type = STATIC[path]
+                self._send(HTTPStatus.OK, RESOURCES.joinpath(name).read_bytes(), content_type)
             elif path == "/api/quiz":
                 vibes = {key: v["label"] for key, v in VIBES.items()}
                 self._send_json(HTTPStatus.OK, {"questions": QUESTIONS, "vibes": vibes})
+            elif path == "/api/soiree":
+                self._send_json(HTTPStatus.OK, {"envies": ENVIES, "occasions": OCCASIONS, "max": MAX_ENVIES})
             elif path.startswith("/api/profiles/") and _ID.match(path.rsplit("/", 1)[1]):
                 with LocalStore(db_path) as store:
                     found = store.get_profile(path.rsplit("/", 1)[1])
@@ -283,21 +382,33 @@ def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
                 with LocalStore(db_path) as store:
                     store.save_profile(profile_id, answers, profile)
                 return self._send_json(HTTPStatus.CREATED, {"id": profile_id, "profile": profile})
-            parts = path.strip("/").split("/")
-            if len(parts) == 4 and parts[:2] == ["api", "profiles"] and parts[3] == "parcours" and _ID.match(parts[2]):
-                return self._compose(parts[2])
+            if path == "/api/soirees":
+                return self._compose(body)
             if redo := _REDO.match(path):
                 return self._redo(redo["name"], int(redo["route"]), None if redo["step"] is None else int(redo["step"]))
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
 
-        def _compose(self, profile_id: str) -> None:
+        def _compose(self, body: dict[str, Any]) -> None:
+            """An evening's routes: its wishes, occasion and day, with the profile given or default settings."""
+            asked = body.get("envies") if isinstance(body.get("envies"), list) else []
+            envies = [e for e in dict.fromkeys(e for e in asked if isinstance(e, str)) if e in ENVIE_KEYS][:MAX_ENVIES]
+            if not envies:
+                return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "au moins une envie"})
+            occasion = body.get("occasion") if body.get("occasion") in OCCASION_KEYS else None
+            day = valid_day(body.get("day"))
+            days = [date.fromisoformat(day)] if day else None
+            profile_id = body.get("profile")
             with LocalStore(db_path) as store:
-                found = store.get_profile(profile_id)
-                if not found:
+                if profile_id is None:
+                    profile = profile_from({})
+                elif isinstance(profile_id, str) and _ID.match(profile_id) and (found := store.get_profile(profile_id)):
+                    profile = found["profile"]
+                else:
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "profil inconnu"})
+                name = f"soiree-{profile_id or 'libre'}-{'-'.join(envies)}"
                 with composing:
                     routes, page = parcours.generate(
-                        store, requests_for(found["profile"]), count=3, checks=checks, name=f"profil-{profile_id}",
+                        store, requests_for(profile, days, envies, occasion), count=3, checks=checks, name=name,
                     )
             self._send_json(HTTPStatus.OK, {"url": f"/parcours/{page.name}", "count": len(routes)})
 

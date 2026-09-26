@@ -98,7 +98,7 @@ class Request:
     trame: list[str] = field(default_factory=list)  # the steps asked, in order ("apero", "insolite", "fete")
     max_travel: int = 35  # minutes between two steps
     audace: float = 0.5  # 0: classics are fine, 1: only the unusual (questionnaire)
-    avoid: set[str] = field(default_factory=set)  # tags or keywords the couple refuses ("dans_le_noir", "sensations")
+    avoid: set[str] = field(default_factory=set)  # tags, keywords or categories the couple refuses ("dans_le_noir", "sensations")
     prefer: set[str] = field(default_factory=set)  # tags the couple likes ("jazz", "electro")
     dinner: bool = False  # the couple wants a sit-down dinner in the evening
 
@@ -429,7 +429,7 @@ def score(candidate: Candidate, request: Request) -> float:
     value = 4 * len(matched) / len(asked) if asked else 2
     if candidate.role == "sortie" and asked and not matched:
         return -math.inf  # an outing must answer one of the wishes
-    if request.avoid & (set(candidate.tags) | set(candidate.keywords)):
+    if request.avoid & (set(candidate.tags) | set(candidate.keywords) | set(activity.get("categories") or [])):
         return -math.inf  # the couple said no
     if "romantique" in candidate.vibes:
         value += 1.2

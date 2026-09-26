@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Votre soirée</title>
+<link rel="stylesheet" href="/client.css">
+</head>
+<body>
+<main>
+  <p class="brand">Surprise · votre soirée</p>
+  <section id="screen" aria-live="polite"></section>
+</main>
+<script src="/client.js"></script>
+<script>
+// One evening, apart from the questionnaire: up to MAX wishes, an occasion, a day.
+// With a profile (#p=<id>), its refusals, budget, audace and tastes apply; without, default ones.
+const state = { envies: [], occasions: [], max: 3, profile: null, night: { envies: [], occasion: null, day: nextFriday() } };
+
+function render() {
+  const { night, profile: found } = state;
+  const p = found?.profile;
+  const status = h("div", { id: "status" });
+  const envies = h("div", { class: "options", role: "group", "aria-labelledby": "q-title" },
+    state.envies.map((o) => {
+      const chosen = night.envies.includes(o.value);
+      return h("button", {
+        class: "option", "aria-pressed": String(chosen), disabled: !chosen && night.envies.length >= state.max,
+        onclick: () => { night.envies = chosen ? night.envies.filter((v) => v !== o.value) : [...night.envies, o.value]; render(); },
+      }, choiceContent(o));
+    }));
+  const occasions = h("div", { class: "chips", role: "group", "aria-label": "Une occasion ?" },
+    state.occasions.map((o) => h("button", {
+      class: "option", "aria-pressed": String(night.occasion === o.value),
+      onclick: () => { night.occasion = night.occasion === o.value ? null : o.value; render(); },
+    }, choiceContent(o))));
+  $("screen").replaceChildren(
+    p
+      ? h("p", { class: "profile-line" }, h("strong", {}, p.names || p.persona.name), p.names ? ` · ${p.persona.name}` : "",
+          " — vos « jamais », votre budget et vos goûts s'appliquent. ", h("a", { href: `/#p=${found.id}` }, "Voir le profil"))
+      : h("p", { class: "profile-line" }, "Sans profil, on compose avec des réglages par défaut. ", h("a", { href: "/" }, "Faire le quiz")),
+    h("h1", { id: "q-title" }, "Ce soir, envie de quoi ?"),
+    h("p", { class: "hint" }, `Jusqu'à ${state.max} envies, on les mêle dans la soirée.`),
+    h("p", { class: "count" }, `${night.envies.length} sur ${state.max}`),
+    envies,
+    h("h2", { class: "sub" }, "Une occasion ?"),
+    occasions,
+    dayField("night-day", night.day, (value) => { night.day = value; }),
+    h("nav", {},
+      h("span"),
+      h("button", { class: "primary", disabled: !night.envies.length || !night.day, onclick: () => compose(status) }, "Composer notre soirée")),
+    status,
+  );
+}
+
+async function compose(status) {
+  const { night } = state;
+  status.replaceChildren(h("div", { class: "loading" }, h("div", { class: "spinner" }), `On vérifie les disponibilités et on compose votre soirée du ${longDay(night.day)}… (une minute environ)`));
+  try {
+    const body = JSON.stringify({ ...night, profile: state.profile?.id || null });
+    const r = await fetch("/api/soirees", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    if (!r.ok) throw new Error(r.status);
+    const { url } = await r.json();
+    window.location.href = url;
+  } catch (e) {
+    status.replaceChildren(h("p", { class: "error" }, "La composition a échoué. Réessayez dans un instant."));
+  }
+}
+
+(async () => {
+  const data = await (await fetch("/api/soiree")).json();
+  Object.assign(state, { envies: data.envies, occasions: data.occasions, max: data.max });
+  const saved = location.hash.match(/p=([\w-]+)/);
+  if (saved) {
+    const r = await fetch(`/api/profiles/${saved[1]}`);
+    if (r.ok) {
+      state.profile = await r.json();
+      const first = state.profile.profile.first_day;
+      if (first && first >= isoDay(new Date())) state.night.day = first;
+    }
+  }
+  render();
+})();
+</script>
+</body>
+</html>
