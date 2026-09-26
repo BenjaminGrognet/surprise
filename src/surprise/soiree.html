@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="brand">Surprise · votre soirée</p>
+  <a class="brand" href="/">Surprise · votre soirée</a>
   <section id="screen" aria-live="polite"></section>
 </main>
 <script src="/client.js"></script>
@@ -56,7 +56,7 @@ function render() {
     p
       ? h("p", { class: "profile-line" }, h("strong", {}, p.names || p.persona.name), p.names ? ` · ${p.persona.name}` : "",
           " — vos « jamais », votre budget et vos goûts s'appliquent. ", h("a", { href: `/#p=${found.id}` }, "Voir le profil"))
-      : h("p", { class: "profile-line" }, "Sans profil, on compose avec des réglages par défaut. ", h("a", { href: "/" }, "Faire le quiz")),
+      : h("p", { class: "profile-line" }, "Sans profil, on compose avec des réglages par défaut. ", h("a", { href: "/profil" }, "Faire le quiz")),
     h("h1", { id: "q-title" }, "Ce soir, envie de quoi ?"),
     h("p", { class: "hint" }, `Jusqu'à ${state.max} envies, on les mêle dans la soirée.`),
     h("p", { class: "count" }, `${night.envies.length} sur ${state.max}`),

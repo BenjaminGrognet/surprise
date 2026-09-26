@@ -1,4 +1,4 @@
-// Shared by the questionnaire (/) and the evening page (/soiree).
+// Shared by the client's pages: home (/), questionnaire (/profil) and evening (/soiree).
 const $ = (id) => document.getElementById(id);
 
 function h(tag, attrs = {}, ...children) {
@@ -23,5 +23,9 @@ function dayField(id, value, set) {
   return h("div", { class: "field" }, h("label", { for: id }, "Le jour"),
     h("input", { type: "date", id, min: isoDay(new Date()), value, oninput: (e) => set(e.target.value) }));
 }
+
+// The couple's last profile, for the home page to offer it again (only in this browser).
+function rememberProfile(id) { try { localStorage.setItem("surprise.profile", id); } catch {} }
+function rememberedProfile() { try { return localStorage.getItem("surprise.profile"); } catch { return null; } }
 
 const choiceContent = (o) => [h("span", { class: "emoji", "aria-hidden": "true" }, o.emoji), h("span", {}, o.label)];

@@ -1,7 +1,8 @@
 """Local moderation UI: review collected activities and approve or reject them.
 
-Serves a single page and a small JSON API on 127.0.0.1, backed by the local
-SQLite store. Standard library only.
+Serves a single page (/admin) and a small JSON API on 127.0.0.1, backed by the
+local SQLite store. Standard library only. The client's server (surprise.quiz)
+serves it too, at the same address.
 """
 
 import argparse
@@ -59,8 +60,13 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
-            if path == "/":
+            if path in ("/admin", "/admin/"):
                 self._send(HTTPStatus.OK, PAGE.read_bytes(), "text/html; charset=utf-8")
+            elif path == "/":
+                self.send_response(HTTPStatus.FOUND)
+                self.send_header("Location", "/admin")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
             elif path == "/api/activities":
                 stamp = db_path.stat().st_mtime_ns
                 if cache.get("stamp") != stamp:
@@ -144,7 +150,7 @@ def main() -> None:
     args = parser.parse_args()
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.db))
-    url = f"http://127.0.0.1:{server.server_port}/"
+    url = f"http://127.0.0.1:{server.server_port}/admin"
     print(f"Modération sur {url} (Ctrl+C pour arrêter)")
     if not args.no_browser:
         webbrowser.open(url)

@@ -209,8 +209,11 @@ Les refus, le budget, l'audace et les goûts sont ceux du profil, ou des réglag
 (« être en maillot de bain », « le vide », « la foule »…) visent des tags, des mots-clés ou des catégories.
 
 ```bash
-uv run python -m surprise.quiz    # quiz : http://127.0.0.1:8001, soirée : http://127.0.0.1:8001/soiree
+uv run python -m surprise.quiz    # http://127.0.0.1:8001
 ```
+
+Un seul site : `/` accueil du client (il y retrouve son dernier profil, gardé dans le navigateur), `/profil` le quiz,
+`/soiree` une soirée, `/parcours/<nom>.html` ses parcours, `/admin` la modération.
 
 ## Modération
 
@@ -220,6 +223,8 @@ Interface locale pour relire les activités collectées (`--store local`) et les
 uv run python -m surprise.admin
 ```
 
-Ouvre http://127.0.0.1:8000 (`--port` pour changer, `--db` pour une autre base). Raccourcis : `j`/`k` naviguer,
+Ouvre http://127.0.0.1:8000/admin (`--port` pour changer, `--db` pour une autre base) ; aussi servie par le
+questionnaire sur http://127.0.0.1:8001/admin. Onglet, filtres et fiche active restent dans l'adresse
+(`#tag=coquin&fiche=…`) : un retour ou un rechargement retrouve la sélection. Filtre par tag, ou clic sur un tag d'une fiche. Raccourcis : `j`/`k` naviguer,
 `v` valider, `r` rejeter, `a` remettre en attente, `o` ouvrir la fiche source, `z` annuler. Filtre par source. Les décisions sont conservées
 d'une collecte à l'autre ; une fiche modifiée par la source après décision est marquée « Modifiée ».

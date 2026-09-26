@@ -13,9 +13,11 @@ Each evening is asked apart, on its own page (/soiree): up to three wishes
 and tastes come from the profile, when there is one. From both,
 surprise.parcours composes the evening.
 
-    uv run python -m surprise.quiz            # http://127.0.0.1:8001, the evening at /soiree
+    uv run python -m surprise.quiz            # http://127.0.0.1:8001
 
-Served on 127.0.0.1 with the standard library, like the moderation page.
+One site: the client's home (/), the quiz (/profil), an evening (/soiree), its
+routes (/parcours/<name>.html) and the moderation page (/admin, from
+surprise.admin). Served on 127.0.0.1 with the standard library.
 """
 
 import argparse
@@ -34,14 +36,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from surprise import images, parcours
+from surprise import admin, images, parcours
 from surprise.local_store import DEFAULT_PATH, LocalStore
 from surprise.tags import VIBES
 
 RESOURCES = files("surprise")
 # Pages and the style and script they share.
 STATIC = {
-    "/": ("quiz.html", "text/html; charset=utf-8"),
+    "/": ("accueil.html", "text/html; charset=utf-8"),
+    "/profil": ("quiz.html", "text/html; charset=utf-8"),
     "/soiree": ("soiree.html", "text/html; charset=utf-8"),
     "/client.css": ("client.css", "text/css; charset=utf-8"),
     "/client.js": ("client.js", "text/javascript; charset=utf-8"),
@@ -74,13 +77,13 @@ QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "id": "energie", "kind": "scale",
-        "question": "Plutôt plaid ou dancefloor ?", "hint": "De 1, on se pose, à 5, on ne tient pas en place.",
+        "question": "Plutôt cocooning ou oiseaux de nuit ?", "hint": "De 1, on se pose, à 5, on ne tient pas en place.",
         "options": [
-            {"value": 1, "label": "Plaid", "emoji": "🛋️", "vibes": {"detente": 2}},
+            {"value": 1, "label": "Cocooning", "emoji": "🛋️", "vibes": {"detente": 2}},
             {"value": 2, "label": "", "emoji": "🍵", "vibes": {"detente": 1, "cultiver": 1}},
             {"value": 3, "label": "", "emoji": "🚶", "vibes": {"flaner": 1}},
             {"value": 4, "label": "", "emoji": "🕺", "vibes": {"bouger": 1, "musique": 1}},
-            {"value": 5, "label": "Dancefloor", "emoji": "🪩", "vibes": {"fete": 2, "bouger": 1}},
+            {"value": 5, "label": "Oiseaux de nuit", "emoji": "🦉", "vibes": {"fete": 2, "bouger": 1}},
         ],
     },
     {
@@ -374,7 +377,8 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
     if warm:
         threading.Thread(target=warm_up, daemon=True).start()
 
-    class Handler(BaseHTTPRequestHandler):
+    # The moderation page and its API (/admin, /api/activities, /api/meta…) come with it.
+    class Handler(admin.make_handler(db_path)):
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
             if path in STATIC:
@@ -398,10 +402,12 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
             elif re.match(r"^/images/\w+\.\w+$", path) and (image := images.DIRECTORY / path.removeprefix("/images/")).exists():
                 self._send(HTTPStatus.OK, image.read_bytes(), images.MEDIA_TYPES.get(image.suffix, "application/octet-stream"))
             else:
-                self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
+                super().do_GET()
 
         def do_POST(self) -> None:
             path = urlsplit(self.path).path
+            if path.startswith("/api/activities/"):
+                return super().do_POST()
             # Requiring JSON forces a CORS preflight, so other sites cannot post here.
             if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
                 return self._send_json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"error": "JSON attendu"})
@@ -458,17 +464,6 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
                 return self._send_json(HTTPStatus.CONFLICT, {"error": error})
             self._send_json(HTTPStatus.OK, {"url": f"/parcours/{name}.html"})
 
-        def _send_json(self, code: HTTPStatus, payload: Any) -> None:
-            self._send(code, json.dumps(payload, ensure_ascii=False).encode(), "application/json; charset=utf-8")
-
-        def _send(self, code: HTTPStatus, body: bytes, content_type: str) -> None:
-            self.send_response(code)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(body)
-
         def log_message(self, format: str, *args: Any) -> None:
             pass
 
@@ -486,7 +481,7 @@ def main() -> None:
     sys.stdout.reconfigure(errors="replace")
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.db, args.checks, warm=True))
     url = f"http://127.0.0.1:{args.port}"
-    print(f"Questionnaire : {url}")
+    print(f"Accueil : {url}  ·  modération : {url}/admin")
     if not args.no_open:
         webbrowser.open(url)
     server.serve_forever()

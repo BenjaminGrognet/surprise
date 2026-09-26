@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="brand">Surprise · votre profil de couple</p>
+  <a class="brand" href="/">Surprise · votre profil de couple</a>
   <div class="progress" aria-hidden="true"><span id="bar"></span></div>
   <section id="screen" aria-live="polite"></section>
 </main>
@@ -91,6 +91,7 @@ async function renderProfile() {
 const ENDS = { "23:30": "avant minuit", "00:30": "sur un dernier verre", "03:30": "au bout de la nuit" };
 
 function showProfile(id, p) {
+  rememberProfile(id);
   $("bar").style.width = "100%";
   const eviter = state.questions.find((q) => q.id === "eviter");
   const never = (state.answers.eviter || []).map((v) => eviter?.options.find((o) => o.value === v)).filter(Boolean);

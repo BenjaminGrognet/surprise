@@ -41,8 +41,9 @@ def request(url, data=None, content_type="application/json"):
 
 
 def test_page_is_served(base_url):
-    status, body = request(f"{base_url}/")
+    status, body = request(f"{base_url}/admin")
     assert status == 200 and b"<title>Surprise" in body
+    assert request(f"{base_url}/")[1] == body  # the root leads to it
 
 
 def test_status_is_updated_through_the_api(base_url):

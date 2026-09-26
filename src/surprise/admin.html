@@ -62,6 +62,8 @@
   .badge.category { background: var(--cat-bg); color: var(--accent); border-color: transparent; }
   .badge.vibe { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
   .badge.tag { color: var(--muted); }
+  button.badge.tag { font: inherit; font-size: 12px; cursor: pointer; }
+  button.badge.tag:hover { color: var(--accent); border-color: var(--accent); }
   .badge.orig { font-weight: 600; font-variant-numeric: tabular-nums; }
   .badge.orig.high { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
   .badge.keyword { font-style: italic; color: var(--muted); border-style: dashed; }
@@ -88,6 +90,7 @@
     <select id="source" aria-label="Source"><option value="">Toutes sources</option></select>
     <select id="category" aria-label="Catégorie"><option value="">Toutes catégories</option></select>
     <select id="vibe" aria-label="Vibe"><option value="">Toutes vibes</option></select>
+    <select id="tag" aria-label="Tag"><option value="">Tous tags</option></select>
     <select id="arr" aria-label="Arrondissement"><option value="">Tous arrondissements</option></select>
     <select id="sort" aria-label="Tri">
       <option value="date">Tri : prochaine date</option>
@@ -194,7 +197,7 @@ function isEvening(it) {
 }
 
 function filtered() {
-  const q = $("q").value.trim().toLowerCase(), arr = $("arr").value, source = $("source").value, category = $("category").value, vibe = $("vibe").value;
+  const q = $("q").value.trim().toLowerCase(), arr = $("arr").value, source = $("source").value, category = $("category").value, vibe = $("vibe").value, tag = $("tag").value;
   const out = items.filter((it) => {
     const a = it.activity, v = a.venue || {};
     if (dismissed.has(key(it))) return false;
@@ -202,6 +205,7 @@ function filtered() {
     if (source && it.source_id !== source) return false;
     if (category === "none" ? (a.categories || []).length : category && !(a.categories || []).includes(category)) return false;
     if (vibe === "none" ? it.vibes.length : vibe && !it.vibes.includes(vibe)) return false;
+    if (tag === "none" ? it.tags.length : tag && !it.tags.includes(tag)) return false;
     if (arr && String(v.arrondissement) !== arr) return false;
     if ($("evening").checked && !isEvening(it)) return false;
     if ($("free").checked && !a.offers[0]?.is_free) return false;
@@ -290,7 +294,10 @@ function card(it, index) {
       it.vibes.length > 0 && h("div", { class: "badges" },
         it.vibes.map((id) => h("span", { class: "badge vibe", title: META.vibes[id]?.question }, META.vibes[id]?.label || id))),
       it.tags.length > 0 && h("div", { class: "badges" },
-        it.tags.map((id) => h("span", { class: "badge tag", title: META.facets[META.tags[id]?.facet] }, `#${META.tags[id]?.label || id}`))),
+        it.tags.map((id) => h("button", {
+          type: "button", class: "badge tag", title: `${META.facets[META.tags[id]?.facet] || "Tag"} · filtrer sur ce tag`,
+          onclick: () => { $("tag").value = id; resetView(); },
+        }, `#${META.tags[id]?.label || id}`))),
       h("div", { class: "badges" },
         h("span", { class: `badge orig${it.originality.score >= 60 ? " high" : ""}`, title: it.originality.reasons.join(" · ") || "rien de particulier" },
           `Originalité ${it.originality.score}`),
@@ -327,12 +334,48 @@ function render() {
     items.length ? "Rien à afficher avec ces filtres." : "Aucune activité — lance d'abord le collecteur avec --store local.")]));
   $("more").hidden = visible.length <= state.shown;
   $("more").textContent = `Afficher plus (${visible.length - state.shown} restantes)`;
+  saveView();
+}
+
+// The view (tab, filters, focused activity) lives in the address: coming back to the page,
+// or reloading it, finds the same selection.
+const FILTERS = ["q", "source", "category", "vibe", "tag", "arr", "sort", "evening", "free", "changed"];
+
+function saveView() {
+  const params = new URLSearchParams();
+  if (state.tab !== "proposed") params.set("tab", state.tab);
+  for (const id of FILTERS) {
+    const el = $(id), value = el.type === "checkbox" ? (el.checked ? "1" : "") : el.value;
+    if (value && !(el.tagName === "SELECT" && value === el.options[0].value)) params.set(id, value);  // not the default
+  }
+  if (visible[state.focus]) params.set("fiche", key(visible[state.focus]));
+  if (state.shown > PAGE_SIZE) params.set("n", state.shown);
+  const hash = params.toString();
+  history.replaceState(null, "", hash ? `#${hash}` : location.pathname + location.search);
+}
+
+function restoreView() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  state.tab = params.get("tab") || state.tab;
+  for (const id of FILTERS) {
+    const el = $(id), value = params.get(id);
+    if (value == null) continue;
+    if (el.type === "checkbox") el.checked = value === "1"; else el.value = value;
+  }
+  state.shown = Math.max(PAGE_SIZE, Number(params.get("n")) || 0);
+  visible = filtered();
+  const index = visible.findIndex((it) => key(it) === params.get("fiche"));
+  if (index >= 0) {
+    state.focus = index;
+    state.shown = Math.max(state.shown, Math.ceil((index + 1) / PAGE_SIZE) * PAGE_SIZE);
+  }
 }
 
 function highlight(scroll = false) {
   document.querySelectorAll(".card.focused").forEach((c) => c.classList.remove("focused"));
   const el = $("list").children[state.focus];
   if (el?.classList.contains("card")) { el.classList.add("focused"); if (scroll) el.scrollIntoView({ block: "nearest" }); }
+  saveView();
 }
 
 function resetView() {
@@ -399,7 +442,7 @@ document.addEventListener("keydown", (e) => {
   if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
 });
 
-for (const id of ["q", "source", "category", "vibe", "arr", "sort", "evening", "free", "changed"]) {
+for (const id of ["q", "source", "category", "vibe", "tag", "arr", "sort", "evening", "free", "changed"]) {
   $(id).addEventListener("input", resetView);
 }
 $("more").addEventListener("click", () => { state.shown += PAGE_SIZE; render(); });
@@ -419,11 +462,22 @@ Promise.all([fetch("/api/meta").then((r) => r.json()), fetch("/api/activities").
     ...Object.entries(META.vibes).map(([id, v]) => h("option", { value: id }, `${v.label} (${vibeCounts[id] || 0})`)),
     h("option", { value: "none" }, `Sans vibe (${items.filter((it) => !it.vibes.length).length})`),
   );
+  // Tags by facet (Activité, Cadre, Moment), those present only, with their count.
+  const tagCounts = {};
+  for (const it of items) for (const id of it.tags) tagCounts[id] = (tagCounts[id] || 0) + 1;
+  $("tag").append(
+    ...Object.entries(META.facets).map(([facet, label]) => h("optgroup", { label },
+      ...Object.entries(META.tags).filter(([id, t]) => t.facet === facet && tagCounts[id])
+        .map(([id, t]) => h("option", { value: id }, `${t.label} (${tagCounts[id]})`)))),
+    h("option", { value: "none" }, `Sans tag (${items.filter((it) => !it.tags.length).length})`),
+  );
   const sources = new Map(items.map((it) => [it.source_id, it.source_name]));
   $("source").append(...[...sources].sort((x, y) => x[1].localeCompare(y[1], "fr")).map(([id, name]) => h("option", { value: id }, name)));
   const arrs = [...new Set(items.map((it) => it.activity.venue?.arrondissement).filter(Boolean))].sort((x, y) => x - y);
   $("arr").append(...arrs.map((n) => h("option", { value: n }, `${n}${n === 1 ? "er" : "e"} arrondissement`)));
+  restoreView();
   render();
+  highlight(true);
 }).catch((err) => toast(`Chargement impossible : ${err.message}`));
 </script>
 </body>

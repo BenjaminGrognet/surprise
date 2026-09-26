@@ -8,6 +8,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
 main { max-width: 620px; margin: 0 auto; padding: 24px 16px 48px; }
+a.brand { display: block; text-decoration: none; }
 .brand { font-family: Georgia, "Times New Roman", serif; font-size: 18px; color: var(--accent); margin: 0 0 20px; }
 .progress { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-bottom: 28px; }
 .progress span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s ease; }
@@ -58,3 +59,13 @@ h2.sub { font-size: 16px; margin: 26px 0 10px; }
 .profile-line a { color: var(--accent); }
 .option:disabled { opacity: .4; cursor: not-allowed; }
 .option:disabled:hover { border-color: var(--line); }
+.home h1 { font-size: clamp(32px, 8vw, 44px); margin-bottom: 12px; }
+.home .lead { font-size: 18px; color: var(--muted); margin: 0 0 28px; }
+.home .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin: 0 0 36px; }
+.home .persona { margin: 0 0 20px; }
+.home .persona h2 { font-size: 26px; }
+.home ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+.home ol li { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.home ol .emoji { font-size: 26px; line-height: 1; }
+.home ol strong { display: block; }
+.home ol span + div { color: var(--muted); font-size: 15px; }

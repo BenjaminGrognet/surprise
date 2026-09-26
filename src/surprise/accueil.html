@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surprise · sorties à deux à Paris</title>
+<link rel="stylesheet" href="/client.css">
+</head>
+<body>
+<main class="home">
+  <p class="brand">Surprise</p>
+  <h1>Des soirées à deux dans Paris, qu'on ne trouve pas tout seuls.</h1>
+  <p class="lead">Dites-nous qui vous êtes, puis ce qui vous fait envie ce soir-là : on compose trois soirées complètes,
+    réservables ou gratuites, à pied d'une étape à l'autre.</p>
+  <section id="start" aria-live="polite"></section>
+  <ol>
+    <li><span class="emoji" aria-hidden="true">💬</span><div><strong>Votre profil, une fois</strong>Quelques questions sur vous deux :
+      ce qui vous plaît, ce que vous ne voulez jamais, votre budget.</div></li>
+    <li><span class="emoji" aria-hidden="true">✨</span><div><strong>Une envie par soirée</strong>Faire la fête, se poser, pimenter,
+      une occasion à fêter : jusqu'à trois envies, un jour, et si vous dînez.</div></li>
+    <li><span class="emoji" aria-hidden="true">🗺️</span><div><strong>Trois parcours au choix</strong>Horaires, trajets, prix et liens
+      de réservation ; une étape ne vous plaît pas, on la retire au sort. Et si vous découchez, la nuit est prévue.</div></li>
+  </ol>
+</main>
+<script src="/client.js"></script>
+<script>
+function start(profile) {
+  if (!profile) {
+    return $("start").replaceChildren(h("div", { class: "actions" },
+      h("a", { class: "primary", href: "/profil" }, "Faire notre profil"),
+      h("a", { class: "link", href: "/soiree" }, "Une soirée tout de suite, sans profil →")));
+  }
+  const p = profile.profile;
+  $("start").replaceChildren(
+    h("div", { class: "persona" },
+      h("p", { class: "eyebrow" }, p.names ? `Content de vous revoir, ${p.names}` : "Content de vous revoir"),
+      h("h2", {}, p.persona.name),
+      h("p", {}, p.persona.text)),
+    h("div", { class: "actions" },
+      h("a", { class: "primary", href: `/soiree#p=${profile.id}` }, "Préparer une soirée"),
+      h("a", { class: "link", href: `/profil#p=${profile.id}` }, "Revoir notre profil"),
+      h("a", { class: "link", href: "/profil" }, "Refaire le quiz")));
+}
+
+(async () => {
+  const id = rememberedProfile();
+  let profile = null;
+  if (id) {
+    try { const r = await fetch(`/api/profiles/${encodeURIComponent(id)}`); if (r.ok) profile = await r.json(); } catch {}
+  }
+  start(profile);
+})();
+</script>
+</body>
+</html>

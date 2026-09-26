@@ -105,6 +105,10 @@ def test_profile_is_stored_through_the_api(tmp_path):
         evening = json.load(urlopen(f"{url}/api/soiree"))
         assert evening["max"] == 3 and evening["envies"] and evening["occasions"]
         assert b"Ce soir" in urlopen(f"{url}/soiree").read() and urlopen(f"{url}/client.js").status == 200
+        # One site: the client's home, the quiz, and the moderation page with its API.
+        assert b"Faire notre profil" in urlopen(f"{url}/").read()
+        assert b"profil de couple" in urlopen(f"{url}/profil").read()
+        assert b"<title>Surprise" in urlopen(f"{url}/admin").read() and json.load(urlopen(f"{url}/api/meta"))["vibes"]
         for body, code in [({"envies": [], "diner": True}, 400), ({"envies": ["fete"]}, 400), ({"envies": ["fete"], "diner": False, "profile": "inconnu"}, 404)]:
             request = Request(f"{url}/api/soirees", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
             try:
