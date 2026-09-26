@@ -219,3 +219,11 @@ def test_shotgun_asks_the_cumulative_page_until_it_ends():
     with httpx.Client() as client:
         assert shotgun.fetch_event_slugs(client, delay=0) == ["a", "b", "c"]
     assert [call.request.url.params["page"] for call in route.calls] == ["25", "50"]
+
+
+def test_stag_party_offers_are_not_for_couples():
+    from surprise.collectors.common import GROUP_PARTY
+
+    assert GROUP_PARTY.search('SPA insolite "The Beer Spa" formule EVG & EVJF')
+    assert GROUP_PARTY.search("Atelier pour un enterrement de vie de jeune fille")
+    assert not GROUP_PARTY.search("Atelier bougie en duo") and not GROUP_PARTY.search("Soirée Evgeny Kissin")

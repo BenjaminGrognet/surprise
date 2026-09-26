@@ -29,6 +29,12 @@ OFF_TOPIC = re.compile(
     r"massage prénatal|flagship|boutique|concept[- ]store|magasin|shopping|\bcures?\b",
     re.IGNORECASE,
 )
+# Offers for a stag or hen party, in their title: a group of friends, not a couple. Their texts
+# often say "also for a hen party" of fine couple workshops: those are kept.
+GROUP_PARTY = re.compile(
+    r"\bEVG\b|\bEVJF\b|enterrements? de vie de (?:garçon|jeune fille|célibataires?)|bachelor(?:ette)? party|hen party|stag party",
+    re.IGNORECASE,
+)
 _EUROS = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)", re.IGNORECASE)
 # "de 24 à 45 €": the lower bound carries no currency sign.
 _EURO_RANGE = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:à|-|–)\s*\d+(?:[.,]\d{1,2})?\s*(?:€|euros?)", re.IGNORECASE)

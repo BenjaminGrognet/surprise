@@ -45,6 +45,7 @@ import httpx
 
 from surprise import availability, images
 from surprise.collectors import come_to_paris, funbooker, wecandoo
+from surprise.collectors.common import GROUP_PARTY
 from surprise.local_store import DEFAULT_PATH, LocalStore
 from surprise.originality import Scorer
 from surprise.sources import source_name
@@ -65,6 +66,8 @@ _DURATIONS = [
 # Price for two when a walk-in place gives none.
 _ESTIMATES = {"repas": 90, "verre": 30, "sortie": 40}
 # When a walk-in place gives no hours: when couples usually go, and until when.
+# When a dinner may start: not a table at 23:00 after the show.
+DINNER_HOURS = (time(18, 30), time(21, 30))
 _USUAL_HOURS = {"verre": (time(18), time(1, 30)), "club": (time(23), time(5))}
 _ROMANTIC_TAGS = {"chandelles", "vue", "sur_l_eau", "en_duo", "cache", "chic", "jazz", "classique", "eglise", "dans_le_noir", "gastronomique", "massage"}
 _ROMANTIC_WORDS = {"romantique", "intimiste", "cosy", "aux chandelles", "vue panoramique", "coucher de soleil", "en duo"}
@@ -293,7 +296,22 @@ def needs_check(item: dict[str, Any]) -> bool:
 
 
 def build_candidate(item: dict[str, Any], request: Request, checked: dict[str, Any] | None, originality: int = 35) -> Candidate | None:
-    """The activity as a step of the evening, with its possible start times, or None if it cannot be one."""
+    """The activity as a step of the evening, with its possible start times, or None if it cannot be one.
+
+    Never a stag or hen party offer (collected before the rule); a dinner sits down between 18:30 and 21:30.
+    """
+    activity = item["activity"]
+    if GROUP_PARTY.search(" ".join(filter(None, [activity["title"], (activity.get("venue") or {}).get("name")]))):
+        return None
+    candidate = _build_candidate(item, request, checked, originality)
+    if candidate and candidate.role == "repas":
+        candidate.starts = [s for s in candidate.starts if DINNER_HOURS[0] <= s.time() <= DINNER_HOURS[1] and s.date() == request.day]
+        if not candidate.starts:
+            return None
+    return candidate
+
+
+def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, Any] | None, originality: int) -> Candidate | None:
     activity = item["activity"]
     place = coordinates(item)
     if not place:

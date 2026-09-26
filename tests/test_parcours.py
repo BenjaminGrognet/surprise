@@ -205,3 +205,13 @@ def test_regenerate_rewrites_the_page(tmp_path, monkeypatch):
     # The only other evening would repeat a step: the whole route has no other draw.
     assert parcours.regenerate(None, None, "essai", 0, claude=False) == "aucun autre parcours complet ce soir-là"
     assert parcours.regenerate(None, None, "absent", 0, claude=False) == "parcours introuvable : relancez la composition"
+
+
+def test_no_stag_party_and_no_late_dinner():
+    party = item("evg", "Laser Game formule EVG & EVJF", ["jeu"], occurrences=[at(20)])
+    assert parcours.build_candidate(party, request(), None) is None
+    restaurant = item("resto", "Bistrot", ["restaurant"], kind="permanent")
+    checked = {"engine": "zenchef", "available": True, "slots": ["19:00", "21:30", "22:00", "23:00"], "detail": ""}
+    assert parcours.build_candidate(restaurant, request(), checked).starts == [at(19), at(21, 30)]
+    late = {**checked, "slots": ["22:30", "23:00"]}
+    assert parcours.build_candidate(restaurant, request(), late) is None

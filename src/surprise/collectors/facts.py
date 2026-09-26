@@ -23,7 +23,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import OFF_TOPIC, USER_AGENT, Normalized, safe_url
+from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, USER_AGENT, Normalized, safe_url
 from surprise.collectors.paris_zigzag import PARIS, WINDOW, postal_code, split_venue
 from surprise.models import Activity, ActivityKind, Image, Occurrence, Offer, PriceUnit, RawRecord, Venue
 
@@ -193,7 +193,7 @@ def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: da
     context = " ".join(filter(None, [name, facts.get("audience"), " ".join(facts.get("tags") or [])]))
     if _CHILD_AUDIENCE.search(context):
         return Normalized(raw, rejection="jeune public")
-    if _NOT_FOR_COUPLES.search(context):
+    if _NOT_FOR_COUPLES.search(context) or GROUP_PARTY.search(name):
         return Normalized(raw, rejection="pas pour un couple")
     if OFF_TOPIC.search(name):
         return Normalized(raw, rejection="hors sujet")
