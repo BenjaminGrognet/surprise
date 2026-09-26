@@ -16,6 +16,8 @@ def activity(title, venue=None, categories=()):
         ("Candlelight : hommage à Adele", "Maison de l'Océan", [], {"classique", "chandelles"}, {"musique", "emerveiller", "romantique"}),
         ("Catacombes de Paris : Billet d'entrée + Audioguide", None, ["lieu_insolite"], {"souterrain", "frisson"}, {"frisson", "insolite"}),
         ("Atelier tournage & peinture sur céramique en duo", None, ["atelier"], {"ceramique", "peinture_dessin"}, {"creer"}),
+        ("Hôtel Erotica : un spectacle érotique", None, ["theatre"], {"coquin"}, {"coquin"}),
+        ("Secret Square : spectacles de strip-tease", None, ["cabaret"], {"coquin", "cabaret"}, {"coquin", "emerveiller"}),
     ],
 )
 def test_tags_and_vibes(title, venue, categories, tags, vibes):
@@ -33,6 +35,10 @@ def test_tags_and_vibes(title, venue, categories, tags, vibes):
         ("Bruges : Excursion autoguidée au départ de Paris", None, "art"),  # "art" inside "départ"
         ("Hello Kitty : Beyond Cute - Paris", "Galerie Joseph", "frisson"),
         ("Dj Krush + Guest", "La Machine du Moulin Rouge", "cabaret"),
+        ("Bérengère Krief dans Sexe", "L'Olympia", "coquin"),
+        ("Strip", "Théâtre de la Cité Internationale", "coquin"),
+        ("Libertino", None, "coquin"),
+        ("La Tropicana - Sex Intention - Dj Yoyow", None, "coquin"),
     ],
 )
 def test_rules_avoid_false_matches(title, venue, absent):

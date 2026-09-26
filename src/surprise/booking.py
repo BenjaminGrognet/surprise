@@ -57,6 +57,27 @@ ENGINES = {
     "OpenTable": r"opentable\.(?:fr|com)/(?:r/|restref|booking)",
     "Guestonline": r"guestonline\.(?:io|fr)",
     "Resy": r"resy\.com/cities",
+    # Hotel booking engines, on the hotel's site or its "Réserver" page.
+    "D-EDGE": r"secure-hotel-booking\.com|availpro\.com|fastbooking\.(?:com|net)|d-edge\.com/booking",
+    "SynXis": r"synxis\.com",
+    "Mews": r"app\.mews\.(?:com|li)|mews\.li/distributor",
+    "Reservit": r"reservit\.com",
+    "Cloudbeds": r"hotels\.cloudbeds\.com",
+    "SiteMinder": r"thebookingbutton\.com|direct-book\.com|book-directonline\.com",
+    "Amenitiz": r"amenitiz\.io|amenitiz\.com/booking",
+    "Lighthouse": r"bookingengine\.mylighthouse\.com",
+    "Profitroom": r"booking\.profitroom\.com",
+    "TravelClick": r"reservations\.travelclick\.com|ihotelier\.com",
+    "Accor": r"all\.accor\.com",
+    "Hyatt": r"hyatt\.com/shop",
+    "Marriott": r"marriott\.com/reservation",
+    "Hilton": r"hilton\.com/[a-z]{2}/book",
+    "WebHotelier": r"webhotelier\.net",
+    "Hotelrunner": r"hotelrunner\.com",
+    "Misterbooking": r"misterbooking\.(?:com|net)",
+    "Booking.com": r"booking\.com/hotel/",
+    "Loveroomers": r"booking\.loveroomers\.fr",
+    "Love'nSpa": r"lovenspa\.fr/products/",
 }
 _ENGINE_PATTERNS = {name: re.compile(pattern, re.IGNORECASE) for name, pattern in ENGINES.items()}
 # A venue's own ticketing: "billetterie.opera-comique.com", "tickets.monuments-nationaux.fr".
@@ -113,8 +134,8 @@ def is_free(activity: Activity) -> bool:
 
 
 def is_walk_in(activity: Activity) -> bool:
-    """A bar, club or restaurant: being open is enough."""
-    return bool(WALK_IN_CATEGORIES & set(activity.categories))
+    """A bar, club or restaurant: being open is enough. Not a hotel's bar: the room is booked."""
+    return bool(WALK_IN_CATEGORIES & set(activity.categories)) and "hotel" not in activity.categories
 
 
 def is_open(client: httpx.Client, activity: Activity, source_text: str = "") -> bool:

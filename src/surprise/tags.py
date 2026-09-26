@@ -42,6 +42,8 @@ _TAG_RULES = [
     ("magie", "Magie / illusion", "activite", r"magi(?:e|que|cien)|illusion|paradox|lupin"),
     ("cabaret", "Cabaret / revue", "activite", r"cabaret|(?<!machine du )moulin rouge|paradis latin|crazy horse|lido|burlesque|revue"),
     ("drag", "Drag", "activite", r"\bdrag\b|madame arthur"),
+    # Said in the title only: "Sexe" (a stand-up), "Strip" (a play) or "Libertino" (a restaurant) are not.
+    ("coquin", "Coquin / effeuillage", "activite", r"[ée]roti|burlesque|effeuill|strip[- ]?(?:tease|club|poker|&)|strips back|crazy horse|pole[- ]?dance|pin[- ]?ups?|lingerie|sexy|spicy|naughty|coquin|libertin(?!o)"),
     ("cirque", "Cirque", "activite", r"cirque|acrobat"),
     ("danse", "Danse / soirée dansante", "activite", r"\bdanse|dance|\bbal\b|salsa|tango|swing|latino|baile"),
     # Musique
@@ -196,6 +198,12 @@ VIBES = {
         "question": "Sortir des sentiers battus, un lieu qu'on n'imagine pas",
         "tags": {"cache", "souterrain", "dans_le_noir", "defouloir", "flottaison", "immersif"},
         "categories": {"lieu_insolite"},
+    },
+    "coquin": {
+        "label": "Pimenter",
+        "question": "Un moment un peu coquin, rien que nous deux",
+        "tags": {"coquin"},
+        "categories": set(),
     },
     "romantique": {
         "label": "Romantique",

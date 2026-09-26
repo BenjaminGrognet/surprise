@@ -57,7 +57,7 @@ QUESTIONS: list[dict[str, Any]] = [
         "options": [
             {"value": "debut", "label": "On se découvre", "emoji": "🌱", "vibes": {"rire": 1, "defi": 1}, "avoid": ["dans_le_noir"]},
             {"value": "complices", "label": "Complices depuis un moment", "emoji": "🤝", "vibes": {"rire": 1, "insolite": 1}},
-            {"value": "installes", "label": "Installés, envie de pimenter", "emoji": "🌶️", "vibes": {"insolite": 1, "romantique": 1}},
+            {"value": "installes", "label": "Installés, envie de pimenter", "emoji": "🌶️", "vibes": {"insolite": 1, "romantique": 1, "coquin": 1}},
             {"value": "longue", "label": "Une longue histoire à célébrer", "emoji": "💞", "vibes": {"romantique": 2, "savourer": 1}},
         ],
     },
@@ -155,6 +155,7 @@ QUESTIONS: list[dict[str, Any]] = [
             {"value": "eau", "label": "Les bateaux", "emoji": "⛵", "avoid": ["sur_l_eau"]},
             {"value": "animaux", "label": "Les animaux", "emoji": "🐾", "avoid": ["animaux"]},
             {"value": "ecrans", "label": "Les écrans, le virtuel", "emoji": "🥽", "avoid": ["jeu_video"]},
+            {"value": "coquin", "label": "Le coquin, l'effeuillage", "emoji": "🙈", "avoid": ["coquin"]},
         ],
     },
     {
@@ -188,6 +189,7 @@ ENVIES: list[dict[str, Any]] = [
     {"value": "gourmand", "label": "Se régaler", "emoji": "🍽️", "vibes": ["savourer"], "dinner": True},
     {"value": "musique", "label": "Vibrer en musique", "emoji": "🎷", "vibes": ["musique", "emerveiller"]},
     {"value": "air", "label": "Prendre l'air", "emoji": "🌿", "vibes": ["flaner", "savourer"], "start": "18:30"},
+    {"value": "pimenter", "label": "Pimenter la soirée", "emoji": "🌶️", "vibes": ["coquin", "romantique"], "start": "20:00"},
     {"value": "frissons", "label": "Frissonner", "emoji": "👻", "vibes": ["frisson", "insolite"]},
     {"value": "surprise", "label": "Surprenez-nous", "emoji": "🎁", "vibes": [], "audace": 0.3},
 ]
@@ -307,9 +309,11 @@ def evening(
 
 def requests_for(
     profile: dict[str, Any], days: list[date] | None = None, envies: list[str] | None = None, occasion: str | None = None,
-    dinner: bool | None = None,
+    dinner: bool | None = None, overnight: bool = False,
 ) -> list[parcours.Request]:
-    """The evenings to plan for a profile and wishes: the days given, its first outing, else the next Friday and Saturday."""
+    """The evenings to plan for a profile and wishes: the days given, its first outing, else the next Friday and Saturday.
+
+    `overnight`: the couple sleeps out, the evening ends in a hotel or a love room."""
     if not days:
         if profile.get("first_day"):
             days = [date.fromisoformat(profile["first_day"])]
@@ -324,7 +328,7 @@ def requests_for(
         requests.append(parcours.Request(
             day, profile["budget"], begin, finish, night["vibes"],
             audace=night["audace"], avoid=set(night["avoid"]), prefer=set(profile["prefer"]), dinner=night["dinner"],
-            no_dinner=night["no_dinner"],
+            no_dinner=night["no_dinner"], overnight=overnight,
         ))
     return requests
 
@@ -436,10 +440,12 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
                     profile = found["profile"]
                 else:
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "profil inconnu"})
+                overnight = body.get("decoucher") is True
                 name = f"soiree-{profile_id or 'libre'}-{'-'.join(envies)}-{'diner' if body['diner'] else 'sans-diner'}"
+                name += "-nuit" if overnight else ""
                 with composing:
                     routes, page = parcours.generate(
-                        store, requests_for(profile, days, envies, occasion, body["diner"]), count=3, checks=checks, name=name,
+                        store, requests_for(profile, days, envies, occasion, body["diner"], overnight), count=3, checks=checks, name=name,
                         base=base(store), name_later=True,
                     )
             self._send_json(HTTPStatus.OK, {"url": f"/parcours/{page.name}", "count": len(routes)})

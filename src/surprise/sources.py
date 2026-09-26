@@ -25,6 +25,8 @@ SOURCES = {
     "shotgun": "Shotgun",
     "billetreduc": "BilletRéduc",
     "time_out": "Time Out Paris",
+    "time_out_hotels": "Time Out Paris (hôtels)",
+    "nuits_couple": "Nuits en amoureux (love rooms, hôtels insolites)",
     "le_bonbon": "Le Bonbon",
     "selections_couple": "Sélections couple (blogs)",
     "osm_restaurants": "Restaurants OpenStreetMap",

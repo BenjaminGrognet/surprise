@@ -15,10 +15,14 @@
 <script>
 // One evening, apart from the questionnaire: up to MAX wishes, an occasion, a day.
 // With a profile (#p=<id>), its refusals, budget, audace and tastes apply; without, default ones.
-const state = { envies: [], occasions: [], max: 3, profile: null, night: { envies: [], diner: null, occasion: null, day: nextFriday() } };
+const state = { envies: [], occasions: [], max: 3, profile: null, night: { envies: [], diner: null, decoucher: false, occasion: null, day: nextFriday() } };
 const MEALS = [
   { value: true, label: "Oui, on dîne pendant la soirée", emoji: "🍽️" },
   { value: false, label: "Non, on aura déjà mangé", emoji: "✅" },
+];
+const NIGHTS = [
+  { value: false, label: "On rentre chez nous", emoji: "🏠" },
+  { value: true, label: "On découche : une nuit dans un hôtel ou une love room", emoji: "🛏️" },
 ];
 
 function render() {
@@ -38,6 +42,11 @@ function render() {
       class: "option", "aria-pressed": String(night.diner === o.value),
       onclick: () => { night.diner = o.value; render(); },
     }, choiceContent(o))));
+  const nights = h("div", { class: "options", role: "group", "aria-labelledby": "night-title" },
+    NIGHTS.map((o) => h("button", {
+      class: "option", "aria-pressed": String(night.decoucher === o.value),
+      onclick: () => { night.decoucher = o.value; render(); },
+    }, choiceContent(o))));
   const occasions = h("div", { class: "chips", role: "group", "aria-label": "Une occasion ?" },
     state.occasions.map((o) => h("button", {
       class: "option", "aria-pressed": String(night.occasion === o.value),
@@ -54,6 +63,8 @@ function render() {
     envies,
     h("h2", { class: "sub", id: "meal-title" }, "Et pour manger ?"),
     meals,
+    h("h2", { class: "sub", id: "night-title" }, "Et après ?"),
+    nights,
     h("h2", { class: "sub" }, "Une occasion ?"),
     occasions,
     dayField("night-day", night.day, (value) => { night.day = value; }),

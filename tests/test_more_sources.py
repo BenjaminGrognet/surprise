@@ -226,4 +226,5 @@ def test_stag_party_offers_are_not_for_couples():
 
     assert GROUP_PARTY.search('SPA insolite "The Beer Spa" formule EVG & EVJF')
     assert GROUP_PARTY.search("Atelier pour un enterrement de vie de jeune fille")
+    assert GROUP_PARTY.search("La Bringue - Halloween Stripclub Girls Only - Paris")
     assert not GROUP_PARTY.search("Atelier bougie en duo") and not GROUP_PARTY.search("Soirée Evgeny Kissin")

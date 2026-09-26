@@ -29,10 +29,10 @@ OFF_TOPIC = re.compile(
     r"massage prénatal|flagship|boutique|concept[- ]store|magasin|shopping|\bcures?\b",
     re.IGNORECASE,
 )
-# Offers for a stag or hen party, in their title: a group of friends, not a couple. Their texts
+# Offers for a stag or hen party, or for girls only, in their title: a group of friends, not a couple. Their texts
 # often say "also for a hen party" of fine couple workshops: those are kept.
 GROUP_PARTY = re.compile(
-    r"\bEVG\b|\bEVJF\b|enterrements? de vie de (?:garçon|jeune fille|célibataires?)|bachelor(?:ette)? party|hen party|stag party",
+    r"\bEVG\b|\bEVJF\b|enterrements? de vie de (?:garçon|jeune fille|célibataires?)|bachelor(?:ette)? party|hen party|stag party|girls only|ladies only|entre filles",
     re.IGNORECASE,
 )
 _EUROS = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)", re.IGNORECASE)

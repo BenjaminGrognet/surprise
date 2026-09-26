@@ -126,3 +126,6 @@ def test_each_evening_says_whether_they_eat():
     assert eats.dinner and not eats.no_dinner
     [unsaid] = quiz.requests_for(profile, [date(2026, 10, 10)], ["fete"])
     assert unsaid.dinner and not unsaid.no_dinner
+    assert not unsaid.overnight
+    [out] = quiz.requests_for(profile, [date(2026, 10, 10)], ["romantique"], overnight=True)
+    assert out.overnight

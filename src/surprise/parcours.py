@@ -68,7 +68,17 @@ _DURATIONS = [
     ("expo", 75), ("musee", 90), ("bar", 75), ("cinema", 110),
 ]
 # Price for two when a walk-in place gives none.
-_ESTIMATES = {"repas": 90, "verre": 30, "sortie": 40}
+_ESTIMATES = {"repas": 90, "verre": 30, "sortie": 40, "nuit": 220}
+# A night's price from Time Out's scale when no price is given ("Prix : €€€").
+_NIGHT_SCALE = {1: 120, 2: 180, 3: 300, 4: 550}
+NIGHT_TRAVEL = 30  # minutes at most from the evening's last step to the hotel
+
+
+def night_budget_for(budget: float) -> float:
+    """What sleeping out adds to the evening's budget: a room of the evening's standing, 120 to 600 € for two."""
+    return float(min(600, max(120, round(budget * 1.5 / 10) * 10)))
+
+CHECK_OUT = time(11)
 # When a walk-in place gives no hours: when couples usually go, and until when.
 # When a dinner may start: not a table at 23:00 after the show.
 DINNER_HOURS = (time(18, 30), time(21, 30))
@@ -106,6 +116,12 @@ class Request:
     prefer: set[str] = field(default_factory=set)  # tags the couple likes ("jazz", "electro")
     dinner: bool = False  # the couple wants a sit-down dinner in the evening
     no_dinner: bool = False  # the couple will have eaten: no meal step (dinner cruises and shows included)
+    overnight: bool = False  # the evening ends in a hotel ("découcher")
+    night_budget: float | None = None  # euros for the room, added to the evening's budget (night_budget_for by default)
+
+    @property
+    def room_budget(self) -> float:
+        return self.night_budget if self.night_budget is not None else night_budget_for(self.budget)
 
 
 @dataclass
@@ -165,9 +181,11 @@ class Route:
     title: str = ""
     pitch: str = ""
     request: Request | None = None  # the evening asked, when several are planned together
+    night: Step | None = None  # the hotel where the evening ends, when the couple sleeps out
 
     @property
     def price(self) -> float:
+        """The evening's price, the night apart."""
         return sum(step.candidate.price for step in self.steps)
 
 
@@ -322,6 +340,8 @@ def build_candidate(item: dict[str, Any], request: Request, checked: dict[str, A
     activity = item["activity"]
     if GROUP_PARTY.search(" ".join(filter(None, [activity["title"], (activity.get("venue") or {}).get("name")]))):
         return None
+    if is_hotel(item):
+        return None  # a hotel is where the evening ends (night_for), not a step of it
     candidate = _build_candidate(item, request, checked, originality)
     if candidate and candidate.role == "repas":
         candidate.starts = [s for s in candidate.starts if DINNER_HOURS[0] <= s.time() <= DINNER_HOURS[1] and s.date() == request.day]
@@ -837,6 +857,78 @@ def replace_step(route: Route, position: int, candidates: list[Candidate], reque
     return best
 
 
+# The night ------------------------------------------------------------------
+# A couple who sleeps out ends the evening in a hotel, a love room or a secret room near its last step.
+
+
+def is_hotel(item: dict[str, Any]) -> bool:
+    return "hotel" in (item["activity"].get("categories") or [])
+
+
+def night_price(activity: dict[str, Any]) -> tuple[float, bool]:
+    """A room's price for the night, and whether it is a guess (from Time Out's scale, "Prix : €€€", if given)."""
+    price, estimated = price_for_two(activity, "nuit")
+    if estimated:
+        labels = " ".join(offer.get("label") or "" for offer in activity.get("offers") or [])
+        if scale := re.search(r"€{1,4}", labels):
+            price = float(_NIGHT_SCALE[len(scale.group(0))])
+    return price, estimated
+
+
+def hotels(base: "Base") -> list[Candidate]:
+    """The rooms of the base, as the last step of an evening."""
+    found = []
+    for item in base.items:
+        if not is_hotel(item) or not (place := coordinates(item)):
+            continue
+        activity, venue = item["activity"], item["activity"].get("venue") or {}
+        tags = describe(activity)
+        price, estimated = night_price(activity)
+        found.append(Candidate(
+            item=item, title=activity["title"], venue=venue.get("name") or "", arrondissement=venue.get("arrondissement"),
+            lat=place[0], lon=place[1], tags=tags["tags"], vibes=tags["vibes"], role="nuit", duration=0, price=price,
+            price_estimated=estimated, starts=[], basis="Chambre à réserver en ligne · disponibilités à vérifier", kind="nuit",
+            booking_url=booking_url(item) or str(activity.get("website") or "") or None,
+            originality=base.originality[(item["source_id"], item["external_id"])],
+        ))
+    return found
+
+
+def night_for(route: Route, rooms: list[Candidate], request: Request, taken: set) -> Step | None:
+    """The room where the route ends: close to its last step, within the night's budget (+20 % at most), romantic, unusual."""
+    last = route.steps[-1]
+    budget = request.room_budget
+    best, best_value, best_km = None, -math.inf, 0.0
+    for room in rooms:
+        if room.key in taken or request.avoid & (set(room.tags) | set(room.item["activity"].get("categories") or [])):
+            continue
+        if room.price > budget * 1.2:
+            continue
+        km = distance_km((last.candidate.lat, last.candidate.lon), (room.lat, room.lon))
+        if travel_minutes(km) > NIGHT_TRAVEL:
+            continue
+        value = -0.08 * travel_minutes(km) + room.originality / 25 + 1.5 * len(set(request.vibes) & set(room.vibes))
+        value += 1.0 * bool({"spa", "massage", "baignade", "coquin"} & set(room.tags)) - 0.5 * room.price_estimated
+        value -= max(0.0, room.price - budget) / 50
+        if value > best_value:
+            best, best_value, best_km = room, value, km
+    if best is None:
+        return None
+    start = last.end + timedelta(minutes=travel_minutes(best_km))
+    morning = start.date() + timedelta(days=1 if start.hour >= 12 else 0)
+    return Step(best, start, datetime.combine(morning, CHECK_OUT, tzinfo=start.tzinfo), travel_minutes(best_km), best_km)
+
+
+def add_nights(routes: list[Route], rooms: list[Candidate]) -> None:
+    """A room for each route whose evening sleeps out, not the same one twice."""
+    taken: set = set()
+    for route in routes:
+        if route.request and route.request.overnight:
+            route.night = night_for(route, rooms, route.request, taken)
+            if route.night:
+                taken.add(route.night.candidate.key)
+
+
 # Names and pitches ----------------------------------------------------------
 
 
@@ -853,7 +945,7 @@ _TAG_WORDS = {
     "animaux": "animaux", "ceramique": "poterie", "peinture_dessin": "peinture", "cuisine": "atelier cuisine",
     "mixologie": "cocktails", "vin": "vins", "artisanat": "atelier", "floral": "fleurs", "parfum_bougie": "parfums",
     "shooting": "shooting photo", "gastronomique": "grande table", "street_food": "street food", "degustation": "dégustation",
-    "brunch_gouter": "goûter", "massage": "massage", "spa": "spa", "flottaison": "flottaison", "relaxation": "yoga",
+    "brunch_gouter": "goûter", "coquin": "moment coquin", "massage": "massage", "spa": "spa", "flottaison": "flottaison", "relaxation": "yoga",
     "baignade": "baignade",
 }
 _CATEGORY_WORDS = {
@@ -931,6 +1023,10 @@ def name_by_rules(route: Route, request: Request) -> None:
     moves = "Tout se fait à pied" if not rides else "Un seul trajet en métro ou taxi" if len(rides) == 1 else "Les trajets se font en métro ou taxi"
     price = f"pour environ {route.price:.0f} € à deux" if route.price else "sans rien dépenser"
     route.pitch = f"{' ; '.join(parts)}. {moves}, {price}."
+    if night := route.night:
+        how = f"{night.travel} min à pied" if night.distance <= WALK_KM else f"{night.travel} min en taxi"
+        cost = f"{'environ ' if night.candidate.price_estimated else 'dès '}{night.candidate.price:.0f} € la nuit"
+        route.pitch += f" Puis on découche, à {how} : {_named(night)}, {cost}."
 
 
 def _hour(moment: datetime) -> str:
@@ -1011,7 +1107,7 @@ def render(routes: list[Route], request: Request, days: list[date] | None = None
         count=_COUNTS.get(len(routes), str(len(routes))),
         day=" · ".join(f"{_weekday(d)} {d:%d/%m}" for d in days) if len(days) > 1 else f"{_weekday(request.day)} {request.day:%d/%m/%Y}",
         hours=f"{request.start:%H:%M} – {request.end:%H:%M}",
-        budget=f"{request.budget:.0f} €",
+        budget=f"{request.budget:.0f} €" + (f" + {request.room_budget:.0f} € la nuit" if request.overnight else ""),
         vibes=vibes,
         body=body,
         name=html.escape(name),
@@ -1024,17 +1120,14 @@ def _render_route(index: int, route: Route, asked: list[str], dated: bool = Fals
     steps = []
     for position, step in enumerate(route.steps):
         if position:
-            previous = route.steps[position - 1].candidate
-            mode = "walking" if step.distance <= WALK_KM else "transit"
-            maps = "https://www.google.com/maps/dir/?" + urlencode(
-                {"api": 1, "origin": f"{previous.lat},{previous.lon}", "destination": f"{step.candidate.lat},{step.candidate.lon}", "travelmode": mode}
-            )
-            icon = "🚶" if mode == "walking" else "🚇"
-            label = f"{step.travel} min" + (f" · {step.distance * 1000:.0f} m" if step.distance < 1 else f" · {step.distance:.1f} km")
-            steps.append(f'<a class="hop" href="{html.escape(maps)}" target="_blank" rel="noopener"><span>{icon}</span>{label}</a>')
+            steps.append(_render_hop(route.steps[position - 1].candidate, step))
         steps.append(_render_step(step, asked, f"routes/{index}/steps/{position}"))
+    if night := route.night:
+        steps.append(_render_hop(route.steps[-1].candidate, night))
+        steps.append(_render_step(night, asked))
     total = route.price
     estimated = any(s.candidate.price_estimated for s in route.steps)
+    sleep = f'<span>+ {"≈ " if night.candidate.price_estimated else ""}{night.candidate.price:.0f} € la nuit</span>' if night else ""
     return f"""
 <section class="route" id="parcours-{index + 1}">
   <header>
@@ -1043,11 +1136,22 @@ def _render_route(index: int, route: Route, asked: list[str], dated: bool = Fals
     <h2>{html.escape(route.title)}</h2>
     <p class="pitch">{html.escape(route.pitch)}</p>
     <p class="meta"><span>{route.steps[0].start:%H:%M} → {route.steps[-1].end:%H:%M}</span>
-      <span>{'≈ ' if estimated else ''}{total:.0f} € pour deux</span>
+      <span>{'≈ ' if estimated else ''}{total:.0f} € pour deux</span>{sleep}
       <span>{len(route.steps)} étapes</span></p>
   </header>
   <ol class="timeline">{''.join(steps)}</ol>
 </section>"""
+
+
+def _render_hop(previous: Candidate, step: Step) -> str:
+    """The way from one step to the next, opened in Google Maps."""
+    mode = "walking" if step.distance <= WALK_KM else "transit"
+    maps = "https://www.google.com/maps/dir/?" + urlencode(
+        {"api": 1, "origin": f"{previous.lat},{previous.lon}", "destination": f"{step.candidate.lat},{step.candidate.lon}", "travelmode": mode}
+    )
+    icon = "🚶" if mode == "walking" else "🚇"
+    label = f"{step.travel} min" + (f" · {step.distance * 1000:.0f} m" if step.distance < 1 else f" · {step.distance:.1f} km")
+    return f'<a class="hop" href="{html.escape(maps)}" target="_blank" rel="noopener"><span>{icon}</span>{label}</a>'
 
 
 def _render_step(step: Step, asked: list[str], redo: str = "") -> str:
@@ -1062,7 +1166,9 @@ def _render_step(step: Step, asked: list[str], redo: str = "") -> str:
     if len(text) > 180:
         text = text[:177].rsplit(" ", 1)[0] + "…"
     price = "Gratuit" if c.price == 0 else f"{'≈ ' if c.price_estimated else ''}{c.price:.0f} € à deux"
-    badge = {"verifie": "ok", "seance": "ok", "gratuit": "free", "sans_resa": "walk"}[c.kind]
+    if c.kind == "nuit":
+        price = f"{'≈ ' if c.price_estimated else 'dès '}{c.price:.0f} € la nuit"
+    badge = {"verifie": "ok", "seance": "ok", "gratuit": "free", "sans_resa": "walk", "nuit": "walk"}[c.kind]
     if c.kind == "sans_resa":
         link, label = str(item["activity"].get("website") or item.get("source_url") or ""), "Voir le lieu"
     elif c.price == 0:
@@ -1096,7 +1202,7 @@ def _render_step(step: Step, asked: list[str], redo: str = "") -> str:
 
 _SLOT_LABELS = {"apero": "Apéro", "diner": "Dîner", "fete": "Danser"}
 _COUNTS = {1: "Une", 2: "Deux", 3: "Trois", 4: "Quatre", 5: "Cinq", 6: "Six", 7: "Sept", 8: "Huit", 9: "Neuf", 10: "Dix"}
-_ROLE_LABELS = {"repas": "Dîner", "verre": "Un verre", "sortie": "Sortie"}
+_ROLE_LABELS = {"repas": "Dîner", "verre": "Un verre", "sortie": "Sortie", "nuit": "La nuit"}
 
 
 def _weekday(day: date) -> str:
@@ -1328,6 +1434,8 @@ def main() -> None:
         help=f"étapes imposées dans l'ordre, séparées par des virgules : {', '.join(SLOTS)} ou une vibe (ex. apero,insolite,fete)",
     )
     parser.add_argument("--trajet-max", type=int, default=35, help="minutes de trajet au plus entre deux étapes (35 par défaut)")
+    parser.add_argument("--decoucher", action="store_true", help="finir la soirée dans un hôtel ou une love room près de la dernière étape")
+    parser.add_argument("--budget-nuit", type=float, help="budget de la chambre pour deux, ajouté à --budget (1,5 fois --budget par défaut, 120 à 600 €)")
     parser.add_argument("--strict", action="store_true", help="sans bars ni clubs non réservables")
     parser.add_argument("--db", type=Path, default=DEFAULT_PATH)
     parser.add_argument("--no-claude", action="store_true", help="titres et pitchs par règles, sans Claude")
@@ -1346,7 +1454,10 @@ def main() -> None:
     requests = []
     for day in days:
         begin, finish = window(day, args.start, args.end)
-        requests.append(Request(day, args.budget, begin, finish, vibes, walk_in=not args.strict, trame=trame, max_travel=args.trajet_max))
+        requests.append(Request(
+            day, args.budget, begin, finish, vibes, walk_in=not args.strict, trame=trame, max_travel=args.trajet_max, overnight=args.decoucher,
+            night_budget=args.budget_nuit,
+        ))
 
     with LocalStore(args.db) as store:
         routes, path = generate(store, requests, args.parcours, args.checks, claude=not args.no_claude)
@@ -1354,6 +1465,9 @@ def main() -> None:
         print(f"\n{index}. {_weekday(route.request.day)} {route.request.day:%d/%m} · {route.title} — {route.price:.0f} € à deux")
         for step in route.steps:
             print(f"   {step.start:%H:%M}-{step.end:%H:%M}  {step.candidate.title[:70]}  [{step.basis}]")
+        if night := route.night:
+            price = f"{'≈ ' if night.candidate.price_estimated else 'dès '}{night.candidate.price:.0f} €"
+            print(f"   {night.start:%H:%M}-{night.end:%H:%M}  nuit : {night.candidate.title[:60]}  [{price}, {night.travel} min]")
     print(f"\nPage : {path.resolve()}")
     if not args.no_open:
         webbrowser.open(path.resolve().as_uri())
@@ -1378,6 +1492,8 @@ def generate(
     routes = pick(sorted(routes, key=lambda route: -route.score), count)
     if len(requests) > 1:
         routes.sort(key=lambda route: (route.steps[0].start, -route.score))
+    if any(request.overnight for request in requests):
+        add_nights(routes, hotels(base))
     for route in routes:
         name_by_rules(route, route.request)
     later = claude and name_later and bool(routes) and bool(os.environ.get("ANTHROPIC_API_KEY"))
@@ -1478,6 +1594,10 @@ def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: 
             return "aucune autre activité ne s'enchaîne à cette étape"
         new = Route(steps, _route_score(steps, request))
     new.request = request
+    if request.overnight:
+        # Its room again if it still fits, else another one than the other routes'.
+        others = {r.night.candidate.key for r in routes if r is not route and getattr(r, "night", None)}
+        new.night = night_for(new, hotels(base), request, others)
     name_by_rules(new, request)
     later = claude and bool(os.environ.get("ANTHROPIC_API_KEY"))
     routes[index] = new

@@ -32,6 +32,7 @@ CATEGORIES = {
     "conference": "Conférence / lecture",
     "nature": "Nature / jardin",
     "salon": "Salon / marché",
+    "hotel": "Hôtel / nuit",
 }
 
 # Que Faire à Paris tags.
@@ -60,6 +61,7 @@ _TAGS = {
     "nature": "nature",
     "salon": "salon",
     "brocante": "salon",
+    "hôtel": "hotel",  # given by the hotel collectors, never guessed from a title ("Hôtel de Ville")
 }
 
 # Paris ZigZag sections (first two path segments of the article URL).

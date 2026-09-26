@@ -53,6 +53,8 @@ Autres sources, chacune par sa voie la plus robuste (même options) :
 | BilletRéduc | `billetreduc` | page Paris + schema.org Event |
 | Time Out Paris | `time_out` | sitemaps (60 jours) + schema.org Review des lieux |
 | Le Bonbon | `le_bonbon` | sitemaps + blocs pratiques des articles |
+| Time Out Paris (hôtels) | `time_out_hotels` | sitemaps (toutes les pages `/paris/hotels/`) + schema.org Review, nom par le titre de la page, prix de la nuit dans le texte (sinon l'échelle €€€) ; gardé si son site passe par un moteur de réservation hôtelier (D-EDGE, SynXis, Mews, Reservit, Booking.com…) |
+| Nuits en amoureux (Loveroomers, Love'nSpa, Love Île-de-France ; guides Love Room Guide, The Love Room, Cupiroom, Weekendlove) | `nuits_couple` | catalogues : une fiche schema.org LodgingBusiness par chambre (sitemaps Loveroomers, `products.json` Shopify de Love'nSpa, liens de la page Paris de Love Île-de-France) ; guides : une chambre par intertitre, lieu sur OSM |
 | Articles « couple » (Hati Hati, Ryo, Love'n'Room, LoveCapsule, blog Funbooker, Petit Futé) | `selections_couple` | une idée par intertitre ou lien de réservation, lieu sur OSM |
 | Restaurants OpenStreetMap | `osm_restaurants` | Overpass (restaurants de Paris avec site) + site du restaurant : gardé s'il passe par un moteur de réservation (Zenchef, SevenRooms, TheFork…), sur sa page ou sa page « Réserver » |
 
@@ -99,7 +101,7 @@ se passe de Claude.
 `surprise/tags.py` décrit chaque activité par des **tags** précis (mini-golf, céramique, rooftop, aux chandelles…),
 en trois facettes : activité, cadre, moment. Les tags donnent les **vibes**, les envies larges du questionnaire client
 (Bouger, Relever un défi, Rire, Créer, Savourer, Se détendre, S'émerveiller, Vibrer en musique, Faire la fête,
-Se cultiver, Prendre l'air, Frissonner, L'insolite, Romantique) : un mini-golf est « Bouger » et « Relever un défi ».
+Se cultiver, Prendre l'air, Frissonner, L'insolite, Pimenter, Romantique) : un mini-golf est « Bouger » et « Relever un défi ».
 Calculés à la lecture par des règles sur le titre et le lieu (plus les catégories), ils s'affinent sans recollecter ;
 la modération les affiche et filtre par vibe.
 
@@ -155,7 +157,12 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
 - Trame imposée et plusieurs soirs : `--trame apero,insolite,fete` fixe les étapes dans l'ordre (`apero`, `diner`,
   `fete` ou une vibe), `--parcours N` le nombre de parcours, plusieurs dates les répartissent sur ces soirs (sans
   étape commune), `--trajet-max` borne les trajets. Un bar d'apéro peut être écourté (45 min au moins) pour attraper
-  une séance ; on reste en club jusqu'à la fin de la soirée :
+  une séance ; on reste en club jusqu'à la fin de la soirée. `--decoucher` finit chaque parcours dans une chambre
+  (catégorie `hotel` : hôtels Time Out, love rooms) à 30 min au plus de la dernière étape, de préférence dans le
+  budget de la nuit, romantique ou insolite, jamais la même pour deux parcours. La nuit a son propre budget, ajouté à
+  celui de la soirée : `--budget-nuit`, sinon 1,5 fois `--budget` (entre 120 et 600 €) ; une chambre ne le dépasse pas
+  de plus de 20 %. Son prix s'affiche à part (« + 180 € la nuit »).
+  Une chambre n'est jamais une étape de la soirée elle-même :
 
   ```bash
   uv run python -m surprise.parcours 2026-10-02 2026-10-03 2026-10-09 2026-10-10 --budget 150 --de 19:00 --a 04:00 \
@@ -179,7 +186,8 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
   elles sont copiées une fois dans `data/images` (800 px) et servies de là, en modération comme dans les parcours.
 
 Vibes possibles : bouger, defi, rire, creer, savourer, detente, emerveiller, musique, fete, cultiver, flaner,
-frisson, insolite, romantique.
+frisson, insolite, coquin, romantique. « Pimenter » (tag `coquin` : burlesque, effeuillage, Crazy Horse,
+pole dance, visite érotique…) est une envie de soirée ; « Le coquin, l'effeuillage » peut être refusé dans le profil.
 
 ## Questionnaire client
 
@@ -192,7 +200,8 @@ genres préférés, envie d'un dîner, budget. Aucune heure précise n'est deman
 Chaque soirée se prépare à part, sur sa propre page (`/soiree`, avec `#p=<profil>` ou sans profil) : jusqu'à trois
 envies (« Faire la fête », « Cocooning », « Romantique », « Surprenez-nous »…), si l'on dîne ou pas (obligatoire :
 « on aura déjà mangé » écarte les formules repas — dîners-croisières, dîners-spectacles, restaurants — mais garde
-les bars, caves, bars à vins, planches et rooftops pour boire un verre, et les concerts d'un club-restaurant), une
+les bars, caves, bars à vins, planches et rooftops pour boire un verre, et les concerts d'un club-restaurant),
+« Et après ? » (rentrer, ou découcher : la soirée finit dans un hôtel ou une love room proche, voir `--decoucher`), une
 occasion éventuelle et le jour.
 Les envies se mêlent : chacune apporte ses vibes à tour de rôle, la soirée commence à l'heure la plus tôt et finit à
 la plus tardive, et ce qu'une envie écarte revient si une autre le demande (cocooning puis fête : le club reste).
