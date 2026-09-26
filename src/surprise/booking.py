@@ -52,6 +52,8 @@ ENGINES = {
     "Bookeo": r"bookeo\.com/(?:widget\.js|[\w-]+)",
     "4escape": r"4escape\.(?:io|app)|class=\"forescape(?:-catalog|-cart)?\"",
     "Qweekle": r"[\w-]+\.qweekle\.com",
+    # WordPress "Event Tickets": the venue sells its seats on the event's page ("Le Son de la Terre").
+    "Event Tickets": r"id=\"tribe-tickets__tickets-form\"",
     "SimplyBook": r"simplybook\.(?:it|me)",
     "Zenchef": r"bookings\.zenchef\.com|widget\.zenchef\.com|sdk\.zenchef\.com",
     "TheFork": r"thefork\.fr|lafourchette\.com",
@@ -100,6 +102,7 @@ _FORM = re.compile(
     re.IGNORECASE,
 )
 _ASKS_BOOKING = re.compile(r"r[ée]serv|inscri", re.IGNORECASE)
+_HOST = re.compile(r"https?://([a-z0-9.-]+)", re.IGNORECASE)
 
 
 def engine_in(text: str) -> str | None:
@@ -111,6 +114,13 @@ def own_ticketing(url: str) -> str | None:
     """A venue's own ticketing or booking site: "billetterie.opera-comique.com", "booking.revo-partybox.com"."""
     parts = urlsplit(url)
     return "billetterie du lieu" if _TICKETING_HOST.search(parts.hostname or "") or _TICKETING_PATH.search(parts.path) else None
+
+
+def ticketing_of_site(url: str, page: str) -> str | None:
+    """The page links to its own site's ticketing ("38riv.com" → "billetterie.38riv.com"): the venue sells its seats."""
+    domain = ".".join((urlsplit(url).hostname or "").split(".")[-2:])
+    hosts = {host.lower() for host in _HOST.findall(page)}
+    return "billetterie du lieu" if domain and any(_TICKETING_HOST.search(h) and h.endswith(f".{domain}") for h in hosts) else None
 
 
 def booking_form(url: str, page: str) -> str | None:
@@ -133,12 +143,14 @@ def booking_engine(client: httpx.Client, urls: Iterable[str]) -> str | None:
             continue
         if engine := engine_in(str(page.url)) or engine_in(page.text) or booking_form(str(page.url), page.text):
             return engine
+        if engine := ticketing_of_site(str(page.url), page.text):
+            return engine
         # The site's "Réserver" page ("perpette.com/reserver/") embeds the widget.
         link = booking_link(str(page.url), page.text)
         if link and (engine := own_ticketing(link)):
             return engine
         if link and (linked := _get(client, link)):
-            if engine := engine_in(str(linked.url)) or engine_in(linked.text):
+            if engine := engine_in(str(linked.url)) or engine_in(linked.text) or ticketing_of_site(str(linked.url), linked.text):
                 return engine
     return None
 

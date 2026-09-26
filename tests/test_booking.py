@@ -85,3 +85,14 @@ def test_a_venue_ticketing_page_and_an_organiser_booking_form_count_as_online_bo
     page = '<p>Réservation préalable impérative : <a href="https://forms.gle/UkU56kpyD2eZZtF86">formulaire</a></p>'
     assert booking_form("https://www.coree-culture.org/ateliers", page) == "formulaire de réservation"
     assert booking_form("https://example.org", '<a href="https://forms.gle/x">Votre avis sur le site</a>') is None
+
+
+def test_a_venue_selling_its_seats_on_its_own_ticketing_or_page():
+    from surprise.booking import engine_in, ticketing_of_site
+    from surprise.enrich import _is_deep_link
+
+    page = '<a href="https://billetterie.38riv.com/concorde/@customer">Mon compte</a>'
+    assert ticketing_of_site("https://38riv.com/concerts/herbin", page) == "billetterie du lieu"
+    assert ticketing_of_site("https://38riv.com/concerts/herbin", '<a href="https://billetterie.autre.com/">x</a>') is None
+    assert engine_in('<form id="tribe-tickets__tickets-form" action="…">') == "Event Tickets"
+    assert _is_deep_link("https://lemelville.fr/?p=6098") and not _is_deep_link("https://lemelville.fr/?lang=en")

@@ -52,6 +52,7 @@ _ATTRIBUTE = re.compile(r"([\w:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
 _TAG = re.compile(r"<[^>]+>")
 _ANCHOR = re.compile(r"<a\s[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL)
 # Links that look like booking but lead elsewhere.
+_WORDPRESS_PAGE = re.compile(r"^(?:p|page_id|event)=\d+$")
 # Any URL in the page source, including JSON of JavaScript-built sites.
 _URL = re.compile(r"https?://[^\s\"'<>\\]+")
 _WORD = re.compile(r"[a-z0-9]{4,}")
@@ -135,8 +136,13 @@ def _is_sibling(page_url: str, url: str) -> bool:
 
 
 def _is_deep_link(url: str) -> bool:
-    """A page of its own: a site's home page or a same-page anchor is not the activity's booking."""
-    return url.startswith("http") and bool(urlsplit(url).path.strip("/")) and "#" not in url and not _NOT_BOOKING.search(url)
+    """A page of its own: a site's home page or a same-page anchor is not the activity's booking.
+
+    A WordPress page may be given by its number ("lemelville.fr/?p=6098").
+    """
+    parts = urlsplit(url)
+    own_page = bool(parts.path.strip("/")) or bool(_WORDPRESS_PAGE.match(parts.query))
+    return url.startswith("http") and own_page and "#" not in url and not _NOT_BOOKING.search(url)
 
 
 def _words(text: str) -> set[str]:
