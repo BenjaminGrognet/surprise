@@ -215,3 +215,83 @@ def test_no_stag_party_and_no_late_dinner():
     assert parcours.build_candidate(restaurant, request(), checked).starts == [at(19), at(21, 30)]
     late = {**checked, "slots": ["22:30", "23:00"]}
     assert parcours.build_candidate(restaurant, request(), late) is None
+
+
+def test_claude_titles_come_after_the_page(tmp_path, monkeypatch):
+    req, _, route = _night()
+    monkeypatch.setattr(parcours, "OUTPUT_DIR", tmp_path)
+    parcours.name_by_rules(route, req)
+    route.request = req
+    parcours.save("essai", {"routes": [route], "requests": [req], "seen": set(), "naming": 1})
+    assert '<main class="page" data-page="essai" data-naming="1">' in (tmp_path / "essai.html").read_text(encoding="utf-8")
+
+    def named(routes, request):
+        routes[0].title, routes[0].pitch = "Nuit secrète", "Un verre, puis l'inconnu."
+
+    monkeypatch.setattr(parcours, "name_with_claude", named)
+    parcours._name_later("essai", [route], req)
+    page = (tmp_path / "essai.html").read_text(encoding="utf-8")
+    assert "Nuit secrète" in page and '<main class="page" data-page="essai">' in page
+    assert parcours.load("essai")["naming"] == 0
+
+
+def test_each_site_is_asked_every_half_second_at_most():
+    wait = parcours._paced(0.2)
+    begin = parcours.clock.monotonic()
+    for url in ("https://a.test/1", "https://b.test/1", "https://a.test/2"):
+        wait(parcours.httpx.Request("GET", url))
+    # a.test waited once; b.test did not have to.
+    assert 0.18 <= parcours.clock.monotonic() - begin < 0.35
+
+
+def test_rules_name_the_evening_by_its_steps_and_place():
+    req, _, route = _night()
+    parcours.name_by_rules(route, req)
+    assert route.title == "Cocktails, immersion et dancefloor dans le Haut-Marais"
+    assert route.pitch.startswith("À 19 h, cocktails : « Bar à cocktails » ; puis, à 3 min à pied, immersion : « Expérience immersive » (Salle)")
+    assert "et la nuit continue" in route.pitch and route.pitch.endswith("à deux.")
+    assert parcours._hour(at(2, 59)) == "3 h" and parcours._hour(at(0, 30)) == "minuit 30" and parcours._hour(at(20, 30)) == "20 h 30"
+
+
+def test_no_meal_step_when_they_will_have_eaten():
+    dinner = item("resto", "Dîner au restaurant", ["restaurant"], occurrences=[at(19, 30)], venue="Resto")
+    show = item("show", "Stand-up du vendredi", ["humour"], occurrences=[at(21)], venue="Comedy")
+    req = request()
+    assert all(c.score > float("-inf") for c in _scored([dinner, show], req))
+    hungry_not, _ = _scored([dinner, show], request(no_dinner=True))
+    assert hungry_not.role == "repas" and hungry_not.score == float("-inf")
+
+
+def test_having_eaten_they_can_still_drink_at_a_wine_bar():
+    ate = request(no_dinner=True)
+    cave = item("cave", "Terra bar à vins", ["gastronomie", "bar", "restaurant"], kind="permanent", hours="Mo-Su 18:00-01:00", venue="Terra")
+    rooftop = item("toit", "Le rooftop du Perchoir", ["restaurant"], kind="permanent", hours="Mo-Su 18:00-01:00", venue="Perchoir")
+    jazz = item("jazz", "Soirée jazz au Duc", ["concert", "restaurant"], occurrences=[at(21)], venue="Duc des Lombards")
+    cruise = item("croisiere", "Dîner-croisière sur la Seine", ["croisiere", "restaurant"], occurrences=[at(20)], venue="Bateau")
+    table = item("table", "Bistrot du coin", ["restaurant"], kind="permanent", hours="Mo-Su 12:00-23:00", venue="Bistrot")
+    roles = {entry["external_id"]: parcours.role(entry["activity"], parcours.describe(entry["activity"])["tags"], ate=True) for entry in (cave, rooftop, jazz, cruise, table)}
+    assert roles == {"cave": "verre", "toit": "verre", "jazz": "sortie", "croisiere": "repas", "table": "repas"}
+    kept = {c.key[1]: c for c in _scored_or_none([cave, rooftop, jazz, cruise], ate)}
+    assert kept["cave"].role == "verre" and kept["cave"].basis.startswith("Sans réservation") and kept["cave"].score > float("-inf")
+    assert kept["jazz"].role == "sortie" and kept["croisiere"].score == float("-inf")
+    # Hungry, the same wine bar is a dinner.
+    assert parcours.role(cave["activity"], parcours.describe(cave["activity"])["tags"]) == "repas"
+
+
+def _scored_or_none(entries, req):
+    candidates = [parcours.build_candidate(entry, req, None) for entry in entries]
+    for candidate in filter(None, candidates):
+        candidate.score = parcours.score(candidate, req)
+    return filter(None, candidates)
+
+
+def test_changing_a_step_never_gives_it_back_under_another_listing():
+    req, candidates, route = _night()
+    # The same immersive show, sold on a second platform.
+    twin = item("immersif-bis", "EXPÉRIENCE IMMERSIVE", ["lieu_insolite"], occurrences=[at(20, 15)], lat=48.861, venue="Salle")
+    candidates = candidates + _scored([twin], req)
+    steps = parcours.replace_step(route, 1, candidates, req, {("test", "immersif")})
+    assert [s.candidate.key[1] for s in steps] == ["bar", "autre", "club"]
+    # Only the twin left besides the step itself: nothing to offer rather than the same show.
+    others = [c for c in candidates if c.key[1] != "autre"]
+    assert parcours.replace_step(route, 1, others, req, {("test", "immersif")}) is None

@@ -15,7 +15,11 @@
 <script>
 // One evening, apart from the questionnaire: up to MAX wishes, an occasion, a day.
 // With a profile (#p=<id>), its refusals, budget, audace and tastes apply; without, default ones.
-const state = { envies: [], occasions: [], max: 3, profile: null, night: { envies: [], occasion: null, day: nextFriday() } };
+const state = { envies: [], occasions: [], max: 3, profile: null, night: { envies: [], diner: null, occasion: null, day: nextFriday() } };
+const MEALS = [
+  { value: true, label: "Oui, on dîne pendant la soirée", emoji: "🍽️" },
+  { value: false, label: "Non, on aura déjà mangé", emoji: "✅" },
+];
 
 function render() {
   const { night, profile: found } = state;
@@ -29,6 +33,11 @@ function render() {
         onclick: () => { night.envies = chosen ? night.envies.filter((v) => v !== o.value) : [...night.envies, o.value]; render(); },
       }, choiceContent(o));
     }));
+  const meals = h("div", { class: "options", role: "group", "aria-labelledby": "meal-title" },
+    MEALS.map((o) => h("button", {
+      class: "option", "aria-pressed": String(night.diner === o.value),
+      onclick: () => { night.diner = o.value; render(); },
+    }, choiceContent(o))));
   const occasions = h("div", { class: "chips", role: "group", "aria-label": "Une occasion ?" },
     state.occasions.map((o) => h("button", {
       class: "option", "aria-pressed": String(night.occasion === o.value),
@@ -43,12 +52,14 @@ function render() {
     h("p", { class: "hint" }, `Jusqu'à ${state.max} envies, on les mêle dans la soirée.`),
     h("p", { class: "count" }, `${night.envies.length} sur ${state.max}`),
     envies,
+    h("h2", { class: "sub", id: "meal-title" }, "Et pour manger ?"),
+    meals,
     h("h2", { class: "sub" }, "Une occasion ?"),
     occasions,
     dayField("night-day", night.day, (value) => { night.day = value; }),
     h("nav", {},
       h("span"),
-      h("button", { class: "primary", disabled: !night.envies.length || !night.day, onclick: () => compose(status) }, "Composer notre soirée")),
+      h("button", { class: "primary", disabled: !night.envies.length || night.diner === null || !night.day, onclick: () => compose(status) }, "Composer notre soirée")),
     status,
   );
 }

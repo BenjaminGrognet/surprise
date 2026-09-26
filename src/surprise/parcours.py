@@ -31,9 +31,12 @@ import os
 import pickle
 import re
 import sys
+import threading
 import time as clock
 import webbrowser
 from collections import Counter
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -54,6 +57,7 @@ from surprise.tags import TAGS, VIBES, describe
 PARIS = ZoneInfo("Europe/Paris")
 OUTPUT_DIR = Path("data/parcours")
 CACHE_HOURS = 6
+CHECK_WORKERS = 8  # booking engines asked at once
 WALK_KM = 1.3  # about 20 minutes on foot
 DEFAULT_MODEL = "claude-opus-5-5"
 
@@ -101,6 +105,7 @@ class Request:
     avoid: set[str] = field(default_factory=set)  # tags, keywords or categories the couple refuses ("dans_le_noir", "sensations")
     prefer: set[str] = field(default_factory=set)  # tags the couple likes ("jazz", "electro")
     dinner: bool = False  # the couple wants a sit-down dinner in the evening
+    no_dinner: bool = False  # the couple will have eaten: no meal step (dinner cruises and shows included)
 
 
 @dataclass
@@ -235,13 +240,27 @@ def _expand_days(spec: str) -> set[str]:
 # Candidates -----------------------------------------------------------------
 
 
-def role(activity: dict[str, Any], tags: list[str]) -> str:
+_SHOWS = {"concert", "humour", "theatre", "spectacle", "cabaret", "nuit"}
+# A place where one can only drink, with a board to share at most: a bar, a wine cellar, tapas, a rooftop.
+_DRINKS = re.compile(r"\bbar\b|bar à|\bcaves?\b|planches?|\bap[ée]ro|tapas|\bpub\b|rooftop|speak ?easy")
+
+
+def role(activity: dict[str, Any], tags: list[str], ate: bool = False) -> str:
+    """The step's part: "repas", "verre" or "sortie". When the couple will have eaten (`ate`), a place that also pours drinks is
+    a drink, a show with a restaurant is the show; only an offer that is a meal (a dinner cruise) stays one."""
     categories = set(activity.get("categories") or [])
     if "atelier" in categories:
         return "sortie"
     if "restaurant" in categories or "diner" in tags or ("gastronomique" in tags and not categories - {"gastronomie", "restaurant", "bar"}):
+        if not ate or "diner" in tags:
+            return "repas"
+        if categories & _SHOWS:
+            return "sortie"
+        text = f"{activity.get('title') or ''} {(activity.get('venue') or {}).get('name') or ''}".lower()
+        if "bar" in categories or {"vin", "mixologie", "degustation"} & set(tags) or _DRINKS.search(text):
+            return "verre"
         return "repas"
-    if "bar" in categories and not categories & {"concert", "humour", "theatre", "spectacle", "cabaret", "nuit"}:
+    if "bar" in categories and not categories & _SHOWS:
         return "verre"
     return "sortie"
 
@@ -317,7 +336,7 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
     if not place:
         return None
     found = describe(activity)
-    role_ = role(activity, found["tags"])
+    role_ = role(activity, found["tags"], ate=request.no_dinner)
     duration = default_duration(activity, role_)
     price, estimated = price_for_two(activity, role_)
     free = price == 0 and not estimated
@@ -379,7 +398,8 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
     hours = opening_intervals(item["enrichment"].get("opening_hours") or _venue_hours(venue), request.day)
     # Bars and clubs are walked into; a dinner is only proposed with a table confirmed above.
     # A booking platform's listing ("Soirée jeux de société" on Funbooker) is an offer to book, not a place to walk in.
-    walk_in = request.walk_in and role_ != "repas" and categories & {"bar", "nuit"} and item["source_id"] not in _PLATFORMS
+    # A restaurant's wine cellar or rooftop, for a couple who ate, is walked into like a bar.
+    walk_in = request.walk_in and role_ != "repas" and (role_ == "verre" or categories & {"bar", "nuit"}) and item["source_id"] not in _PLATFORMS
     walk_in = walk_in and not {"visite_guidee", "sur_l_eau"} & set(found["tags"])  # a night tour is booked, not walked into
     if walk_in:
         usual = hours is None
@@ -431,6 +451,8 @@ def score(candidate: Candidate, request: Request) -> float:
         return -math.inf  # an outing must answer one of the wishes
     if request.avoid & (set(candidate.tags) | set(candidate.keywords) | set(activity.get("categories") or [])):
         return -math.inf  # the couple said no
+    if request.no_dinner and candidate.role == "repas":
+        return -math.inf  # they will have eaten
     if "romantique" in candidate.vibes:
         value += 1.2
     value += min(2, 0.5 * len(_ROMANTIC_TAGS & set(candidate.tags)))
@@ -466,26 +488,47 @@ def check_engines(store: LocalStore, items: list[dict[str, Any]], request: Reque
         (item for item in items if needs_check(item) and (item["source_id"], item["external_id"]) not in cached),
         key=lambda item: -prescore.get((item["source_id"], item["external_id"]), 0),
     )
-    # Half of the checks for dinners, the rarest step to confirm.
-    dinners = [item for item in todo if role(item["activity"], describe(item["activity"])["tags"]) == "repas"]
+    # Half of the checks for dinners, the rarest step to confirm; none when the couple will have eaten.
+    dinners = [item for item in todo if role(item["activity"], describe(item["activity"])["tags"], request.no_dinner) == "repas"]
     others = [item for item in todo if item not in dinners]
-    taken = min(len(dinners), limit // 2)
+    taken = 0 if request.no_dinner else min(len(dinners), limit // 2)
     todo = dinners[:taken] + others[: limit - taken]
     if todo:
         print(f"Vérification de {len(todo)} disponibilités (moteurs de réservation)…")
-    with httpx.Client(timeout=20, follow_redirects=True, headers={"User-Agent": availability.USER_AGENT}) as client:
-        for index, item in enumerate(todo, 1):
-            try:
-                found = availability.check(client, item, request.day, request.party)
-            except (httpx.HTTPError, ValueError, KeyError) as error:
-                found = "?", availability.Availability(None, detail=f"erreur : {error}"[:200])
-            engine, result = found or (None, availability.Availability(None, detail="sans moteur pris en charge"))
+
+    def one(item: dict[str, Any]) -> tuple[str | None, availability.Availability]:
+        try:
+            found = availability.check(client, item, request.day, request.party)
+        except (httpx.HTTPError, ValueError, KeyError) as error:
+            found = "?", availability.Availability(None, detail=f"erreur : {error}"[:200])
+        return found or (None, availability.Availability(None, detail="sans moteur pris en charge"))
+
+    # Several activities at once, but each site asked at most every half second, as when checked one by one.
+    hooks = {"request": [_paced(availability.DELAY_SECONDS / 2)]}
+    with httpx.Client(timeout=20, follow_redirects=True, headers={"User-Agent": availability.USER_AGENT}, event_hooks=hooks) as client, \
+            ThreadPoolExecutor(CHECK_WORKERS) as pool:
+        futures = {pool.submit(one, item): item for item in todo}
+        # Written from this thread only: the store's connection is not shared.
+        for index, future in enumerate(as_completed(futures), 1):
+            item, (engine, result) = futures[future], future.result()
             store.save_availability(item["source_id"], item["external_id"], day, request.party, engine, result.available, result.slots, result.detail)
             cached[(item["source_id"], item["external_id"])] = {"engine": engine, "available": result.available, "slots": result.slots, "detail": result.detail}
             mark = {True: "✓", False: "✗", None: "·"}[result.available]
             print(f"  {index:>3}/{len(todo)} {mark} {item['activity']['title'][:70]}")
-            clock.sleep(availability.DELAY_SECONDS / 2)
     return cached
+
+
+def _paced(delay: float) -> Callable[[httpx.Request], None]:
+    """An httpx hook that spaces the requests to a same host by `delay` seconds, across threads."""
+    lock, next_at = threading.Lock(), {}
+
+    def wait(request: httpx.Request) -> None:
+        with lock:
+            at = max(clock.monotonic(), next_at.get(request.url.host, 0.0))
+            next_at[request.url.host] = at + delay
+        clock.sleep(max(0.0, at - clock.monotonic()))
+
+    return wait
 
 
 def quick_score(item: dict[str, Any], request: Request, originality: int = 35) -> float:
@@ -713,6 +756,11 @@ def _centre(route: Route) -> tuple[float, float]:
     )
 
 
+def _same(title: str) -> str:
+    """A title as compared between listings: "Rex Club presents: X" and "REX CLUB PRESENTS – X" are one."""
+    return " ".join(re.findall(r"\w+", title.lower()))
+
+
 def replace_step(route: Route, position: int, candidates: list[Candidate], request: Request, excluded: set) -> list[Step] | None:
     """The route's steps with another activity at this position, the others kept; None if nothing fits.
 
@@ -727,12 +775,14 @@ def replace_step(route: Route, position: int, candidates: list[Candidate], reque
     following = steps[position + 1] if position + 1 < len(steps) else None
     slot = request.trame[position] if position < len(request.trame) else None
     roles = Counter(s.candidate.role for s in others)
-    venues = {s.candidate.venue.lower() for s in others}
+    # Never the same activity again under another listing (a concert sold on two platforms): not its venue, not its title.
+    venues = {s.candidate.venue.lower() for s in steps} - {""}
+    titles = {_same(old.candidate.title)}
     budget = request.budget * 1.2 - sum(s.candidate.price for s in others)
     wait = timedelta(minutes=90 if slot == "fete" else 60 if request.trame else 50)
     best, best_value = None, -math.inf
     for candidate in candidates:
-        if candidate.key in excluded or candidate.venue.lower() in venues or candidate.price > budget:
+        if candidate.key in excluded or candidate.venue.lower() in venues or _same(candidate.title) in titles or candidate.price > budget:
             continue
         if (slot is None and candidate.role != old.candidate.role) or not _role_fits(candidate, roles, others, bool(request.trame)):
             continue
@@ -790,22 +840,104 @@ def replace_step(route: Route, position: int, candidates: list[Candidate], reque
 # Names and pitches ----------------------------------------------------------
 
 
-def name_by_rules(route: Route, request: Request) -> None:
+# Naming by rules: what each step is, in a word, and where the evening happens. Nothing is invented:
+# the words come from the tags, the categories and the step's role.
+_TAG_WORDS = {
+    "escape_game": "escape game", "murder_party": "enquête", "jeu_de_piste": "chasse au trésor", "quiz": "quiz",
+    "karaoke": "karaoké", "jeux_de_societe": "jeux de société", "jeu_video": "réalité virtuelle", "mini_golf": "mini-golf",
+    "jeu_actif": "jeux d'adresse", "defouloir": "défouloir", "sport": "sport", "stand_up": "stand-up", "theatre": "théâtre",
+    "comedie": "comédie", "comedie_musicale": "comédie musicale", "magie": "magie", "cabaret": "cabaret", "drag": "show drag",
+    "cirque": "cirque", "danse": "danse", "classique": "concert classique", "jazz": "jazz", "electro": "dancefloor",
+    "concert_live": "concert", "art": "art", "photo": "photo", "mode_design": "design", "histoire": "histoire",
+    "sciences": "sciences", "immersif": "immersion", "cinema": "cinéma", "lecture": "lecture", "visite_guidee": "balade",
+    "animaux": "animaux", "ceramique": "poterie", "peinture_dessin": "peinture", "cuisine": "atelier cuisine",
+    "mixologie": "cocktails", "vin": "vins", "artisanat": "atelier", "floral": "fleurs", "parfum_bougie": "parfums",
+    "shooting": "shooting photo", "gastronomique": "grande table", "street_food": "street food", "degustation": "dégustation",
+    "brunch_gouter": "goûter", "massage": "massage", "spa": "spa", "flottaison": "flottaison", "relaxation": "yoga",
+    "baignade": "baignade",
+}
+_CATEGORY_WORDS = {
+    "concert": "concert", "theatre": "théâtre", "humour": "stand-up", "cabaret": "cabaret", "spectacle": "spectacle",
+    "danse": "danse", "cinema": "cinéma", "expo": "expo", "musee": "musée", "visite": "balade", "lieu_insolite": "lieu insolite",
+    "atelier": "atelier", "gastronomie": "dégustation", "jeux": "jeux", "sensations": "sensations", "bien_etre": "bien-être",
+    "croisiere": "croisière", "festival": "festival", "nuit": "dancefloor", "conference": "conférence", "nature": "nature",
+}
+# The setting, added to the word when the step has it: "dîner sur l'eau", "concert aux chandelles".
+_SETTING_WORDS = {"sur_l_eau": "sur l'eau", "chandelles": "aux chandelles", "vue": "avec vue", "dans_le_noir": "dans le noir", "souterrain": "sous terre"}
+_PLACES = {
+    1: "près du Louvre", 2: "vers la Bourse", 3: "dans le Haut-Marais", 4: "dans le Marais", 5: "au Quartier latin",
+    6: "à Saint-Germain", 7: "au pied de la tour Eiffel", 8: "vers les Champs-Élysées", 9: "entre Pigalle et Opéra",
+    10: "le long du canal Saint-Martin", 11: "entre Bastille et Oberkampf", 12: "à Bercy", 13: "à la Butte-aux-Cailles",
+    14: "à Montparnasse", 15: "à Vaugirard", 16: "à Passy", 17: "aux Batignolles", 18: "à Montmartre",
+    19: "aux Buttes-Chaumont", 20: "à Belleville",
+}
+
+
+def step_word(step: Step) -> str:
+    """The step in a few words: "cocktails", "dîner sur l'eau", "stand-up"."""
+    candidate = step.candidate
+    tags = set(candidate.tags)
+    categories = candidate.item["activity"].get("categories") or []
+    if candidate.role == "repas":
+        word = next((_TAG_WORDS[t] for t in ("gastronomique", "street_food") if t in tags), "dîner")
+    elif candidate.role == "verre" and "nuit" not in categories:
+        # A bar is said by what one does there (cocktails, games, jazz), else by the hour.
+        word = next((_TAG_WORDS[t] for t in ("mixologie", "vin", *candidate.tags) if t in tags and t in _TAG_WORDS), None)
+        word = word or ("apéro" if 12 < step.start.hour < 21 else "dernier verre")
+    else:
+        word = next((_TAG_WORDS[t] for t in candidate.tags if t in _TAG_WORDS), None)
+        word = word or next((_CATEGORY_WORDS[c] for c in categories if c in _CATEGORY_WORDS), None) or "surprise"
+    said = word in ("croisière",) and "sur_l_eau"  # a cruise is on the water already
+    setting = next((_SETTING_WORDS[t] for t in _SETTING_WORDS if t in tags and t != said and _SETTING_WORDS[t] not in word), "")
+    return f"{word} {setting}".strip()
+
+
+def _place(route: Route) -> str:
     arrondissements = Counter(s.candidate.arrondissement for s in route.steps if s.candidate.arrondissement)
-    quarter = _QUARTERS.get(arrondissements.most_common(1)[0][0], "Paris") if arrondissements else "Paris"
-    asked = [v for v in request.vibes if any(v in s.candidate.vibes for s in route.steps)]
-    moods = asked or [v for v, _ in Counter(v for s in route.steps for v in s.candidate.vibes).most_common(2)]
-    labels = [VIBES[v]["label"].lower() for v in moods[:2]]
-    route.title = f"{' & '.join(labels).capitalize() or 'Soirée surprise'} · {quarter}"
+    return _PLACES.get(arrondissements.most_common(1)[0][0], "à Paris") if arrondissements else "à Paris"
+
+
+def _listing(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} et {words[-1]}"
+
+
+def _named(step: Step) -> str:
+    """The activity as the source names it, with its venue when the title does not say it."""
+    title, venue = step.candidate.title.strip().replace("«", "“").replace("»", "”"), (step.candidate.venue or "").strip()
+    title = title if len(title) <= 70 else title[:67].rsplit(" ", 1)[0] + "…"
+    return f"« {title} »" + (f" ({venue})" if venue and venue.lower() not in title.lower() else "")
+
+
+def name_by_rules(route: Route, request: Request) -> None:
+    """A title that says what the evening is and where ("Apéro, stand-up et dancefloor entre Pigalle et Opéra"),
+    and a pitch that tells it step by step, with the walks and the price."""
+    words = list(dict.fromkeys(step_word(step) for step in route.steps))
+    route.title = f"{_listing(words)} {_place(route)}"
+    route.title = route.title[0].upper() + route.title[1:]
     parts = []
+    last = len(route.steps) - 1
     for index, step in enumerate(route.steps):
-        what = step.candidate.title
+        how = f"{step.travel} min à pied" if step.distance <= WALK_KM else f"{step.travel} min en métro ou taxi"
+        dancing = "fete" in step.candidate.vibes or "nuit" in (step.candidate.item["activity"].get("categories") or [])
         if index == 0:
-            parts.append(f"On commence à {step.start:%H:%M} par « {what} »")
+            parts.append(f"À {_hour(step.start)}, {step_word(step)} : {_named(step)}")
+        elif index == last and dancing:
+            parts.append(f"et la nuit continue, à {how}, avec {_named(step)} jusqu'à {_hour(step.end)}")
+        elif index == last:
+            parts.append(f"et pour finir, à {how}, {step_word(step)} : {_named(step)}")
         else:
-            how = f"{step.travel} min à pied" if step.distance <= WALK_KM else f"{step.travel} min en métro ou taxi"
-            parts.append(f"puis, à {how}, « {what} »")
-    route.pitch = ", ".join(parts) + "."
+            parts.append(f"puis, à {how}, {step_word(step)} : {_named(step)}")
+    rides = [s for s in route.steps[1:] if s.distance > WALK_KM]
+    moves = "Tout se fait à pied" if not rides else "Un seul trajet en métro ou taxi" if len(rides) == 1 else "Les trajets se font en métro ou taxi"
+    price = f"pour environ {route.price:.0f} € à deux" if route.price else "sans rien dépenser"
+    route.pitch = f"{' ; '.join(parts)}. {moves}, {price}."
+
+
+def _hour(moment: datetime) -> str:
+    """20 h, 20 h 30, minuit; an end at 02:59 is said 3 h."""
+    rounded = moment + timedelta(minutes=(5 - moment.minute % 5) % 5)
+    hour = "minuit" if rounded.hour == 0 else f"{rounded.hour} h"
+    return hour + (f" {rounded.minute:02d}" if rounded.minute else "")
 
 
 def name_with_claude(routes: list[Route], request: Request) -> bool:
@@ -862,10 +994,11 @@ def name_with_claude(routes: list[Route], request: Request) -> bool:
 # Page -----------------------------------------------------------------------
 
 
-def render(routes: list[Route], request: Request, days: list[date] | None = None, name: str = "") -> str:
+def render(routes: list[Route], request: Request, days: list[date] | None = None, name: str = "", naming: bool = False) -> str:
     """The routes as timelines; with several evenings, each route says its date.
 
-    Served by surprise.quiz, the page (its `name`) offers to draw a route or a step again.
+    Served by surprise.quiz, the page (its `name`) offers to draw a route or a step again;
+    while Claude writes the titles (`naming`), it waits for them and reloads.
     """
     days = days or [request.day]
     vibes = "".join(f'<span class="chip">{html.escape(VIBES[v]["label"])}</span>' for v in request.vibes)
@@ -882,6 +1015,7 @@ def render(routes: list[Route], request: Request, days: list[date] | None = None
         vibes=vibes,
         body=body,
         name=html.escape(name),
+        naming=' data-naming="1"' if naming else "",
         script=_SCRIPT,
     )
 
@@ -1058,7 +1192,7 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 sys
 </style>
 </head>
 <body>
-<main class="page" data-page="{name}">
+<main class="page" data-page="{name}"{naming}>
   <section class="hero">
     <h1>{count} soirées pour vous deux</h1>
     <p>Chaque étape est gratuite ou réservable ce soir-là ; les trajets se font à pied quand c'est possible.</p>
@@ -1077,9 +1211,20 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 sys
 # Opened as a file, it has no server: the buttons stay hidden.
 _SCRIPT = """<script>
 (() => {
-  const page = document.querySelector("main").dataset.page;
+  const main = document.querySelector("main");
+  const page = main.dataset.page;
   if (!page || location.protocol === "file:") return;
   document.body.classList.add("live");
+  // Claude's titles come a few seconds after the page: it reloads on them, a minute at most.
+  if (main.dataset.naming) {
+    const since = Date.now();
+    const wait = async () => {
+      const text = await fetch(location.href, { cache: "no-store" }).then((r) => r.text()).catch(() => "");
+      if (text && !/<main[^>]*data-naming/.test(text)) return location.reload();
+      if (Date.now() - since < 60000) setTimeout(wait, 2000);
+    };
+    setTimeout(wait, 2000);
+  }
   const back = sessionStorage.getItem("redone");
   if (back) {
     sessionStorage.removeItem("redone");
@@ -1216,9 +1361,14 @@ def main() -> None:
 
 def generate(
     store: LocalStore, requests: list[Request], count: int, checks: int = 60, claude: bool = True, name: str | None = None,
+    base: Base | None = None, name_later: bool = False,
 ) -> tuple[list[Route], Path]:
-    """The best routes over the evenings asked, named, and the page showing them."""
-    base = Base.load(store)
+    """The best routes over the evenings asked, named, and the page showing them.
+
+    `base`: the activities already loaded (a server keeps them). `name_later`: the page is written at
+    once with titles by rules, and Claude's titles replace them when they come (the page reloads on them).
+    """
+    base = base or Base.load(store)
     routes: list[Route] = []
     for request in requests:
         if len(requests) > 1:
@@ -1230,12 +1380,36 @@ def generate(
         routes.sort(key=lambda route: (route.steps[0].start, -route.score))
     for route in routes:
         name_by_rules(route, route.request)
-    if claude:
+    later = claude and name_later and bool(routes) and bool(os.environ.get("ANTHROPIC_API_KEY"))
+    if claude and not later:
         name_with_claude(routes, requests[0])
     days = [request.day for request in requests]
     name = name or (days[0].isoformat() if len(days) == 1 else f"{days[0].isoformat()}_{days[-1].isoformat()}")
-    state = {"routes": routes, "requests": requests, "seen": {s.candidate.key for r in routes for s in r.steps}}
-    return routes, save(name, state)
+    state = {"routes": routes, "requests": requests, "seen": {s.candidate.key for r in routes for s in r.steps}, "naming": int(later)}
+    with _SAVING:
+        path = save(name, state)
+    if later:
+        threading.Thread(target=_name_later, args=(name, routes, requests[0]), daemon=True).start()
+    return routes, path
+
+
+def _route_key(route: Route) -> tuple:
+    return tuple((step.candidate.key, step.start) for step in route.steps)
+
+
+def _name_later(name: str, routes: list[Route], request: Request) -> None:
+    """Claude's titles into the saved page, for the routes still on it (one may have been redrawn meanwhile)."""
+    try:
+        name_with_claude(routes, request)
+    finally:
+        titles = {_route_key(route): (route.title, route.pitch) for route in routes}
+        with _SAVING:
+            state = load(name)
+            if state is not None:
+                for route in state["routes"]:
+                    route.title, route.pitch = titles.get(_route_key(route), (route.title, route.pitch))
+                state["naming"] = max(0, int(state.get("naming") or 0) - 1)  # titles still awaited for other routes
+                save(name, state)
 
 
 # Regeneration ----------------------------------------------------------------
@@ -1244,13 +1418,17 @@ def generate(
 # while others fit.
 
 
+# A page is loaded, changed and saved again by the composition, a redraw and Claude's titles: one at a time.
+_SAVING = threading.RLock()
+
+
 def save(name: str, state: dict[str, Any]) -> Path:
     """The page and its routes, written under this name."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUTPUT_DIR / f"{name}.pkl").write_bytes(pickle.dumps(state))
     path = OUTPUT_DIR / f"{name}.html"
     requests = state["requests"]
-    path.write_text(render(state["routes"], requests[0], [r.day for r in requests], name), encoding="utf-8")
+    path.write_text(render(state["routes"], requests[0], [r.day for r in requests], name, bool(state.get("naming"))), encoding="utf-8")
     return path
 
 
@@ -1266,6 +1444,11 @@ def regenerate(
     store: LocalStore, base: Base, name: str, index: int, position: int | None = None, checks: int = 10, claude: bool = True,
 ) -> str | None:
     """Draws route `index` again, or only its step `position`, and rewrites the page; the error, if any."""
+    with _SAVING:
+        return _regenerate(store, base, name, index, position, checks, claude)
+
+
+def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: int | None, checks: int, claude: bool) -> str | None:
     state = load(name)
     if state is None:
         return "parcours introuvable : relancez la composition"
@@ -1277,7 +1460,10 @@ def regenerate(
     candidates = candidates_for(store, base, request, checks)
     on_page = {s.candidate.key for r in routes for s in r.steps}
     if position is None:
-        found = compose([c for c in candidates if c.key not in {s.candidate.key for s in route.steps}], request)
+        # None of the route's activities again, under the same listing or another one.
+        keys, titles = {s.candidate.key for s in route.steps}, {_same(s.candidate.title) for s in route.steps}
+        venues = {s.candidate.venue.lower() for s in route.steps} - {""}
+        found = compose([c for c in candidates if c.key not in keys and _same(c.title) not in titles and c.venue.lower() not in venues], request)
         others = [r for r in routes if r is not route]
         fresh = [r for r in found if not {s.candidate.key for s in r.steps} & state["seen"]]
         chosen = pick(fresh, 1, others) or pick(found, 1, others)
@@ -1293,11 +1479,13 @@ def regenerate(
         new = Route(steps, _route_score(steps, request))
     new.request = request
     name_by_rules(new, request)
-    if claude:
-        name_with_claude([new], request)
+    later = claude and bool(os.environ.get("ANTHROPIC_API_KEY"))
     routes[index] = new
     state["seen"] |= {s.candidate.key for s in new.steps}
+    state["naming"] = int(state.get("naming") or 0) + later
     save(name, state)
+    if later:
+        threading.Thread(target=_name_later, args=(name, [new], request), daemon=True).start()
     return None
 
 if __name__ == "__main__":

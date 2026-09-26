@@ -105,7 +105,7 @@ def test_profile_is_stored_through_the_api(tmp_path):
         evening = json.load(urlopen(f"{url}/api/soiree"))
         assert evening["max"] == 3 and evening["envies"] and evening["occasions"]
         assert b"Ce soir" in urlopen(f"{url}/soiree").read() and urlopen(f"{url}/client.js").status == 200
-        for body, code in [({"envies": []}, 400), ({"envies": ["fete"], "profile": "inconnu"}, 404)]:
+        for body, code in [({"envies": [], "diner": True}, 400), ({"envies": ["fete"]}, 400), ({"envies": ["fete"], "diner": False, "profile": "inconnu"}, 404)]:
             request = Request(f"{url}/api/soirees", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
             try:
                 urlopen(request)
@@ -115,3 +115,14 @@ def test_profile_is_stored_through_the_api(tmp_path):
                 raise AssertionError(body)
     finally:
         server.shutdown()
+
+
+def test_each_evening_says_whether_they_eat():
+    profile = quiz.profile_from(ANSWERS)  # a profile that likes a fine table
+    assert profile["dinner"]
+    [ate] = quiz.requests_for(profile, [date(2026, 10, 10)], ["romantique"], dinner=False)
+    assert ate.no_dinner and not ate.dinner
+    [eats] = quiz.requests_for(quiz.profile_from({}), [date(2026, 10, 10)], ["fete"], dinner=True)
+    assert eats.dinner and not eats.no_dinner
+    [unsaid] = quiz.requests_for(profile, [date(2026, 10, 10)], ["fete"])
+    assert unsaid.dinner and not unsaid.no_dinner

@@ -113,7 +113,7 @@ QUESTIONS: list[dict[str, Any]] = [
             {"value": "table", "label": "Une vraie belle table", "emoji": "🍽️", "vibes": {"savourer": 2}, "dinner": True},
             {"value": "partage", "label": "Des assiettes à partager", "emoji": "🥂", "vibes": {"savourer": 1}},
             {"value": "pouce", "label": "Sur le pouce, on a mieux à faire", "emoji": "🌮", "vibes": {}},
-            {"value": "deja", "label": "On aura déjà dîné", "emoji": "✅", "vibes": {}},
+            {"value": "secondaire", "label": "Manger, pas notre priorité", "emoji": "🤷", "vibes": {}},
         ],
     },
     {
@@ -274,8 +274,14 @@ def _late(hour: str) -> str:
     return f"{int(hour[:2]) + 24}{hour[2:]}" if hour < "12:00" else hour
 
 
-def evening(profile: dict[str, Any], envies: list[str] | None = None, occasion: str | None = None) -> dict[str, Any]:
-    """One evening's settings: its wishes and occasion over the profile, which keeps refusals, budget and tastes."""
+def evening(
+    profile: dict[str, Any], envies: list[str] | None = None, occasion: str | None = None, dinner: bool | None = None,
+) -> dict[str, Any]:
+    """One evening's settings: its wishes and occasion over the profile, which keeps refusals, budget and tastes.
+
+    `dinner`: whether the couple eats during the evening, asked each time; it wins over the profile and the wishes.
+    Not said (None): a dinner when the profile, a wish or the occasion calls for one, and maybe one otherwise.
+    """
     wishes = [ENVIE_KEYS[e] for e in dict.fromkeys(envies or []) if e in ENVIE_KEYS][:MAX_ENVIES] or [ENVIES[0]]
     event = OCCASION_KEYS.get(occasion or "rien", OCCASION_KEYS["rien"])
     # Each wish's vibes, the profile's for "nous" and "surprise"; taken in turn so that every wish has its share.
@@ -292,7 +298,8 @@ def evening(profile: dict[str, Any], envies: list[str] | None = None, occasion: 
         "vibes": vibes,
         "audace": min(1.0, profile["audace"] + max(w.get("audace", 0) for w in wishes)),
         "avoid": sorted(set(profile["avoid"]) | avoid),
-        "dinner": profile["dinner"] or any(w.get("dinner") for w in wishes) or bool(event.get("dinner")),
+        "dinner": dinner if dinner is not None else profile["dinner"] or any(w.get("dinner") for w in wishes) or bool(event.get("dinner")),
+        "no_dinner": dinner is False,
         "start": min((w["start"] for w in wishes if "start" in w), default=DEFAULT_START),
         "end": max(ends, key=_late) if ends else profile.get("end") or DEFAULT_END,
     }
@@ -300,6 +307,7 @@ def evening(profile: dict[str, Any], envies: list[str] | None = None, occasion: 
 
 def requests_for(
     profile: dict[str, Any], days: list[date] | None = None, envies: list[str] | None = None, occasion: str | None = None,
+    dinner: bool | None = None,
 ) -> list[parcours.Request]:
     """The evenings to plan for a profile and wishes: the days given, its first outing, else the next Friday and Saturday."""
     if not days:
@@ -309,13 +317,14 @@ def requests_for(
             today = date.today()
             friday = today + timedelta(days=(4 - today.weekday()) % 7)
             days = [friday, friday + timedelta(days=1)]
-    night = evening(profile, envies, occasion)
+    night = evening(profile, envies, occasion, dinner)
     requests = []
     for day in days:
         begin, finish = parcours.window(day, night["start"], night["end"])
         requests.append(parcours.Request(
             day, profile["budget"], begin, finish, night["vibes"],
             audace=night["audace"], avoid=set(night["avoid"]), prefer=set(profile["prefer"]), dinner=night["dinner"],
+            no_dinner=night["no_dinner"],
         ))
     return requests
 
@@ -330,16 +339,36 @@ _REDO = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)(?:/st
 BASE_MINUTES = 15
 
 
-def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
+def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTTPRequestHandler]:
     # One composition at a time: it checks booking engines and writes the page.
     composing = threading.Lock()
-    # The activities take seconds to load: kept a quarter of an hour between two redraws.
+    # The activities take seconds to load: loaded when the server starts, then again in the background
+    # when a quarter of an hour old, the evening being composed meanwhile with the previous ones.
     loaded: dict[str, Any] = {}
+    loading = threading.Lock()
+
+    def reload() -> None:
+        with LocalStore(db_path) as store:
+            fresh = parcours.Base.load(store)
+        with loading:
+            loaded.update(at=clock.monotonic(), base=fresh, refreshing=False)
 
     def base(store: LocalStore) -> parcours.Base:
-        if clock.monotonic() - loaded.get("at", -BASE_MINUTES * 60) > BASE_MINUTES * 60:
-            loaded.update(at=clock.monotonic(), base=parcours.Base.load(store))
-        return loaded["base"]
+        with loading:
+            if "base" not in loaded:
+                loaded.update(at=clock.monotonic(), base=parcours.Base.load(store), refreshing=False)
+            elif clock.monotonic() - loaded["at"] > BASE_MINUTES * 60 and not loaded["refreshing"]:
+                loaded["refreshing"] = True
+                threading.Thread(target=reload, daemon=True).start()
+            return loaded["base"]
+
+    def warm_up() -> None:
+        # Holds the lock while loading: a composition asked meanwhile waits for it rather than loading again.
+        with LocalStore(db_path) as store:
+            base(store)
+
+    if warm:
+        threading.Thread(target=warm_up, daemon=True).start()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
@@ -394,6 +423,8 @@ def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
             envies = [e for e in dict.fromkeys(e for e in asked if isinstance(e, str)) if e in ENVIE_KEYS][:MAX_ENVIES]
             if not envies:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "au moins une envie"})
+            if not isinstance(body.get("diner"), bool):
+                return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "dîner ou pas ?"})
             occasion = body.get("occasion") if body.get("occasion") in OCCASION_KEYS else None
             day = valid_day(body.get("day"))
             days = [date.fromisoformat(day)] if day else None
@@ -405,10 +436,11 @@ def make_handler(db_path: Path, checks: int) -> type[BaseHTTPRequestHandler]:
                     profile = found["profile"]
                 else:
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "profil inconnu"})
-                name = f"soiree-{profile_id or 'libre'}-{'-'.join(envies)}"
+                name = f"soiree-{profile_id or 'libre'}-{'-'.join(envies)}-{'diner' if body['diner'] else 'sans-diner'}"
                 with composing:
                     routes, page = parcours.generate(
-                        store, requests_for(profile, days, envies, occasion), count=3, checks=checks, name=name,
+                        store, requests_for(profile, days, envies, occasion, body["diner"]), count=3, checks=checks, name=name,
+                        base=base(store), name_later=True,
                     )
             self._send_json(HTTPStatus.OK, {"url": f"/parcours/{page.name}", "count": len(routes)})
 
@@ -446,7 +478,7 @@ def main() -> None:
     args = parser.parse_args()
     # A Windows console cannot show every character (✓, ✗): replace them rather than fail.
     sys.stdout.reconfigure(errors="replace")
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.db, args.checks))
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.db, args.checks, warm=True))
     url = f"http://127.0.0.1:{args.port}"
     print(f"Questionnaire : {url}")
     if not args.no_open:

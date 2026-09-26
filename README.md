@@ -161,14 +161,19 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
   uv run python -m surprise.parcours 2026-10-02 2026-10-03 2026-10-09 2026-10-10 --budget 150 --de 19:00 --a 04:00 \
     --vibes insolite,fete --trame apero,insolite,fete --parcours 10 --trajet-max 30
   ```
-- `--checks N` : vérifications en direct au plus (60 par défaut, 0 = cache seul). Titres et pitchs rédigés par Claude
-  si `ANTHROPIC_API_KEY` est définie (`--no-claude` sinon).
+- `--checks N` : vérifications en direct au plus (60 par défaut, 0 = cache seul), huit à la fois, chaque site
+  interrogé au plus toutes les demi-secondes. Titres et pitchs par règles, sans IA : ce qu'est chaque étape et le
+  quartier (« Jeux d'adresse et danse le long du canal Saint-Martin »), puis la soirée pas à pas avec trajets et prix.
+  Si `ANTHROPIC_API_KEY` est définie, Claude les réécrit en arrière-plan (`--no-claude` sinon) : la page s'affiche
+  aussitôt et se recharge sur ses titres, après une composition comme après un redessin. Le questionnaire charge les activités à son démarrage et les recharge en arrière-plan toutes les
+  15 minutes.
 - Page : `data/parcours/<date>.html`, ouverte à la fin — trois frises (photos, horaires, trajets vers Google Maps,
   bouton « Réserver » sous chaque étape).
 - Régénérer : servie par le questionnaire (`http://127.0.0.1:8001/parcours/<nom>.html`), la page propose
   « ↻ Tout le parcours » (une autre soirée, différente des deux autres) et « ↻ Changer » sur chaque étape (une autre
   activité du même rôle ou de la même étape de la trame, qui s'enchaîne avec ses voisines ; un bar voisin est écourté
-  ou prolongé). Les activités déjà proposées ne reviennent pas tant que d'autres conviennent. Les parcours sont gardés
+  ou prolongé). Les activités déjà proposées ne reviennent pas tant que d'autres conviennent ; celle qu'on change ne revient jamais,
+  même vendue sous une autre fiche (même lieu ou même titre). Les parcours sont gardés
   à côté de la page (`<nom>.pkl`).
 - Images : BilletRéduc interdit l'affichage de ses affiches ailleurs que chez lui (`Cross-Origin-Resource-Policy`) ;
   elles sont copiées une fois dans `data/images` (800 px) et servies de là, en modération comme dans les parcours.
@@ -185,7 +190,10 @@ genres préférés, envie d'un dîner, budget. Aucune heure précise n'est deman
 (table `profiles`).
 
 Chaque soirée se prépare à part, sur sa propre page (`/soiree`, avec `#p=<profil>` ou sans profil) : jusqu'à trois
-envies (« Faire la fête », « Cocooning », « Romantique », « Surprenez-nous »…), une occasion éventuelle et le jour.
+envies (« Faire la fête », « Cocooning », « Romantique », « Surprenez-nous »…), si l'on dîne ou pas (obligatoire :
+« on aura déjà mangé » écarte les formules repas — dîners-croisières, dîners-spectacles, restaurants — mais garde
+les bars, caves, bars à vins, planches et rooftops pour boire un verre, et les concerts d'un club-restaurant), une
+occasion éventuelle et le jour.
 Les envies se mêlent : chacune apporte ses vibes à tour de rôle, la soirée commence à l'heure la plus tôt et finit à
 la plus tardive, et ce qu'une envie écarte revient si une autre le demande (cocooning puis fête : le club reste).
 Les refus, le budget, l'audace et les goûts sont ceux du profil, ou des réglages par défaut sans profil. Les refus
