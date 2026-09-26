@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
 from surprise.categories import categorize
-from surprise.models import Activity, ActivityKind, Image, Occurrence, Offer, RawRecord, Venue
+from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Occurrence, Offer, RawRecord, Venue
 
 SOURCE_ID = "que_faire_a_paris"
 DATASET = "que-faire-a-paris-"
@@ -77,7 +77,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             website=safe_url(payload.get("address_url")),
         )
     except ValidationError:
-        return Normalized(raw, rejection="hors Paris intra-muros")
+        return Normalized(raw, rejection=OUT_OF_AREA)
 
     all_occurrences = parse_occurrences(payload.get("occurrences"))
     occurrences = [o for o in all_occurrences if _in_window(o, now, window)]

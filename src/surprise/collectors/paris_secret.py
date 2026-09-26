@@ -41,7 +41,7 @@ from surprise.collectors.paris_zigzag import (
     postal_code,
     split_venue,
 )
-from surprise.models import Activity, ActivityKind, Image, Occurrence, Offer, RawRecord, Venue
+from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Occurrence, Offer, RawRecord, Venue
 
 SOURCE_ID = "paris_secret"
 BASE_URL = "https://parissecret.com"
@@ -181,7 +181,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
     try:
         venue = Venue(name=venue_name or parsed_name, address=street, postal_code=postal_code(address) or "")
     except ValidationError:
-        return Normalized(raw, rejection="hors Paris intra-muros")
+        return Normalized(raw, rejection=OUT_OF_AREA)
     if (ends_on or starts_on) and (ends_on or starts_on) < today:
         return Normalized(raw, rejection="passé")
     if starts_on and starts_on > today + window:

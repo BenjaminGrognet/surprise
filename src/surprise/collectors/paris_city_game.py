@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from surprise.categories import categorize
 from surprise.collectors.common import BOOKING, OFF_TOPIC, Normalized, euro_amounts, run, safe_url
 from surprise.collectors.paris_zigzag import postal_code, split_venue
-from surprise.models import Activity, ActivityKind, Image, Offer, RawRecord, Venue
+from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "paris_city_game"
 BASE_URL = "https://pariscitygame.fr"
@@ -103,7 +103,7 @@ def normalize(payload: dict[str, Any]) -> Normalized:
     try:
         venue = Venue(name=name, address=street, postal_code=postal_code(address) or "")
     except ValidationError:
-        return Normalized(raw, rejection="hors Paris intra-muros")
+        return Normalized(raw, rejection=OUT_OF_AREA)
     price_text = payload.get("price") or ""
     amounts = euro_amounts(price_text)
     is_free = bool(_FREE.search(price_text)) and not any(amounts)

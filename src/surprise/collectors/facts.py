@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from surprise.categories import categorize
 from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, USER_AGENT, Normalized, safe_url
 from surprise.collectors.paris_zigzag import PARIS, WINDOW, postal_code, split_venue
-from surprise.models import Activity, ActivityKind, Image, Occurrence, Offer, PriceUnit, RawRecord, Venue
+from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Occurrence, Offer, PriceUnit, RawRecord, Venue
 
 # Some sites answer bots with a 429 or a captcha page.
 BROWSER_HEADERS = {
@@ -211,7 +211,7 @@ def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: da
             longitude=_float(facts.get("longitude")),
         )
     except ValidationError:
-        return Normalized(raw, rejection="hors Paris intra-muros")
+        return Normalized(raw, rejection=OUT_OF_AREA)
 
     today = now.astimezone(PARIS).date()
     starts_at, ends_at = parse_datetime(facts.get("starts_at")), parse_datetime(facts.get("ends_at"))

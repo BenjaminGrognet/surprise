@@ -31,7 +31,7 @@ _TAG_RULES = [
     ("jeux_de_societe", "Jeux de société", "activite", r"jeux? de (?:société|figurines)|bar à jeux|café jeux|wargame|taverne|stratèges|jovial|loufoque|perpette"),
     ("jeu_video", "Jeu vidéo / réalité virtuelle", "activite", r"gaming|jeu vidéo|réalité virtuelle|\bvr\b|playin|press start"),
     ("mini_golf", "Mini-golf", "activite", r"mini[- ]?golf|mad golf"),
-    ("jeu_actif", "Jeu actif (salle, palets, glisse)", "activite", r"active room|pucks|shuffled|glisse|a tour de bras|lancer de hache|laser[- ]?game|bowling|billard"),
+    ("jeu_actif", "Jeu actif (salle, palets, glisse)", "activite", r"active room|action game|pucks|shuffled|glisse|a tour de bras|lancer de hache|laser[- ]?game|bowling|billard|fléchettes|baby[- ]?foot|trampoline"),
     ("defouloir", "Défouloir / rage room", "activite", r"casse tout|rage room|tout brûler"),
     ("sport", "Sport / plein effort", "activite", r"\bquad|segway|à vélo|location de vélo|bike|pilates|\bsport|escalade|trampoline|karting|randonnée|wave in paris|\bsurf"),
     # Spectacles
@@ -43,11 +43,11 @@ _TAG_RULES = [
     ("cabaret", "Cabaret / revue", "activite", r"cabaret|(?<!machine du )moulin rouge|paradis latin|crazy horse|lido|burlesque|revue"),
     ("drag", "Drag", "activite", r"\bdrag\b|madame arthur"),
     # Said in the title only: "Sexe" (a stand-up), "Strip" (a play) or "Libertino" (a restaurant) are not.
-    ("coquin", "Coquin / effeuillage", "activite", r"[ée]roti|burlesque|effeuill|strip[- ]?(?:tease|club|poker|&)|strips back|crazy horse|pole[- ]?dance|pin[- ]?ups?|lingerie|sexy|spicy|naughty|coquin|libertin(?!o)"),
+    ("coquin", "Coquin / effeuillage", "activite", r"[ée]roti|burlesque|effeuill|strip[- ]?(?:tease|club|poker|&)|strips back|crazy horse|pole[- ]?dance|pin[- ]?ups?\b|lingerie|sexy|spicy|naughty|coquin|libertin(?!o)"),
     ("cirque", "Cirque", "activite", r"cirque|acrobat"),
     ("danse", "Danse / soirée dansante", "activite", r"\bdanse|dance|\bbal\b|salsa|tango|swing|latino|baile"),
     # Musique
-    ("classique", "Musique classique", "activite", r"candlelight|vivaldi|mozart|requiem|beethoven|chopin|ravel|symphoni|concerto|adagio|orchestre|philharmoni|opéra|choir|chœur|choeur|salle gaveau|récital"),
+    ("classique", "Musique classique", "activite", r"candlelight|vivaldi|mozart|requiem|beethoven|chopin|\bravel\b|symphoni|concerto|adagio|orchestre|philharmoni|opéra(?!tion)|choir|chœur|choeur|salle gaveau|récital"),
     ("jazz", "Jazz", "activite", r"\bjazz"),
     ("electro", "Électro / DJ / clubbing", "activite", r"\bdj\b|techno|tech no|(?<!murder )party|clubbing|\blive\)|club\b.*\bpresents?|open[- ]air|clubbing|boat party|afro(?:beat|love| sunset)|soirée afro|amapiano|groove"),
     ("concert_live", "Concert live", "activite", r"concert|en live|\blive\b|dream tour|accor arena|zénith|popfest"),
@@ -84,7 +84,7 @@ _TAG_RULES = [
     ("relaxation", "Yoga / méditation", "activite", r"yoga|méditation|relaxation|sophrologie"),
     ("baignade", "Baignade / piscine", "activite", r"piscine|baignade|natation|aquagym|jacuzzi|bains? nordiques?|maillot de bain"),
     # Cadre
-    ("sur_l_eau", "Sur l'eau", "cadre", r"croisière|péniche|bateau|barque|seine|canal|river|boat|cruise|akwa|\bflots?\b"),
+    ("sur_l_eau", "Sur l'eau", "cadre", r"croisière|péniche|bateau|barque|seine|canal|\briver\b|boat|cruise|akwa|\bflots?\b"),
     ("vue", "Vue panoramique", "cadre", r"rooftop|accès au toit|panoramique|ballon de paris|tour eiffel|\bt7\b|vue spectaculaire"),
     ("souterrain", "Souterrain", "cadre", r"souterrain|catacombe|crypte|métro de paris"),
     ("cache", "Lieu secret / speakeasy", "cadre", r"speak ?easy|secret|caché|little red door|moonshiner|candelaria|maison close|club des haschischins|mask|cupidon"),

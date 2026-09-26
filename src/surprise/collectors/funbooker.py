@@ -19,7 +19,7 @@ from pydantic import ValidationError
 from surprise.categories import categorize
 from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, Normalized, run, safe_url
 from surprise.collectors.paris_zigzag import postal_code, split_venue
-from surprise.models import Activity, ActivityKind, Image, Offer, RawRecord, Venue
+from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "funbooker"
 BASE_URL = "https://www.funbooker.com"
@@ -102,7 +102,7 @@ def normalize(payload: dict[str, Any]) -> Normalized:
             longitude=float(payload["longitude"]) if payload["longitude"] else None,
         )
     except ValidationError:
-        return Normalized(raw, rejection="hors Paris intra-muros")
+        return Normalized(raw, rejection=OUT_OF_AREA)
     try:
         activity = Activity(
             title=title,

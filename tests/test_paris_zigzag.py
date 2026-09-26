@@ -137,7 +137,8 @@ def test_split_venue(text, expected):
 def test_postal_code_from_district():
     assert zz.postal_code("5 rue La Bruyère, Paris 9e") == "75009"
     assert zz.postal_code("1 place de Valois, Paris 1er") == "75001"
-    assert zz.postal_code("3 place Test, 93100 Montreuil") is None
+    assert zz.postal_code("3 place Test, 91300 Massy") is None
+    assert zz.postal_code("3 place Test, 93100 Montreuil") == "93100"  # a town the metro reaches
 
 
 def test_venue_written_as_a_label():
@@ -214,3 +215,12 @@ def test_collect_reads_recent_articles_in_scope():
     assert article.call_count == 1
     assert len(collected) == 5
     assert {r.raw.source_id for r in collected} == {"paris_zigzag"}
+
+
+def test_the_official_page_is_the_link_naming_the_show():
+    page = (
+        '<p><strong>Éternel Tintoret</strong><br /><a href="https://www.musee-jacquemart-andre.com/fr">Musée Jacquemart-André</a>'
+        '<br />158 boulevard Haussmann, 75008 Paris<br /><a href="https://www.musee-jacquemart-andre.com/fr/eternel-tintoret">Infos</a></p>'
+    )
+    [payload] = zz.parse_article(ARTICLE_URL, page)
+    assert payload["website"] == "https://www.musee-jacquemart-andre.com/fr/eternel-tintoret"

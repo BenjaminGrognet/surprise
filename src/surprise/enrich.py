@@ -350,12 +350,16 @@ def enrich_one(
     return fields
 
 
+def _where(venue: dict[str, Any]) -> str:
+    return f"{venue['arrondissement']}e arrondissement" if venue.get("arrondissement") else venue.get("town") or "Paris"
+
+
 def _prompt(activity: dict[str, Any], source_text: str | None) -> str:
     venue = activity.get("venue") or {}
     categories = ", ".join(CATEGORIES[c] for c in activity.get("categories") or [])
     facts = [
         f"Titre : {activity['title']}",
-        f"Lieu : {venue.get('name')} ({venue.get('arrondissement')}e arrondissement)" if venue else None,
+        f"Lieu : {venue.get('name')} ({_where(venue)})" if venue else None,
         f"Type : {categories}" if categories else None,
         "Lieu permanent" if activity.get("kind") == "permanent" else None,
     ]

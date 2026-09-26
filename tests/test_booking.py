@@ -12,6 +12,8 @@ def test_engine_in_links():
     assert engine_in("https://www.billetterie-parismusees.paris.fr/selection/timeslotpass?productId=1") == "Secutix"
     assert engine_in("https://bookings.zenchef.com/results?rid=351778") == "Zenchef"
     assert engine_in('<div class="forescape-catalog" data-widget-id="0e20" data-settings="b64.e30="></div>') == "4escape"
+    assert engine_in("https://theatredelavilleparis.notre-billetterie.com/billets?seance=706") == "Notre Billetterie"
+    assert engine_in("https://simdrivers.qweekle.com/shop/simdrivers/") == "Qweekle"
     assert engine_in("https://www.orchestrehelios.com/concerts") is None
     # An association's page is not a ticketing form.
     assert engine_in("https://centredaide.helloasso.com/particulier?question=billet") is None
@@ -26,7 +28,12 @@ def test_booking_engine_links_then_pages():
         return_value=httpx.Response(200, text='<a href="/reserver/">Réserver</a>', headers={"content-type": "text/html"})
     )
     respx.get("https://salle.example/").mock(return_value=httpx.Response(200, text="<p>Réservation par téléphone</p>"))
+    respx.get("https://karaoke.example/").mock(
+        return_value=httpx.Response(200, text='<a href="https://booking.karaoke.example/booking?lang=fr">Réserver</a>')
+    )
     with httpx.Client() as client:
+        # The "Réserver" button leads to the venue's own booking site.
+        assert booking_engine(client, ["https://karaoke.example/"]) == "billetterie du lieu"
         assert booking_engine(client, ["https://billetterie.opera-comique.com/list/events"]) == "billetterie du lieu"
         assert booking_engine(client, ["https://perpette.example/reserver/"]) == "Bookeo"
         # The site's "Réserver" page embeds the widget.
@@ -68,3 +75,13 @@ def test_require_booking_keeps_open_walk_in_places():
         assert require_booking(client, place("https://ferme.example/")).rejection == "fermé définitivement"
         # Not a walk-in place: still needs online booking.
         assert require_booking(client, place("https://bar.example/", "expo")).rejection == "ni gratuit ni réservable en ligne"
+
+
+def test_a_venue_ticketing_page_and_an_organiser_booking_form_count_as_online_booking():
+    from surprise.booking import booking_form, own_ticketing
+
+    assert own_ticketing("https://www.musee-jacquemart-andre.com/fr/tickets/6a280a225308177b77141dd9") == "billetterie du lieu"
+    assert own_ticketing("https://www.musee-jacquemart-andre.com/fr/eternel-tintoret") is None
+    page = '<p>Réservation préalable impérative : <a href="https://forms.gle/UkU56kpyD2eZZtF86">formulaire</a></p>'
+    assert booking_form("https://www.coree-culture.org/ateliers", page) == "formulaire de réservation"
+    assert booking_form("https://example.org", '<a href="https://forms.gle/x">Votre avis sur le site</a>') is None

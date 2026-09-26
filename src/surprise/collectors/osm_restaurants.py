@@ -21,7 +21,7 @@ from urllib.parse import urljoin
 
 import httpx
 
-from surprise.booking import engine_in
+from surprise.booking import engine_in, own_ticketing
 from surprise.collectors.common import Normalized, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, complete_place, normalize_facts, utc_now
 from surprise.models import RawRecord
@@ -54,13 +54,19 @@ _ASSET = re.compile(r"\.(?:js|css|png|svg|jpe?g|woff2?)(?:[?#]|$)", re.IGNORECAS
 
 def fetch_restaurants(client: httpx.Client) -> list[dict[str, Any]]:
     """Named restaurants of Paris with a website, in a stable order."""
+    places = [e for e in overpass(client, OVERPASS_QUERY) if _website(e.get("tags") or {})]
+    return sorted(places, key=lambda e: (e["type"], e["id"]))
+
+
+def overpass(client: httpx.Client, query: str) -> list[dict[str, Any]]:
+    """The elements an Overpass query finds, from the first mirror that answers."""
     response = None
     for attempt in range(OVERPASS_ROUNDS):
         if attempt:
             time.sleep(OVERPASS_PAUSE * attempt)
         for url in OVERPASS_URLS:
             try:
-                response = client.post(url, data={"data": OVERPASS_QUERY}, timeout=240)
+                response = client.post(url, data={"data": query}, timeout=240)
                 response.raise_for_status()
                 break
             except httpx.HTTPError as error:
@@ -69,8 +75,7 @@ def fetch_restaurants(client: httpx.Client) -> list[dict[str, Any]]:
             break
     else:
         raise failure
-    places = [e for e in response.json().get("elements") or [] if _website(e.get("tags") or {})]
-    return sorted(places, key=lambda e: (e["type"], e["id"]))
+    return response.json().get("elements") or []
 
 
 def _website(tags: dict[str, str]) -> str | None:
@@ -99,8 +104,8 @@ def read_site(client: httpx.Client, url: str) -> dict[str, Any]:
     engine = engine_in(str(page.url)) or engine_in(text)
     link = _engine_link(text)
     if not engine and (reserve := booking_link(str(page.url), text)):
-        # The "Réserver" page embeds the widget.
-        engine = engine_in(reserve)
+        # The "Réserver" page is the venue's booking site, or embeds the widget.
+        engine = engine_in(reserve) or own_ticketing(reserve)
         link = reserve if engine else None
         if not engine:
             try:

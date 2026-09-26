@@ -57,6 +57,10 @@ Autres sources, chacune par sa voie la plus robuste (même options) :
 | Nuits en amoureux (Loveroomers, Love'nSpa, Love Île-de-France ; guides Love Room Guide, The Love Room, Cupiroom, Weekendlove) | `nuits_couple` | catalogues : une fiche schema.org LodgingBusiness par chambre (sitemaps Loveroomers, `products.json` Shopify de Love'nSpa, liens de la page Paris de Love Île-de-France) ; guides : une chambre par intertitre, lieu sur OSM |
 | Articles « couple » (Hati Hati, Ryo, Love'n'Room, LoveCapsule, blog Funbooker, Petit Futé) | `selections_couple` | une idée par intertitre ou lien de réservation, lieu sur OSM |
 | Restaurants OpenStreetMap | `osm_restaurants` | Overpass (restaurants de Paris avec site) + site du restaurant : gardé s'il passe par un moteur de réservation (Zenchef, SevenRooms, TheFork…), sur sa page ou sa page « Réserver » |
+| Sortir à Paris | `sortir_a_paris` | sitemaps (60 jours) des rubriques insolite, soirées, spectacles, gaming, Halloween et bars + bloc « Informations pratiques » (microdonnées schema.org Place, dates, tarifs, site officiel, réservation) ; articles sans lieu écartés |
+| Dice | `dice` | sitemaps : événements de Paris (adresse en « -paris-tickets ») de la fenêtre, par le jour de leur adresse + schema.org MusicEvent ; une soirée qui finit après 2 h est du clubbing |
+| EscapeGame.fr | `escape_game` | sitemap des salles de Paris (escape games, action games, réalité virtuelle, expériences immersives) + fiche HTML (joueurs, durée, prix, adresse, bouton « Réserver » vers le site de l'enseigne) ; salle à 3 joueurs minimum écartée |
+| Loisirs OpenStreetMap | `osm_loisirs` | Overpass (karaoké, lancer de hache, laser game, réalité virtuelle, bowling, mini-golf, trampoline, hammam, escalade, piscine ; bars à fléchettes ou billard) + site du lieu comme pour les restaurants ; la nature du lieu dans le titre (« Escalade : Arkose ») ; bars gardés sans réservation |
 
 Sans collecteur : Que faire à Paris (paris.fr) est déjà l'open data collecté, Weezevent n'a pas de catalogue
 public (reconnu comme billetterie), Fnac Spectacles ne répond pas aux robots, Le Petit Journal n'a pas d'édition Paris.
@@ -73,7 +77,17 @@ page « Réserver ») menant à une billetterie ou un moteur de réservation rec
 sont rejetées avec le motif « ni gratuit ni réservable en ligne » : elles restent en base, à part dans la modération
 (onglet « Écartées à la collecte »), pour affiner les règles ou en repêcher. Exception : bars, clubs et restaurants sont gardés
 tant qu'ils sont ouverts (rejet « fermé définitivement » si la source ou le site le dit), marqués « Non réservable »
-quand ils n'ont pas de réservation en ligne.
+quand ils n'ont pas de réservation en ligne. Comptent aussi comme réservation en ligne : une page billetterie du site
+du lieu (« …/fr/tickets/… »), et le formulaire d'un organisateur (Google Forms, Tally…) sur une page qui demande de
+réserver ou de s'inscrire. Sur Paris ZigZag, la page officielle d'un bloc pratique est le lien qui nomme le lieu ou le
+spectacle ; sa billetterie est suivie de là.
+
+Zone : Paris et la proche banlieue qu'atteint le métro (`METRO_TOWNS` dans `surprise/models.py` : Boulogne, Montreuil,
+Saint-Denis, Vincennes, Ivry…) ; ailleurs, rejet « hors Paris et proche banlieue ». Les parcours gardent au plus 35 min
+de trajet entre deux étapes.
+
+Règles changées : `uv run python -m surprise.renormalize --rejet "<motif>"` (ou `--source <id>`) normalise de nouveau
+les pages déjà collectées, puis revérifie la réservation, sans rien recollecter.
 
 ## Enrichissement
 
@@ -149,12 +163,9 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
 ```
 
 - Étapes retenues : séance datée ce soir-là avec billetterie (séances concerts.paris, Que Faire à Paris, Shotgun…),
-  créneau libre pour 2 vérifié (Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms, 4escape ; réponses
-  gardées 30 h), lieu gratuit ouvert à cette heure, ou bar / club sans réservation (marqué comme tel, `--strict` les
+  créneau libre pour 2 vérifié en direct (Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms, 4escape ; réponses
+  gardées 6 h), lieu gratuit ouvert à cette heure, ou bar / club sans réservation (marqué comme tel, `--strict` les
   exclut). Un dîner n'est proposé qu'avec une table confirmée ; une pièce « jusqu'en décembre » sans ses dates, jamais.
-- Créneaux vérifiés d'avance : `uv run python -m surprise.prefetch --jours 14`, chaque nuit après la collecte,
-  demande aux moteurs toutes les activités sans séances datées (ateliers, spas, escape games, tables) pour les 14
-  prochains soirs ; une soirée composée ne vérifie plus en direct que ce qui manque.
 - Choix : envies demandées, romantisme, originalité (sources de curation, lieux insolites), photo ; une pièce ou un
   stand-up ordinaire (originalité < 45) passe après l'insolite, d'autant plus que le couple est audacieux (sauf le
   stand-up quand il veut rire) ; budget au plus +20 % ; pas deux sorties du même genre ; trois parcours sans étape ni lieu communs, dans des quartiers différents.

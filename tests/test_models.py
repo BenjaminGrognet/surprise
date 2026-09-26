@@ -11,10 +11,16 @@ def test_paris_venue(postal_code, arrondissement):
     assert Venue(name="Lieu", postal_code=postal_code).arrondissement == arrondissement
 
 
-@pytest.mark.parametrize("postal_code", ["75000", "75021", "93100", "92120"])
+@pytest.mark.parametrize("postal_code", ["75000", "75021", "91300", "94130"])
 def test_venue_outside_paris_is_rejected(postal_code):
     with pytest.raises(ValidationError):
         Venue(name="Lieu", postal_code=postal_code)
+
+
+def test_venue_in_a_town_the_metro_reaches():
+    venue = Venue(name="Lieu", postal_code="93100")
+    assert (venue.arrondissement, venue.town) == (None, "Montreuil")
+    assert Venue(name="Lieu", postal_code="75011").town == "Paris"
 
 
 def test_offer_price_consistency():

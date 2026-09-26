@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from surprise.categories import categorize
 from surprise.collectors.common import BOOKING, Normalized, euro_amounts, run, safe_url
-from surprise.models import Activity, ActivityKind, Image, Offer, RawRecord, Venue
+from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "paris_zigzag"
 BASE_URL = "https://www.pariszigzag.fr"
@@ -59,7 +59,8 @@ _IMG = re.compile(r"<img\s[^>]*>", re.IGNORECASE)
 _PHOTO_CLASS = re.compile(r"class=\"[^\"]*\bwp-(?:image-\d+|post-image)\b")
 _SRC = re.compile(r"\ssrc=\"(https://www\.pariszigzag\.fr/wp-content/uploads/[^\"]+)\"")
 _LABEL = re.compile(r"^([A-Za-zÀ-ÿ' ]{2,25}?)\s*:\s*(.*)$")
-_POSTAL_CODE = re.compile(r"\b(75\d{3})\b")
+# Paris, and the nearby towns in the metro's reach (surprise.models.METRO_TOWNS).
+_POSTAL_CODE = re.compile(r"\b(75\d{3}|9[234]\d{3})\b")
 _PARIS_DISTRICT = re.compile(r"\bParis\s+(\d{1,2})\s*(?:e|er|ème)\b", re.IGNORECASE)
 _STREET = re.compile(
     r"\b\d{1,3}(?:\s?[/-]\s?\d{1,3})?\s?(?:bis|ter)?\s*,?\s+(?:rue|av\.?|avenue|bd|bvd|boulevard|place|quai|passage|impasse|allée|square|"
@@ -143,8 +144,13 @@ def parse_article(url: str, page: str, modified: str | None = None) -> list[dict
         links = [_clean_url(html.unescape(href)) for href in _LINK.findall(paragraph)]
         links = [link for link in links if link and urlsplit(link).netloc not in ("pariszigzag.fr", "www.pariszigzag.fr")]
         first_line_links = [_clean_url(html.unescape(href)) for href in _LINK.findall(raw_lines[0])]
-        # The name is usually the link to the official site; otherwise the block's first external link.
-        website = next((link for link in first_line_links if link in links), None) or next(iter(links), None)
+        # The official page: the link naming the place or show ("…/fr/eternel-tintoret" for "Éternel Tintoret"),
+        # else the name's own link, else the block's first external link. Its booking link is followed later.
+        wanted = _words(name)
+        named = max(links, key=lambda link: len(wanted & _words(urlsplit(link).path)), default=None)
+        if named and len(wanted & _words(urlsplit(named).path)) < min(2, len(wanted)):
+            named = None
+        website = named or next((link for link in first_line_links if link in links), None) or next(iter(links), None)
         domain = _domain(website)
         blocks.append(
             {
@@ -195,7 +201,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
     try:
         venue = Venue(name=venue_name, address=street, postal_code=postal_code(address_line) or "")
     except ValidationError:
-        return Normalized(raw, rejection="hors Paris intra-muros")
+        return Normalized(raw, rejection=OUT_OF_AREA)
 
     starts_on, ends_on = parse_dates(fields.get("dates"), today)
     if ends_on and ends_on < today:
@@ -246,6 +252,11 @@ def booking_link(payload: dict[str, Any]) -> str | None:
         or next(iter(payload.get("booking_links") or []), None)
         or next(iter(others), None)
     )
+
+
+def _words(text: str) -> set[str]:
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    return set(re.findall(r"[a-z0-9]{3,}", ascii_text)) - {"paris", "les", "des", "html", "www"}
 
 
 def postal_code(text: str) -> str | None:

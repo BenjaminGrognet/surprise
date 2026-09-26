@@ -206,7 +206,7 @@ function filtered() {
     if (category === "none" ? (a.categories || []).length : category && !(a.categories || []).includes(category)) return false;
     if (vibe === "none" ? it.vibes.length : vibe && !it.vibes.includes(vibe)) return false;
     if (tag === "none" ? it.tags.length : tag && !it.tags.includes(tag)) return false;
-    if (arr && String(v.arrondissement) !== arr) return false;
+    if (arr === "banlieue" ? v.arrondissement || !v.town || v.town === "Paris" : arr && String(v.arrondissement) !== arr) return false;
     if ($("evening").checked && !isEvening(it)) return false;
     if ($("free").checked && !a.offers[0]?.is_free) return false;
     if ($("changed").checked && !it.changed_since_decision) return false;
@@ -268,7 +268,8 @@ function card(it, index) {
     isEvening(it) && h("span", { class: "badge" }, "Soirée"),
     price(offer) && h("span", { class: "badge", title: offer.label || "" }, truncate(price(offer), 40)),
     offer?.online_booking === false && h("span", { class: "badge", title: "Bar, club ou restaurant : sans réservation en ligne, y aller pendant les horaires" }, "Non réservable"),
-    v.arrondissement && h("span", { class: "badge" }, `${v.arrondissement}${v.arrondissement === 1 ? "er" : "e"}`),
+    v.arrondissement ? h("span", { class: "badge" }, `${v.arrondissement}${v.arrondissement === 1 ? "er" : "e"}`)
+      : v.town && v.town !== "Paris" && h("span", { class: "badge" }, v.town),
   ];
   const occ = a.occurrences.slice(0, 4).map((o) => h("li", {}, occurrence(o)));
   if (a.occurrences.length > 4) occ.push(h("li", {}, `+ ${a.occurrences.length - 4} autres créneaux`));
@@ -474,7 +475,8 @@ Promise.all([fetch("/api/meta").then((r) => r.json()), fetch("/api/activities").
   const sources = new Map(items.map((it) => [it.source_id, it.source_name]));
   $("source").append(...[...sources].sort((x, y) => x[1].localeCompare(y[1], "fr")).map(([id, name]) => h("option", { value: id }, name)));
   const arrs = [...new Set(items.map((it) => it.activity.venue?.arrondissement).filter(Boolean))].sort((x, y) => x - y);
-  $("arr").append(...arrs.map((n) => h("option", { value: n }, `${n}${n === 1 ? "er" : "e"} arrondissement`)));
+  $("arr").append(...arrs.map((n) => h("option", { value: n }, `${n}${n === 1 ? "er" : "e"} arrondissement`)),
+    h("option", { value: "banlieue" }, "Proche banlieue"));
   restoreView();
   render();
   highlight(true);

@@ -1,5 +1,6 @@
 import pytest
 
+from surprise.categories import categorize
 from surprise.tags import TAGS, VIBES, describe, tag
 
 
@@ -18,6 +19,10 @@ def activity(title, venue=None, categories=()):
         ("Atelier tournage & peinture sur céramique en duo", None, ["atelier"], {"ceramique", "peinture_dessin"}, {"creer"}),
         ("Hôtel Erotica : un spectacle érotique", None, ["theatre"], {"coquin"}, {"coquin"}),
         ("Secret Square : spectacles de strip-tease", None, ["cabaret"], {"coquin", "cabaret"}, {"coquin", "emerveiller"}),
+        ("Action game : Push", "Active Room", ["jeux"], {"jeu_actif"}, {"bouger", "defi"}),
+        ("Fléchettes et baby-foot : The Lions", "The Lions", ["bar"], {"jeu_actif"}, {"bouger"}),
+        ("Réalité virtuelle : Time Travel : Chapter 1", "Virtual Room", ["sensations"], {"jeu_video"}, {"defi"}),
+        ("Soirée pin-up et swing", None, [], {"coquin", "danse"}, {"coquin"}),
     ],
 )
 def test_tags_and_vibes(title, venue, categories, tags, vibes):
@@ -39,6 +44,8 @@ def test_tags_and_vibes(title, venue, categories, tags, vibes):
         ("Strip", "Théâtre de la Cité Internationale", "coquin"),
         ("Libertino", None, "coquin"),
         ("La Tropicana - Sex Intention - Dj Yoyow", None, "coquin"),
+        ("Réalité virtuelle : Time Travel : Chapter 1", "Virtual Room", "classique"),  # "ravel" inside "travel"
+        ("Escape game : Anatole Latuile : opération Morvox d'or", None, "classique"),
     ],
 )
 def test_rules_avoid_false_matches(title, venue, absent):
@@ -54,3 +61,14 @@ def test_every_tag_leads_to_a_vibe_or_describes_a_setting():
     used = set().union(*(vibe["tags"] for vibe in VIBES.values()))
     orphans = {key for key, info in TAGS.items() if key not in used and info["facet"] == "activite"}
     assert orphans == set()
+
+
+def test_categories_avoid_false_matches():
+    assert "concert" not in categorize("Escape game : Anatole Latuile : opération Morvox d'or")
+    assert "danse" not in categorize("Escape game : Cannibal Island")
+    assert "danse" in categorize("Grand bal swing")
+
+
+def test_a_driving_simulator_is_not_on_the_water():
+    assert "sur_l_eau" not in describe({"title": "Sim Drivers", "categories": []})["tags"]
+    assert "sur_l_eau" in describe({"title": "River Café", "categories": []})["tags"]

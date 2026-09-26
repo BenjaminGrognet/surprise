@@ -30,6 +30,10 @@ SOURCES = {
     "le_bonbon": "Le Bonbon",
     "selections_couple": "Sélections couple (blogs)",
     "osm_restaurants": "Restaurants OpenStreetMap",
+    "sortir_a_paris": "Sortir à Paris",
+    "dice": "Dice",
+    "escape_game": "EscapeGame.fr",
+    "osm_loisirs": "Loisirs OpenStreetMap",
     "manual": "Ajout manuel",
 }
 

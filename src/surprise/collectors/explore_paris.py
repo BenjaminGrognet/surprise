@@ -19,7 +19,7 @@ from surprise.collectors.common import Normalized, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, USER_AGENT, lines, normalize_facts, text, utc_now
 from surprise.collectors.funbooker import duration_minutes
 from surprise.collectors.paris_zigzag import _MONTHS, postal_code
-from surprise.models import RawRecord
+from surprise.models import METRO_TOWNS, OUT_OF_AREA, RawRecord
 
 SOURCE_ID = "explore_paris"
 BASE_URL = "https://exploreparis.com"
@@ -112,8 +112,8 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
-    if not re.match(r"^Paris\b", payload.get("city") or ""):
-        return Normalized(raw, rejection="hors Paris intra-muros")
+    if not re.match(r"^Paris\b", payload.get("city") or "") and (payload.get("city") or "").strip() not in METRO_TOWNS.values():
+        return Normalized(raw, rejection=OUT_OF_AREA)
     if payload.get("sessions") and not any(session[:10] >= now.date().isoformat() for session in payload["sessions"]):
         return Normalized(raw, rejection="passé")
     return normalize_facts(raw, payload, "Explore Paris", now)

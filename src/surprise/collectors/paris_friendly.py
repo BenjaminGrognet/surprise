@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from surprise.categories import categorize
 from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, run, safe_url
 from surprise.collectors.paris_zigzag import PARIS, WINDOW, is_evening, parse_dates, postal_code, split_venue
-from surprise.models import Activity, ActivityKind, Image, Offer, RawRecord, Venue
+from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "paris_friendly"
 BASE_URL = "https://www.paris-friendly.fr"
@@ -107,7 +107,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
     try:
         venue = Venue(name=venue_name, address=street, postal_code=postal_code(address) or "")
     except ValidationError:
-        return Normalized(raw, rejection="hors Paris intra-muros")
+        return Normalized(raw, rejection=OUT_OF_AREA)
 
     today = now.astimezone(PARIS).date()
     # "Les 16, 17 et 18 octobre 2026 - à réserver le 24 septembre à 14h": the booking date is not the event's.

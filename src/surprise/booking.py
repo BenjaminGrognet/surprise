@@ -39,6 +39,7 @@ ENGINES = {
     "Ticketac": r"ticketac\.com",
     "BilletRéduc": r"billetreduc\.com",
     "Mapado": r"mapado\.com",
+    "Notre Billetterie": r"[\w-]+\.notre-billetterie\.com",
     "Tickeasy": r"tickeasy\.com",
     "Themis": r"themisweb\.fr",
     "Secutix": r"/selection/(?:timeslotpass|event)\b|secutix\.com",
@@ -50,6 +51,7 @@ ENGINES = {
     "FareHarbor": r"fareharbor\.com",
     "Bookeo": r"bookeo\.com/(?:widget\.js|[\w-]+)",
     "4escape": r"4escape\.(?:io|app)|class=\"forescape(?:-catalog|-cart)?\"",
+    "Qweekle": r"[\w-]+\.qweekle\.com",
     "SimplyBook": r"simplybook\.(?:it|me)",
     "Zenchef": r"bookings\.zenchef\.com|widget\.zenchef\.com|sdk\.zenchef\.com",
     "TheFork": r"thefork\.fr|lafourchette\.com",
@@ -90,6 +92,14 @@ CLOSED = re.compile(
     re.IGNORECASE,
 )
 _TICKETING_HOST = re.compile(r"^(?:www\.)?(?:billetterie|billeterie|tickets?|booking|reservations?|resa)[.-]", re.IGNORECASE)
+# Or one of its pages: "musee-jacquemart-andre.com/fr/tickets/6a280a…", a show's page in the site's ticketing.
+_TICKETING_PATH = re.compile(r"/(?:billetterie|billeterie|tickets?|ticketing|e-?billets?)/[\w-]{3,}", re.IGNORECASE)
+# An organiser's booking form ("Réservation préalable sur notre site" → a Google form): booked online too.
+_FORM = re.compile(
+    r"forms\.gle/|docs\.google\.com/forms/|tally\.so/r/|[\w-]+\.typeform\.com/to/|form\.jotform\.com/|framaforms\.org/",
+    re.IGNORECASE,
+)
+_ASKS_BOOKING = re.compile(r"r[ée]serv|inscri", re.IGNORECASE)
 
 
 def engine_in(text: str) -> str | None:
@@ -97,14 +107,23 @@ def engine_in(text: str) -> str | None:
     return next((name for name, pattern in _ENGINE_PATTERNS.items() if pattern.search(text)), None)
 
 
+def own_ticketing(url: str) -> str | None:
+    """A venue's own ticketing or booking site: "billetterie.opera-comique.com", "booking.revo-partybox.com"."""
+    parts = urlsplit(url)
+    return "billetterie du lieu" if _TICKETING_HOST.search(parts.hostname or "") or _TICKETING_PATH.search(parts.path) else None
+
+
+def booking_form(url: str, page: str) -> str | None:
+    """A booking form the page links to, on a page that asks to book or register; not a survey or a newsletter."""
+    return "formulaire de réservation" if (_FORM.search(url) or _FORM.search(page)) and _ASKS_BOOKING.search(page) else None
+
+
 def booking_engine(client: httpx.Client, urls: Iterable[str]) -> str | None:
     """Where the activity can be booked online: in its links first, then in the pages they lead to."""
     urls = list(dict.fromkeys(urls))
     for url in urls:
-        if engine := engine_in(url):
+        if engine := engine_in(url) or own_ticketing(url):
             return engine
-        if _TICKETING_HOST.search(urlsplit(url).hostname or ""):
-            return "billetterie du lieu"
     # Imported here: the enrichment imports the collectors, which check bookings with this module.
     from surprise.enrich import booking_link
 
@@ -112,10 +131,13 @@ def booking_engine(client: httpx.Client, urls: Iterable[str]) -> str | None:
         page = _get(client, url)
         if page is None:
             continue
-        if engine := engine_in(str(page.url)) or engine_in(page.text):
+        if engine := engine_in(str(page.url)) or engine_in(page.text) or booking_form(str(page.url), page.text):
             return engine
         # The site's "Réserver" page ("perpette.com/reserver/") embeds the widget.
-        if (link := booking_link(str(page.url), page.text)) and (linked := _get(client, link)):
+        link = booking_link(str(page.url), page.text)
+        if link and (engine := own_ticketing(link)):
+            return engine
+        if link and (linked := _get(client, link)):
             if engine := engine_in(str(linked.url)) or engine_in(linked.text):
                 return engine
     return None

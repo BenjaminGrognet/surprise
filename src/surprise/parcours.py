@@ -56,7 +56,7 @@ from surprise.tags import TAGS, VIBES, describe
 
 PARIS = ZoneInfo("Europe/Paris")
 OUTPUT_DIR = Path("data/parcours")
-CACHE_HOURS = 30  # engine answers kept a day and a bit: surprise.prefetch asks them all each night
+CACHE_HOURS = 6
 CHECK_WORKERS = 8  # booking engines asked at once
 WALK_KM = 1.3  # about 20 minutes on foot
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -1188,7 +1188,9 @@ def _render_step(step: Step, asked: list[str], redo: str = "") -> str:
     vibes += "".join(f'<span class="tag word">{html.escape(word)}</span>' for word in c.keywords[:2])
     if c.originality >= 55:
         vibes += f'<span class="tag orig" title="originalité sur 100">✦ {c.originality}</span>'
-    place = " · ".join(filter(None, [c.venue, f"Paris {c.arrondissement}ᵉ" if c.arrondissement else None]))
+    town = (c.item["activity"].get("venue") or {}).get("town")
+    where = f"Paris {c.arrondissement}ᵉ" if c.arrondissement else town if town and town != "Paris" else None
+    place = " · ".join(filter(None, [c.venue, where]))
     return f"""
 <li class="step">
   <div class="time">{step.start:%H:%M}<small>→ {step.end:%H:%M}</small></div>

@@ -47,7 +47,7 @@ def test_youth_events_are_rejected():
 
 
 def test_events_outside_paris_are_rejected():
-    assert by_id("3").rejection == "hors Paris intra-muros"
+    assert by_id("3").rejection == "hors Paris et proche banlieue"
 
 
 def test_daytime_free_event_with_invalid_url():
@@ -73,7 +73,7 @@ def test_collect_queries_the_six_week_window(monkeypatch):
     assert route.calls.last.request.url.params["where"] == (
         "date_end >= date'2026-09-25' and date_start <= date'2026-11-06'"
     )
-    assert [r.rejection for r in results] == [None, "jeune public", "hors Paris intra-muros", None]
+    assert [r.rejection for r in results] == [None, "jeune public", "hors Paris et proche banlieue", None]
 
 
 def test_portal_url_can_be_overridden(monkeypatch):

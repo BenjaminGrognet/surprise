@@ -29,7 +29,7 @@ def test_normalize_facts_rejections():
     assert normalize_facts(raw({}), {"name": "Soirée célibataires"}, "x", NOW).rejection == "pas pour un couple"
     assert normalize_facts(raw({}), {"name": "Atelier parent-enfant"}, "x", NOW).rejection == "jeune public"
     assert normalize_facts(raw({}), {"name": "Visite"}, "x", NOW).rejection == "sans lieu"
-    assert normalize_facts(raw({}), {"name": "Visite", "address": "1 rue X, 93100 Montreuil"}, "x", NOW).rejection == "hors Paris intra-muros"
+    assert normalize_facts(raw({}), {"name": "Visite", "address": "1 rue X, 91300 Massy"}, "x", NOW).rejection == "hors Paris et proche banlieue"
     past = {"name": "Expo", "address": "1 rue X, 75011 Paris", "ends_on": "2026-09-01"}
     assert normalize_facts(raw({}), past, "x", NOW).rejection == "passé"
 

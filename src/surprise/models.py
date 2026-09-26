@@ -13,6 +13,19 @@ from pydantic import AwareDatetime, BaseModel, Field, HttpUrl, computed_field, f
 from surprise.categories import CATEGORIES
 
 PARIS_POSTAL_CODE = re.compile(r"^750(0[1-9]|1[0-9]|20)$|^75116$")
+# The nearby towns a metro line reaches: an evening there stays a short ride from Paris (the routes cap each hop).
+METRO_TOWNS = {
+    "92100": "Boulogne-Billancourt", "92110": "Clichy", "92120": "Montrouge", "92130": "Issy-les-Moulineaux",
+    "92170": "Vanves", "92200": "Neuilly-sur-Seine", "92220": "Bagneux", "92230": "Gennevilliers",
+    "92240": "Malakoff", "92300": "Levallois-Perret", "92320": "Châtillon", "92400": "Courbevoie",
+    "92600": "Asnières-sur-Seine", "92800": "Puteaux",
+    "93000": "Bobigny", "93100": "Montreuil", "93120": "La Courneuve", "93170": "Bagnolet", "93200": "Saint-Denis",
+    "93230": "Romainville", "93260": "Les Lilas", "93300": "Aubervilliers", "93310": "Le Pré-Saint-Gervais",
+    "93400": "Saint-Ouen-sur-Seine", "93500": "Pantin",
+    "94160": "Saint-Mandé", "94200": "Ivry-sur-Seine", "94220": "Charenton-le-Pont", "94270": "Le Kremlin-Bicêtre",
+    "94300": "Vincennes", "94700": "Maisons-Alfort", "94800": "Villejuif",
+}
+OUT_OF_AREA = "hors Paris et proche banlieue"
 
 
 class ActivityKind(StrEnum):
@@ -51,16 +64,23 @@ class Venue(BaseModel):
 
     @field_validator("postal_code")
     @classmethod
-    def must_be_paris_intra_muros(cls, value: str) -> str:
+    def must_be_paris_or_metro_town(cls, value: str) -> str:
         value = value.strip()
-        if not PARIS_POSTAL_CODE.match(value):
-            raise ValueError(f"hors Paris intra-muros : {value}")
+        if not PARIS_POSTAL_CODE.match(value) and value not in METRO_TOWNS:
+            raise ValueError(f"{OUT_OF_AREA} : {value}")
         return value
 
     @computed_field
     @property
-    def arrondissement(self) -> int:
+    def arrondissement(self) -> int | None:
+        if not PARIS_POSTAL_CODE.match(self.postal_code):
+            return None
         return 16 if self.postal_code == "75116" else int(self.postal_code[-2:])
+
+    @computed_field
+    @property
+    def town(self) -> str:
+        return METRO_TOWNS.get(self.postal_code, "Paris")
 
 
 class Image(BaseModel):
