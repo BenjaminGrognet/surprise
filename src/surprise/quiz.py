@@ -77,13 +77,13 @@ QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "id": "energie", "kind": "scale",
-        "question": "Plutôt cocooning ou oiseaux de nuit ?", "hint": "De 1, on se pose, à 5, on ne tient pas en place.",
+        "question": "Plutôt cocooning ou dancefloor ?", "hint": "De 1, on se pose, à 5, on ne tient pas en place.",
         "options": [
             {"value": 1, "label": "Cocooning", "emoji": "🛋️", "vibes": {"detente": 2}},
             {"value": 2, "label": "", "emoji": "🍵", "vibes": {"detente": 1, "cultiver": 1}},
             {"value": 3, "label": "", "emoji": "🚶", "vibes": {"flaner": 1}},
             {"value": 4, "label": "", "emoji": "🕺", "vibes": {"bouger": 1, "musique": 1}},
-            {"value": 5, "label": "Oiseaux de nuit", "emoji": "🦉", "vibes": {"fete": 2, "bouger": 1}},
+            {"value": 5, "label": "Dancefloor", "emoji": "🪩", "vibes": {"fete": 2, "bouger": 1}},
         ],
     },
     {
