@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon historique</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/client.css">
+</head>
+<body>
+<main>
+  <img class="banner" src="https://images.unsplash.com/photo-1785665615443-183c92802fe7?auto=format&fit=crop&w=1600&q=60" alt="" loading="lazy" decoding="async">
+  <a class="brand" href="/">Surprise · mon historique</a>
+  <section id="screen" aria-live="polite"></section>
+</main>
+<script src="/client.js"></script>
+<script src="/account.js"></script>
+<script>
+const FR_DAY = (iso) => new Date(`${iso}T12:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+(async () => {
+  const screen = $("screen");
+  const { supabaseUrl } = await supabaseConfig();
+  if (!supabaseUrl) {
+    return screen.replaceChildren(h("h1", {}, "Mon historique"), h("p", { class: "notice" }, "Les comptes ne sont pas encore configurés sur ce serveur."));
+  }
+  const user = currentUser();
+  if (!user) {
+    return screen.replaceChildren(h("h1", {}, "Mon historique"),
+      h("p", { class: "notice" }, "Connectez-vous pour retrouver les soirées que vous avez choisies. ", h("a", { href: "/compte" }, "Se connecter →")));
+  }
+  screen.replaceChildren(h("div", { class: "loading" }, h("div", { class: "spinner" }), "On retrouve vos soirées…"));
+  let rows;
+  try { rows = await eveningsHistory(); }
+  catch (err) { return screen.replaceChildren(h("h1", {}, "Mon historique"), h("p", { class: "error" }, err.message)); }
+  if (!rows.length) {
+    return screen.replaceChildren(h("h1", {}, "Mon historique"),
+      h("p", { class: "hint" }, "Vous n'avez pas encore choisi de soirée : quand vous composez une soirée, gardez celle que vous avez vraiment faite."),
+      h("a", { class: "primary", href: "/soiree" }, "Composer une soirée"));
+  }
+  screen.replaceChildren(
+    h("h1", {}, "Mon historique"),
+    h("p", { class: "hint" }, `${rows.length} soirée${rows.length > 1 ? "s" : ""} vécue${rows.length > 1 ? "s" : ""}.`),
+    h("ul", { class: "history-list" }, rows.map((row) => h("li", {},
+      h("a", { class: "history-card", href: `/parcours/${row.page_name}.html#parcours-${row.route_index + 1}` },
+        h("time", {}, row.day ? FR_DAY(row.day) : "Date libre"),
+        h("h3", {}, row.title),
+        h("p", {}, row.pitch),
+        h("div", { class: "tags" }, (row.vibes || []).map((v) => h("span", { class: "tag" }, v))))))),
+  );
+})();
+</script>
+</body>
+</html>

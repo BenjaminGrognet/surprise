@@ -22,6 +22,7 @@ surprise.admin). Served on 127.0.0.1 with the standard library.
 
 import argparse
 import json
+import os
 import re
 import secrets
 import sys
@@ -46,8 +47,11 @@ STATIC = {
     "/": ("accueil.html", "text/html; charset=utf-8"),
     "/profil": ("quiz.html", "text/html; charset=utf-8"),
     "/soiree": ("soiree.html", "text/html; charset=utf-8"),
+    "/compte": ("compte.html", "text/html; charset=utf-8"),
+    "/historique": ("historique.html", "text/html; charset=utf-8"),
     "/client.css": ("client.css", "text/css; charset=utf-8"),
     "/client.js": ("client.js", "text/javascript; charset=utf-8"),
+    "/account.js": ("account.js", "text/javascript; charset=utf-8"),
 }
 
 # The profile's questions: what lasts from one evening to the next, no precise hour.
@@ -389,6 +393,13 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
                 self._send_json(HTTPStatus.OK, {"questions": QUESTIONS, "vibes": vibes})
             elif path == "/api/soiree":
                 self._send_json(HTTPStatus.OK, {"envies": ENVIES, "occasions": OCCASIONS, "max": MAX_ENVIES})
+            elif path == "/api/config":
+                # Public by design (the anon key is meant for the browser): accounts and history run
+                # straight against Supabase, row-level security is what scopes them to their owner.
+                self._send_json(HTTPStatus.OK, {
+                    "supabaseUrl": os.environ.get("SUPABASE_URL", ""),
+                    "supabaseAnonKey": os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_PUBLISHABLE_KEY", ""),
+                })
             elif path.startswith("/api/profiles/") and _ID.match(path.rsplit("/", 1)[1]):
                 with LocalStore(db_path) as store:
                     found = store.get_profile(path.rsplit("/", 1)[1])

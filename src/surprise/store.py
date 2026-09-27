@@ -18,7 +18,8 @@ class SupabaseStore:
 
     @classmethod
     def from_env(cls) -> "SupabaseStore":
-        return cls(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ["SUPABASE_SECRET_KEY"]
+        return cls(os.environ["SUPABASE_URL"], key)
 
     def __enter__(self) -> "SupabaseStore":
         return self

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon compte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/client.css">
+</head>
+<body>
+<main>
+  <img class="banner" src="https://images.unsplash.com/photo-1632900182533-c8ee9ba229f4?auto=format&fit=crop&w=1600&q=60" alt="" loading="lazy" decoding="async">
+  <a class="brand" href="/">Surprise · mon compte</a>
+  <section id="screen" aria-live="polite"></section>
+</main>
+<script src="/client.js"></script>
+<script src="/account.js"></script>
+<script>
+let tab = "in";
+
+function renderLoggedOut(notice) {
+  const screen = $("screen");
+  const email = h("input", { type: "email", id: "email", autocomplete: "email", required: true });
+  const password = h("input", { type: "password", id: "password", autocomplete: tab === "in" ? "current-password" : "new-password", required: true, minlength: 6 });
+  const error = h("p", { class: "error" });
+  const submit = async (e) => {
+    e.preventDefault();
+    error.textContent = "";
+    try {
+      if (tab === "in") await signIn(email.value, password.value); else await signUp(email.value, password.value);
+      render();
+    } catch (err) { error.textContent = err.message; }
+  };
+  screen.replaceChildren(
+    h("h1", {}, "Mon compte"),
+    h("p", { class: "hint" }, "Un compte garde votre profil et l'historique de vos soirées, retrouvables sur n'importe quel appareil."),
+    notice ? h("p", { class: "notice" }, notice) : "",
+    h("div", { class: "tabs", role: "tablist" },
+      h("button", { type: "button", "aria-pressed": String(tab === "in"), onclick: () => { tab = "in"; renderLoggedOut(); } }, "Se connecter"),
+      h("button", { type: "button", "aria-pressed": String(tab === "up"), onclick: () => { tab = "up"; renderLoggedOut(); } }, "Créer un compte")),
+    h("form", { class: "form", onsubmit: submit },
+      h("div", {}, h("label", { for: "email" }, "Email"), email),
+      h("div", {}, h("label", { for: "password" }, "Mot de passe"), password),
+      error,
+      h("button", { class: "primary", type: "submit" }, tab === "in" ? "Se connecter" : "Créer notre compte")),
+  );
+}
+
+async function renderLoggedIn(user) {
+  const screen = $("screen");
+  screen.replaceChildren(h("div", { class: "loading" }, h("div", { class: "spinner" }), "On retrouve votre profil…"));
+  let found;
+  try { found = await accountProfile(); }
+  catch (err) { screen.replaceChildren(h("p", { class: "error" }, err.message)); return; }
+  const p = found?.profile;
+  screen.replaceChildren(
+    h("h1", {}, "Mon compte"),
+    h("p", { class: "hint" }, `Connecté·e en tant que ${user.email}.`),
+    p
+      ? h("div", { class: "persona" },
+          h("p", { class: "eyebrow" }, p.names ? `${p.names}, vous êtes…` : "Vous êtes…"),
+          h("h2", {}, p.persona.name),
+          h("p", {}, p.persona.text))
+      : h("p", { class: "notice" }, "Vous n'avez pas encore de profil : faites le quiz, il sera gardé sur votre compte."),
+    h("div", { class: "actions" },
+      h("a", { class: "primary", href: "/profil" }, p ? "Modifier notre profil" : "Faire notre profil"),
+      h("a", { class: "link", href: "/historique" }, "Voir notre historique →")),
+    h("nav", {}, h("button", { class: "link", onclick: () => { signOut(); render(); } }, "Se déconnecter")),
+  );
+}
+
+function render() {
+  const user = currentUser();
+  user ? renderLoggedIn(user) : renderLoggedOut();
+}
+
+(async () => {
+  const { supabaseUrl } = await supabaseConfig();
+  if (!supabaseUrl) return renderLoggedOut("Les comptes ne sont pas encore configurés sur ce serveur.");
+  render();
+})();
+</script>
+</body>
+</html>

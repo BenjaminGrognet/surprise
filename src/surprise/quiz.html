@@ -12,11 +12,13 @@
 <body>
 <main>
   <img class="banner" src="https://images.unsplash.com/photo-1560439972-1af698047fa3?auto=format&fit=crop&w=1600&q=60" alt="" loading="lazy" decoding="async">
+  <div id="account-nav" class="account-nav"></div>
   <a class="brand" href="/">Surprise · votre profil de couple</a>
   <div class="progress" aria-hidden="true"><span id="bar"></span></div>
   <section id="screen" aria-live="polite"></section>
 </main>
 <script src="/client.js"></script>
+<script src="/account.js"></script>
 <script>
 const state = { questions: [], vibes: {}, index: 0, answers: {} };
 
@@ -89,6 +91,9 @@ async function renderProfile() {
     return;
   }
   history.replaceState(null, "", `#p=${saved.id}`);
+  // Best-effort: a signed-in couple also keeps their profile on their account, so it
+  // follows them to another device. The local copy above always works, account or not.
+  if (currentUser()) saveAccountProfile(state.answers, saved.profile).catch(() => {});
   showProfile(saved.id, saved.profile);
 }
 
@@ -120,12 +125,20 @@ function showProfile(id, p) {
 }
 
 (async () => {
+  renderAccountNav($("account-nav"));
   const data = await (await fetch("/api/quiz")).json();
   Object.assign(state, { questions: data.questions, vibes: data.vibes });
   const saved = location.hash.match(/p=([\w-]+)/);
   if (saved) {
     const r = await fetch(`/api/profiles/${saved[1]}`);
     if (r.ok) { const found = await r.json(); state.answers = found.answers; return showProfile(found.id, found.profile); }
+  } else if (currentUser()) {
+    // Restore the account's saved answers, then let renderProfile's usual flow give this
+    // device its own local id (soirées are composed against the local store) and sync back.
+    try {
+      const found = await accountProfile();
+      if (found) { state.answers = found.answers; return renderProfile(); }
+    } catch {}
   }
   render();
 })();

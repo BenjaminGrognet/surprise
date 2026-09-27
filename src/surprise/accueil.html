@@ -12,6 +12,7 @@
 <body>
 <main class="home">
   <img class="banner" src="https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=1600&q=60" alt="" loading="lazy" decoding="async">
+  <div id="account-nav" class="account-nav"></div>
   <p class="brand">Surprise</p>
   <h1>Des soirées à deux dans Paris, qu'on ne trouve pas tout seuls.</h1>
   <p class="lead">Dites-nous qui vous êtes, puis ce qui vous fait envie ce soir-là : on compose trois soirées complètes,
@@ -27,6 +28,7 @@
   </ol>
 </main>
 <script src="/client.js"></script>
+<script src="/account.js"></script>
 <script>
 function start(profile) {
   if (!profile) {
@@ -47,6 +49,7 @@ function start(profile) {
 }
 
 (async () => {
+  renderAccountNav($("account-nav"));
   const id = rememberedProfile();
   let profile = null;
   if (id) {

@@ -228,7 +228,26 @@ uv run python -m surprise.quiz    # http://127.0.0.1:8001
 ```
 
 Un seul site : `/` accueil du client (il y retrouve son dernier profil, gardé dans le navigateur), `/profil` le quiz,
-`/soiree` une soirée, `/parcours/<nom>.html` ses parcours, `/admin` la modération.
+`/soiree` une soirée, `/parcours/<nom>.html` ses parcours, `/compte` et `/historique` le compte du client, `/admin`
+la modération.
+
+## Compte client et historique
+
+Sans compte, le profil reste un id anonyme gardé dans le navigateur (comme aujourd'hui). Un compte (email + mot de
+passe, Supabase Auth) garde en plus le profil et l'historique des soirées vraiment réalisées (celle choisie parmi
+les trois parcours proposés) sur n'importe quel appareil. Le navigateur parle directement à Supabase avec la clé
+anon ; la sécurité (chacun ne voit que ses données) vient uniquement des policies RLS des migrations
+(`couple_profiles.user_id`, table `soirees_choisies`) — il n'y a pas de code serveur entre les deux.
+
+```bash
+SUPABASE_URL=...            # ces deux-là sont publiques par nature (clé anon) : le serveur les sert telles
+SUPABASE_ANON_KEY=...        # quelles au navigateur via /api/config, sans jamais les combiner à la service role key
+uv run python -m surprise.quiz
+```
+
+Sans ces variables, `/compte` et `/historique` s'affichent normalement mais annoncent que les comptes ne sont pas
+configurés ; le reste du site (profil anonyme, soirées, parcours) fonctionne à l'identique. Dans les réglages Auth
+de Supabase, désactiver la confirmation par email a du sens pour un usage personnel à deux.
 
 ## Modération
 

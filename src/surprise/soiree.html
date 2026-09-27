@@ -12,10 +12,12 @@
 <body>
 <main>
   <img class="banner" src="https://images.unsplash.com/photo-1770743798589-f41ac6e65078?auto=format&fit=crop&w=1600&q=60" alt="" loading="lazy" decoding="async">
+  <div id="account-nav" class="account-nav"></div>
   <a class="brand" href="/">Surprise · votre soirée</a>
   <section id="screen" aria-live="polite"></section>
 </main>
 <script src="/client.js"></script>
+<script src="/account.js"></script>
 <script>
 // One evening, apart from the questionnaire: up to MAX wishes, an occasion, a day.
 // With a profile (#p=<id>), its refusals, budget, audace and tastes apply; without, default ones.
@@ -94,6 +96,7 @@ async function compose(status) {
 }
 
 (async () => {
+  renderAccountNav($("account-nav"));
   const data = await (await fetch("/api/soiree")).json();
   Object.assign(state, { envies: data.envies, occasions: data.occasions, max: data.max });
   const saved = location.hash.match(/p=([\w-]+)/);

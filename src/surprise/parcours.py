@@ -1135,8 +1135,9 @@ def _render_route(index: int, route: Route, asked: list[str], dated: bool = Fals
     total = route.price
     estimated = any(s.candidate.price_estimated for s in route.steps)
     sleep = f'<span>+ {"≈ " if night.candidate.price_estimated else ""}{night.candidate.price:.0f} € la nuit</span>' if night else ""
+    day = route.steps[0].start.date().isoformat()
     return f"""
-<section class="route" id="parcours-{index + 1}">
+<section class="route" id="parcours-{index + 1}" data-day="{day}">
   <header>
     <p class="eyebrow">Parcours {index + 1}{f" · {_weekday(route.steps[0].start.date())} {route.steps[0].start:%d/%m}" if dated else ""}
       <button type="button" class="redo" data-redo="routes/{index}" title="Composer une autre soirée à la place de celle-ci">↻ Tout le parcours</button></p>
@@ -1147,6 +1148,7 @@ def _render_route(index: int, route: Route, asked: list[str], dated: bool = Fals
       <span>{len(route.steps)} étapes</span></p>
   </header>
   <ol class="timeline">{''.join(steps)}</ol>
+  <p class="choose-row"><button type="button" class="choose" data-choose="{index}">✓ On a choisi cette soirée</button></p>
 </section>"""
 
 
@@ -1227,6 +1229,7 @@ _PAGE = """<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="/account.js"></script>
 <style>
 :root {{
   --bg: #fbf3e7; --surface: #ffffff; --text: #211a2b; --muted: #6f6579; --line: #e8dcf3;
@@ -1303,6 +1306,12 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Sp
 .redo:disabled {{ opacity: .5; cursor: wait; }}
 .redo.busy {{ opacity: 1; }}
 .redo:focus-visible {{ outline: 2px solid var(--accent); outline-offset: 2px; }}
+.choose-row {{ margin: 18px 0 0; }}
+.choose {{ font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 999px; padding: 10px 20px;
+  border: 1px solid var(--accent); background: var(--surface); color: var(--accent-ink); }}
+.choose:hover:not(:disabled) {{ background: var(--accent-soft); }}
+.choose:disabled {{ cursor: default; opacity: .8; }}
+.choose.chosen {{ background: var(--accent); border-color: var(--accent); color: var(--accent-text); }}
 .flash {{ animation: flash 1.6s ease-out; }}
 @keyframes flash {{ from {{ box-shadow: 0 0 0 3px var(--accent); }} to {{ box-shadow: 0 0 0 3px transparent; }} }}
 @media (max-width: 720px) {{
@@ -1356,27 +1365,54 @@ _SCRIPT = """<script>
     if (target) { target.scrollIntoView({ block: "center" }); target.classList.add("flash"); }
   }
   document.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-redo]");
-    if (!button) return;
-    const buttons = document.querySelectorAll("[data-redo]");
-    const label = button.textContent;
-    buttons.forEach((b) => { b.disabled = true; });
-    button.classList.add("busy");
-    button.textContent = "Recherche…";
-    try {
-      const response = await fetch(`/api/parcours/${page}/${button.dataset.redo}`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
-      });
-      const answer = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(answer.error || "la recherche a échoué");
-      const card = button.closest(".card");
-      sessionStorage.setItem("redone", card ? `[data-redo="${button.dataset.redo}"]` : `#${button.closest(".route").id}`);
-      location.reload();
-    } catch (error) {
-      alert(`Pas de nouvelle proposition : ${error.message}`);
-      buttons.forEach((b) => { b.disabled = false; });
-      button.classList.remove("busy");
-      button.textContent = label;
+    const redo = event.target.closest("[data-redo]");
+    if (redo) {
+      const buttons = document.querySelectorAll("[data-redo]");
+      const label = redo.textContent;
+      buttons.forEach((b) => { b.disabled = true; });
+      redo.classList.add("busy");
+      redo.textContent = "Recherche…";
+      try {
+        const response = await fetch(`/api/parcours/${page}/${redo.dataset.redo}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+        });
+        const answer = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(answer.error || "la recherche a échoué");
+        const card = redo.closest(".card");
+        sessionStorage.setItem("redone", card ? `[data-redo="${redo.dataset.redo}"]` : `#${redo.closest(".route").id}`);
+        location.reload();
+      } catch (error) {
+        alert(`Pas de nouvelle proposition : ${error.message}`);
+        buttons.forEach((b) => { b.disabled = false; });
+        redo.classList.remove("busy");
+        redo.textContent = label;
+      }
+      return;
+    }
+    const choose = event.target.closest("[data-choose]");
+    if (choose) {
+      if (!currentUser()) {
+        if (confirm("Connectez-vous pour garder cette soirée dans votre historique. Aller à votre compte ?")) location.href = "/compte";
+        return;
+      }
+      const route = choose.closest(".route");
+      const label = choose.textContent;
+      choose.disabled = true;
+      choose.textContent = "Ajout…";
+      try {
+        await chooseEvening({
+          pageName: page, routeIndex: Number(choose.dataset.choose),
+          title: route.querySelector("h2").textContent, pitch: route.querySelector(".pitch").textContent,
+          vibes: [...document.querySelectorAll(".request .chip:not(.plain)")].map((c) => c.textContent),
+          day: route.dataset.day || null,
+        });
+        choose.classList.add("chosen");
+        choose.textContent = "✓ Choisie, dans votre historique";
+      } catch (error) {
+        alert(`Impossible de la garder : ${error.message}`);
+        choose.disabled = false;
+        choose.textContent = label;
+      }
     }
   });
 })();
