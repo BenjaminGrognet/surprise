@@ -1224,31 +1224,39 @@ _PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {{
-  --bg: #faf7f4; --surface: #ffffff; --text: #231c1a; --muted: #6f6360; --line: #e8dfd9;
-  --accent: #b3264b; --accent-soft: #f7e4e9; --ok: #1e7a4c; --ok-soft: #e3f3ea; --walk: #8a5a00; --walk-soft: #fbf0d9;
+  --bg: #fbf3e7; --surface: #ffffff; --text: #211a2b; --muted: #6f6579; --line: #e8dcf3;
+  --accent: #ff5c72; --accent-soft: #ffe1e6; --accent-text: #211a2b; --accent-ink: #d6314c;
+  --gold: #caa15a; --night-bg: #241a1f; --night-line: #3a2a1f;
+  --ok: #1e7a4c; --ok-soft: #e3f3ea; --walk: #8a5a00; --walk-soft: #fbf0d9;
   --free: #1f5fa8; --free-soft: #e2edf9;
 }}
 @media (prefers-color-scheme: dark) {{
   :root {{
-    --bg: #171314; --surface: #221c1e; --text: #f3ecea; --muted: #b3a7a4; --line: #3a3033;
-    --accent: #f06b8f; --accent-soft: #3b1f28; --ok: #6fd3a0; --ok-soft: #1b3226; --walk: #f0c46b; --walk-soft: #372b14;
+    --bg: #1c1620; --surface: #241c26; --text: #f3ecea; --muted: #b3a7a4; --line: #3a3033;
+    --accent: #ff5c72; --accent-soft: #4a2028; --accent-text: #211a2b; --accent-ink: #ff5c72;
+    --ok: #6fd3a0; --ok-soft: #1b3226; --walk: #f0c46b; --walk-soft: #372b14;
     --free: #8fbef3; --free-soft: #1a2a3d;
   }}
 }}
 * {{ box-sizing: border-box; }}
-body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }}
+body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Space Grotesk", system-ui, sans-serif; }}
 .page {{ max-width: 1280px; margin: 0 auto; padding: 32px 16px 64px; }}
-.hero h1 {{ font-family: Georgia, "Times New Roman", serif; font-weight: 600; font-size: clamp(28px, 4vw, 42px); margin: 0 0 8px; }}
+.banner {{ display: block; width: 100%; height: clamp(140px, 22vw, 240px); object-fit: cover; border-radius: 20px;
+  background: var(--line); margin: 0 0 24px; }}
+.hero h1 {{ font-family: "Fredoka", sans-serif; font-weight: 600; font-size: clamp(28px, 4vw, 42px); margin: 0 0 8px; }}
 .hero p {{ margin: 0; color: var(--muted); }}
 .request {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }}
-.chip {{ background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; }}
+.chip {{ background: var(--accent-soft); color: var(--accent-ink); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; }}
 .chip.plain {{ background: var(--surface); color: var(--text); border: 1px solid var(--line); font-weight: 500; }}
 .route {{ margin-top: 48px; }}
 .route header {{ max-width: 760px; }}
-.eyebrow {{ text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--accent); font-weight: 700; margin: 0; }}
-.route h2 {{ font-family: Georgia, "Times New Roman", serif; font-size: clamp(24px, 3vw, 32px); margin: 4px 0 8px; }}
+.eyebrow {{ text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--accent-ink); font-weight: 700; margin: 0; }}
+.route h2 {{ font-family: "Fredoka", sans-serif; font-weight: 600; font-size: clamp(24px, 3vw, 32px); margin: 4px 0 8px; }}
 .pitch {{ margin: 0 0 8px; font-size: 17px; }}
 .meta {{ display: flex; flex-wrap: wrap; gap: 16px; color: var(--muted); font-size: 14px; margin: 0; }}
 .timeline {{ list-style: none; padding: 0; margin: 24px 0 0; display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 8px; }}
@@ -1268,7 +1276,7 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 sys
 .text {{ margin: 0 0 10px; font-size: 14px; }}
 .tags {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }}
 .tag {{ font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--muted); }}
-.tag.asked {{ border-color: var(--accent); color: var(--accent); }}
+.tag.asked {{ border-color: var(--accent-ink); color: var(--accent-ink); }}
 .tag.word {{ font-style: italic; border-style: dashed; }}
 .tag.orig {{ background: var(--walk-soft); color: var(--walk); border-color: transparent; font-weight: 600; }}
 .basis {{ font-size: 13px; border-radius: 8px; padding: 6px 10px; margin: 0 0 12px; }}
@@ -1277,17 +1285,17 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 sys
 .basis.walk {{ background: var(--walk-soft); color: var(--walk); }}
 .foot {{ margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }}
 .price {{ font-weight: 700; }}
-.book {{ display: inline-block; text-decoration: none; font-weight: 600; font-size: 14px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); }}
-.book.primary {{ background: var(--accent); color: #fff; }}
+.book {{ display: inline-block; text-decoration: none; font-weight: 600; font-size: 14px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--accent-ink); color: var(--accent-ink); }}
+.book.primary {{ background: var(--accent); border-color: var(--accent); color: var(--accent-text); }}
 .book:hover {{ filter: brightness(1.08); }}
 .source {{ margin: 10px 0 0; font-size: 12px; color: var(--muted); }}
 .hop {{ flex: 0 0 64px; align-self: flex-start; margin-top: 44px; display: flex; flex-direction: column; align-items: center; text-align: center;
   font-size: 12px; color: var(--muted); text-decoration: none; padding-top: 40px; line-height: 1.3; }}
 .hop span {{ font-size: 18px; }}
-.hop:hover {{ color: var(--accent); }}
+.hop:hover {{ color: var(--accent-ink); }}
 .empty {{ margin-top: 48px; color: var(--muted); }}
 .redo {{ display: none; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 999px; padding: 4px 12px;
-  border: 1px solid var(--accent); background: var(--surface); color: var(--accent); text-transform: none; letter-spacing: 0; }}
+  border: 1px solid var(--accent-ink); background: var(--surface); color: var(--accent-ink); text-transform: none; letter-spacing: 0; }}
 .live .redo {{ display: inline-block; }}
 .eyebrow .redo {{ margin-left: 12px; vertical-align: middle; }}
 .redo.on-photo {{ position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.6); color: #fff; border-color: transparent; }}
@@ -1308,6 +1316,7 @@ body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 sys
 </head>
 <body>
 <main class="page" data-page="{name}"{naming}>
+  <img class="banner" src="https://images.unsplash.com/photo-1759503166788-cbe7c2503e96?auto=format&fit=crop&w=1600&q=60" alt="" loading="lazy" decoding="async">
   <section class="hero">
     <h1>{count} soirées pour vous deux</h1>
     <p>Chaque étape est gratuite ou réservable ce soir-là ; les trajets se font à pied quand c'est possible.</p>

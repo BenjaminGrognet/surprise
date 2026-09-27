@@ -4,10 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Votre profil de couple</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/client.css">
 </head>
 <body>
 <main>
+  <img class="banner" src="https://images.unsplash.com/photo-1560439972-1af698047fa3?auto=format&fit=crop&w=1600&q=60" alt="" loading="lazy" decoding="async">
   <a class="brand" href="/">Surprise · votre profil de couple</a>
   <div class="progress" aria-hidden="true"><span id="bar"></span></div>
   <section id="screen" aria-live="polite"></section>
@@ -96,7 +100,7 @@ function showProfile(id, p) {
   const eviter = state.questions.find((q) => q.id === "eviter");
   const never = (state.answers.eviter || []).map((v) => eviter?.options.find((o) => o.value === v)).filter(Boolean);
   $("screen").replaceChildren(
-    h("div", { class: "persona" },
+    h("div", { class: "persona night" },
       h("p", { class: "eyebrow" }, p.names ? `${p.names}, vous êtes…` : "Vous êtes…"),
       h("h2", {}, p.persona.name),
       h("p", {}, p.persona.text),
