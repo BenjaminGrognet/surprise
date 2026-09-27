@@ -627,7 +627,7 @@ def compose(candidates: list[Candidate], request: Request, beam: int = 300, max_
             if trame and slot is None:
                 continue
             for candidate in pool:
-                if candidate.key in used or candidate.venue.lower() in venues or not _role_fits(candidate, roles, steps, bool(trame)):
+                if candidate.key in used or candidate.venue.lower() in venues or not _role_fits(candidate, roles, steps, bool(trame), request.overnight):
                     continue
                 km = distance_km((last.candidate.lat, last.candidate.lon), (candidate.lat, candidate.lon))
                 minutes = travel_minutes(km)
@@ -676,12 +676,14 @@ def _step(candidate: Candidate, start: datetime, request: Request, travel: int =
     return Step(candidate, start, end, travel, distance)
 
 
-def _role_fits(candidate: Candidate, roles: Counter, steps: list[Step], trame: bool = False) -> bool:
-    """Without a trame: one dinner, one drink, three outings at most. Always: no kind of outing twice."""
-    if not trame and candidate.role in ("repas", "verre") and roles[candidate.role]:
-        return False
-    if not trame and candidate.role == "sortie" and roles["sortie"] >= 3:
-        return False
+def _role_fits(candidate: Candidate, roles: Counter, steps: list[Step], trame: bool = False, overnight: bool = False) -> bool:
+    """Without a trame: three activities at most, four if the evening sleeps out; one dinner, one drink among
+    them. Always: no kind of outing twice."""
+    if not trame:
+        if len(steps) >= (4 if overnight else 3):
+            return False
+        if candidate.role in ("repas", "verre") and roles[candidate.role]:
+            return False
     # Not twice the same kind of outing (two escape games, two stand-ups).
     kinds = _activity_tags(candidate)
     if any(kinds & _activity_tags(s.candidate) for s in steps):
@@ -811,7 +813,7 @@ def replace_step(route: Route, position: int, candidates: list[Candidate], reque
     for candidate in candidates:
         if candidate.key in excluded or candidate.venue.lower() in venues or _same(candidate.title) in titles or candidate.price > budget:
             continue
-        if (slot is None and candidate.role != old.candidate.role) or not _role_fits(candidate, roles, others, bool(request.trame)):
+        if (slot is None and candidate.role != old.candidate.role) or not _role_fits(candidate, roles, others, bool(request.trame), request.overnight):
             continue
         km_in = distance_km((previous.candidate.lat, previous.candidate.lon), (candidate.lat, candidate.lon)) if previous else 0.0
         travel_in = travel_minutes(km_in) if previous else 0
