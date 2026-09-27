@@ -225,6 +225,7 @@ Les refus, le budget, l'audace et les goûts sont ceux du profil, ou des réglag
 
 ```bash
 uv run python -m surprise.quiz    # http://127.0.0.1:8001
+uv run python -m surprise.quiz --host 0.0.0.0    # + accessible depuis un téléphone sur le même Wi-Fi
 ```
 
 Un seul site : `/` accueil du client (il y retrouve son dernier profil, gardé dans le navigateur), `/profil` le quiz,

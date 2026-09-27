@@ -54,9 +54,27 @@ STATIC = {
     "/account.js": ("account.js", "text/javascript; charset=utf-8"),
 }
 
-# The profile's questions: what lasts from one evening to the next, no precise hour.
-# id, question, hint, kind ("single", "multi", "scale", "date", "text"), options.
-# An option: value, label, emoji, and what it does: vibe weights, audace, avoid, prefer, end, budget, dinner.
+# A soirée-type budget (profile) that the couple can also adjust for one particular evening (/soiree).
+BUDGET_OPTIONS: list[dict[str, Any]] = [
+    {"value": "doux", "label": "Moins de 60 €", "emoji": "🪙", "budget": 60},
+    {"value": "moyen", "label": "60 à 120 €", "emoji": "💶", "budget": 120},
+    {"value": "genereux", "label": "120 à 200 €", "emoji": "💳", "budget": 200},
+    {"value": "folie", "label": "On ne compte pas", "emoji": "💎", "budget": 350},
+]
+# Asked each time an evening is composed (/soiree), not in the profile: when it starts and ends.
+START_OPTIONS: list[dict[str, Any]] = [
+    {"value": "normal", "label": "À l'heure habituelle", "emoji": "🕖", "start": "19:00"},
+    {"value": "tot", "label": "On commence plus tôt", "emoji": "🌇", "start": "17:00"},
+]
+END_OPTIONS: list[dict[str, Any]] = [
+    {"value": "tot", "label": "Avant minuit", "emoji": "🌙", "end": "23:30"},
+    {"value": "verre", "label": "Sur un dernier verre", "emoji": "🍸", "end": "00:30"},
+    {"value": "danser", "label": "Au bout de la nuit", "emoji": "🌃", "end": "03:30"},
+]
+
+# The profile's questions: what lasts from one evening to the next — no hour or meal, asked
+# each time instead (/soiree). id, question, hint, kind ("single", "multi", "scale", "date", "text"), options.
+# An option: value, label, emoji, and what it does: vibe weights, audace, avoid, prefer, budget.
 QUESTIONS: list[dict[str, Any]] = [
     {
         "id": "couple", "kind": "single",
@@ -114,16 +132,6 @@ QUESTIONS: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": "assiette", "kind": "single",
-        "question": "Et côté assiette ?", "hint": None,
-        "options": [
-            {"value": "table", "label": "Une vraie belle table", "emoji": "🍽️", "vibes": {"savourer": 2}, "dinner": True},
-            {"value": "partage", "label": "Des assiettes à partager", "emoji": "🥂", "vibes": {"savourer": 1}},
-            {"value": "pouce", "label": "Sur le pouce, on a mieux à faire", "emoji": "🌮", "vibes": {}},
-            {"value": "secondaire", "label": "Manger, pas notre priorité", "emoji": "🤷", "vibes": {}},
-        ],
-    },
-    {
         "id": "musique", "kind": "multi", "max": 3,
         "question": "La bande-son de votre couple ?", "hint": "Trois au plus, ou aucune.",
         "options": [
@@ -136,44 +144,26 @@ QUESTIONS: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": "fin", "kind": "single",
-        "question": "D'habitude, vos soirées finissent…", "hint": "Un soir de fête pourra aller plus loin.",
-        "options": [
-            {"value": "tot", "label": "Avant minuit", "emoji": "🌙", "end": "23:30"},
-            {"value": "verre", "label": "Sur un dernier verre", "emoji": "🍸", "end": "00:30", "vibes": {"savourer": 1}},
-            {"value": "danser", "label": "Au bout de la nuit", "emoji": "🌃", "end": "03:30", "vibes": {"fete": 3}},
-        ],
-    },
-    {
         "id": "eviter", "kind": "multi",
         "question": "Ce que vous ne voulez jamais", "hint": "Aucune soirée ne vous le proposera. Autant de réponses que vous voulez.",
         "options": [
             {"value": "maillot", "label": "Être en maillot de bain", "emoji": "🩱", "avoid": ["spa", "flottaison", "baignade"]},
             {"value": "noir", "label": "Le noir complet", "emoji": "🌑", "avoid": ["dans_le_noir"]},
             {"value": "peur", "label": "Les frissons, la peur", "emoji": "😱", "avoid": ["frisson", "souterrain", "murder_party"]},
-            {"value": "enfermes", "label": "Être enfermés, sous terre", "emoji": "🔒", "avoid": ["escape_game", "souterrain", "dans_le_noir", "flottaison"]},
-            {"value": "hauteur", "label": "Le vide, la hauteur", "emoji": "🧗", "avoid": ["hauteur"]},
             {"value": "effort", "label": "Transpirer", "emoji": "🥵", "avoid": ["sport", "jeu_actif", "defouloir", "sensations"]},
             {"value": "alcool", "label": "L'alcool", "emoji": "🚱", "avoid": ["mixologie", "vin", "cocktails", "vins nature"]},
             {"value": "scene", "label": "Être mis en scène", "emoji": "🎭", "avoid": ["interactif", "karaoke"]},
             {"value": "danser", "label": "Danser", "emoji": "🙅", "avoid": ["danse"]},
-            {"value": "foule", "label": "La foule, les boîtes bondées", "emoji": "👥", "avoid": ["grande_salle", "nuit"]},
             {"value": "assis", "label": "Rester assis deux heures", "emoji": "🪑", "avoid": ["theatre", "cinema", "lecture", "comedie_musicale"]},
             {"value": "eau", "label": "Les bateaux", "emoji": "⛵", "avoid": ["sur_l_eau"]},
-            {"value": "animaux", "label": "Les animaux", "emoji": "🐾", "avoid": ["animaux"]},
             {"value": "ecrans", "label": "Les écrans, le virtuel", "emoji": "🥽", "avoid": ["jeu_video"]},
             {"value": "coquin", "label": "Le coquin, l'effeuillage", "emoji": "🙈", "avoid": ["coquin"]},
         ],
     },
     {
         "id": "budget", "kind": "single",
-        "question": "Votre budget pour deux ?", "hint": "Hors transport, tout compris.",
-        "options": [
-            {"value": "doux", "label": "Moins de 60 €", "emoji": "🪙", "budget": 60},
-            {"value": "moyen", "label": "60 à 120 €", "emoji": "💶", "budget": 120},
-            {"value": "genereux", "label": "120 à 200 €", "emoji": "💳", "budget": 200},
-            {"value": "folie", "label": "On ne compte pas", "emoji": "💎", "budget": 350},
-        ],
+        "question": "Votre budget pour deux ?", "hint": "Pour une soirée type, hors transport ; vous pourrez l'ajuster à chaque soirée.",
+        "options": BUDGET_OPTIONS,
     },
     {"id": "premiere", "kind": "date", "question": "Votre première sortie ?", "hint": "Le jour qui vous tente ; l'envie de la soirée, on vous la demandera juste avant."},
     {"id": "prenoms", "kind": "text", "question": "Et vous êtes ?", "hint": "Vos prénoms, pour personnaliser vos soirées (facultatif)."},
@@ -225,10 +215,10 @@ DEFAULT_END = "00:30"
 
 
 def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
-    """The couple's profile from their answers: weighted vibes, main vibes, persona, audace, refusals, budget, usual end."""
+    """The couple's profile from their answers: weighted vibes, main vibes, persona, audace, refusals, a typical budget."""
     weights = {key: 0.0 for key in VIBES}
-    audace, avoid, prefer, dinner = 0.5, set(), set(), False
-    budget, end = 120, DEFAULT_END
+    audace, avoid, prefer = 0.5, set(), set()
+    budget = 120
     for question in QUESTIONS:
         chosen = answers.get(question["id"])
         values = chosen if isinstance(chosen, list) else [chosen]
@@ -240,9 +230,7 @@ def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
             audace = option.get("audace", audace)
             avoid |= set(option.get("avoid") or [])
             prefer |= set(option.get("prefer") or [])
-            dinner = dinner or bool(option.get("dinner"))
             budget = option.get("budget", budget)
-            end = option.get("end", end)
     ranked = sorted((v for v in weights if weights[v] > 0), key=lambda v: -weights[v])
     top = weights[ranked[0]] if ranked else 0
     # The main vibes: those weighing at least a third of the strongest, four at most.
@@ -255,10 +243,8 @@ def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
         "audace": audace,
         "avoid": sorted(avoid),
         "prefer": sorted(prefer),
-        "dinner": dinner,
         "budget": budget,
         "first_day": valid_day(answers.get("premiere")),
-        "end": end,
         "names": (answers.get("prenoms") or "").strip()[:80] or None,
     }
 
@@ -273,6 +259,8 @@ def valid_day(value: Any) -> str | None:
 
 ENVIE_KEYS = {envie["value"]: envie for envie in ENVIES}
 OCCASION_KEYS = {occasion["value"]: occasion for occasion in OCCASIONS}
+START_KEYS = {option["value"]: option for option in START_OPTIONS}
+END_KEYS = {option["value"]: option for option in END_OPTIONS}
 
 
 MAX_VIBES = 5
@@ -285,11 +273,12 @@ def _late(hour: str) -> str:
 
 def evening(
     profile: dict[str, Any], envies: list[str] | None = None, occasion: str | None = None, dinner: bool | None = None,
+    start: str | None = None, end: str | None = None,
 ) -> dict[str, Any]:
-    """One evening's settings: its wishes and occasion over the profile, which keeps refusals, budget and tastes.
+    """One evening's settings: its wishes and occasion over the profile, which keeps refusals and tastes.
 
-    `dinner`: whether the couple eats during the evening, asked each time; it wins over the profile and the wishes.
-    Not said (None): a dinner when the profile, a wish or the occasion calls for one, and maybe one otherwise.
+    `dinner`, `start`, `end`: asked each time (/soiree), not kept in the profile; they win over what
+    the wishes would otherwise set. Not said (None): inferred from the wishes, or the defaults.
     """
     wishes = [ENVIE_KEYS[e] for e in dict.fromkeys(envies or []) if e in ENVIE_KEYS][:MAX_ENVIES] or [ENVIES[0]]
     event = OCCASION_KEYS.get(occasion or "rien", OCCASION_KEYS["rien"])
@@ -307,20 +296,22 @@ def evening(
         "vibes": vibes,
         "audace": min(1.0, profile["audace"] + max(w.get("audace", 0) for w in wishes)),
         "avoid": sorted(set(profile["avoid"]) | avoid),
-        "dinner": dinner if dinner is not None else profile["dinner"] or any(w.get("dinner") for w in wishes) or bool(event.get("dinner")),
+        "dinner": dinner if dinner is not None else any(w.get("dinner") for w in wishes) or bool(event.get("dinner")),
         "no_dinner": dinner is False,
-        "start": min((w["start"] for w in wishes if "start" in w), default=DEFAULT_START),
-        "end": max(ends, key=_late) if ends else profile.get("end") or DEFAULT_END,
+        "start": START_KEYS[start]["start"] if start in START_KEYS else min((w["start"] for w in wishes if "start" in w), default=DEFAULT_START),
+        "end": END_KEYS[end]["end"] if end in END_KEYS else (max(ends, key=_late) if ends else DEFAULT_END),
     }
 
 
 def requests_for(
     profile: dict[str, Any], days: list[date] | None = None, envies: list[str] | None = None, occasion: str | None = None,
-    dinner: bool | None = None, overnight: bool = False,
+    dinner: bool | None = None, overnight: bool = False, start: str | None = None, end: str | None = None,
+    budget: float | None = None,
 ) -> list[parcours.Request]:
     """The evenings to plan for a profile and wishes: the days given, its first outing, else the next Friday and Saturday.
 
-    `overnight`: the couple sleeps out, the evening ends in a hotel or a love room."""
+    `overnight`: the couple sleeps out, the evening ends in a hotel or a love room. `budget`: this evening's
+    budget, in place of the profile's typical one, when the couple adjusts it for this occasion."""
     if not days:
         if profile.get("first_day"):
             days = [date.fromisoformat(profile["first_day"])]
@@ -328,12 +319,12 @@ def requests_for(
             today = date.today()
             friday = today + timedelta(days=(4 - today.weekday()) % 7)
             days = [friday, friday + timedelta(days=1)]
-    night = evening(profile, envies, occasion, dinner)
+    night = evening(profile, envies, occasion, dinner, start, end)
     requests = []
     for day in days:
         begin, finish = parcours.window(day, night["start"], night["end"])
         requests.append(parcours.Request(
-            day, profile["budget"], begin, finish, night["vibes"],
+            day, budget if budget is not None else profile["budget"], begin, finish, night["vibes"],
             audace=night["audace"], avoid=set(night["avoid"]), prefer=set(profile["prefer"]), dinner=night["dinner"],
             no_dinner=night["no_dinner"], overnight=overnight,
         ))
@@ -392,7 +383,10 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
                 vibes = {key: v["label"] for key, v in VIBES.items()}
                 self._send_json(HTTPStatus.OK, {"questions": QUESTIONS, "vibes": vibes})
             elif path == "/api/soiree":
-                self._send_json(HTTPStatus.OK, {"envies": ENVIES, "occasions": OCCASIONS, "max": MAX_ENVIES})
+                self._send_json(HTTPStatus.OK, {
+                    "envies": ENVIES, "occasions": OCCASIONS, "max": MAX_ENVIES,
+                    "starts": START_OPTIONS, "ends": END_OPTIONS, "budgets": BUDGET_OPTIONS,
+                })
             elif path == "/api/config":
                 # Public by design (the anon key is meant for the browser): accounts and history run
                 # straight against Supabase, row-level security is what scopes them to their owner.
@@ -447,6 +441,11 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
             if not isinstance(body.get("diner"), bool):
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "dîner ou pas ?"})
             occasion = body.get("occasion") if body.get("occasion") in OCCASION_KEYS else None
+            start = body.get("start") if body.get("start") in START_KEYS else None
+            end = body.get("end") if body.get("end") in END_KEYS else None
+            budget = body.get("budget")
+            if budget is not None and not (isinstance(budget, (int, float)) and not isinstance(budget, bool) and 0 < budget <= 1000):
+                return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "budget invalide"})
             day = valid_day(body.get("day"))
             days = [date.fromisoformat(day)] if day else None
             profile_id = body.get("profile")
@@ -462,8 +461,8 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
                 name += "-nuit" if overnight else ""
                 with composing:
                     routes, page = parcours.generate(
-                        store, requests_for(profile, days, envies, occasion, body["diner"], overnight), count=3, checks=checks, name=name,
-                        base=base(store), name_later=True,
+                        store, requests_for(profile, days, envies, occasion, body["diner"], overnight, start, end, budget),
+                        count=3, checks=checks, name=name, base=base(store), name_later=True,
                     )
             self._send_json(HTTPStatus.OK, {"url": f"/parcours/{page.name}", "count": len(routes)})
 
@@ -484,15 +483,23 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
 def main() -> None:
     parser = argparse.ArgumentParser(description="Questionnaire client : profil du couple, puis ses soirées")
     parser.add_argument("--port", type=int, default=8001)
+    parser.add_argument("--host", default="127.0.0.1", help="0.0.0.0 pour tester depuis un téléphone sur le même Wi-Fi")
     parser.add_argument("--db", type=Path, default=DEFAULT_PATH)
     parser.add_argument("--checks", type=int, default=30, help="vérifications de disponibilité en direct par soirée composée")
     parser.add_argument("--no-open", action="store_true")
     args = parser.parse_args()
     # A Windows console cannot show every character (✓, ✗): replace them rather than fail.
     sys.stdout.reconfigure(errors="replace")
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.db, args.checks, warm=True))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(args.db, args.checks, warm=True))
     url = f"http://127.0.0.1:{args.port}"
     print(f"Accueil : {url}  ·  modération : {url}/admin")
+    if args.host == "0.0.0.0":
+        import socket
+
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            lan_ip = s.getsockname()[0]
+        print(f"Sur le même Wi-Fi (téléphone…) : http://{lan_ip}:{args.port}")
     if not args.no_open:
         webbrowser.open(url)
     server.serve_forever()

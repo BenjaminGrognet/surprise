@@ -4,13 +4,6 @@
   --mint: #35c2a0; --gold: #caa15a;
   --night-bg: #241a1f; --night-surface: #2f2420; --night-text: #fbf3e7; --night-muted: #c9b89a; --night-line: #3a2a1f;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1c1620; --surface: #241c26; --surface-soft: #2f2534; --text: #f3ecea; --muted: #b3a7a4; --line: #3a3033;
-    --accent: #ff5c72; --accent-soft: #4a2028; --accent-text: #211a2b; --accent-ink: #ff5c72;
-    --mint: #35c2a0; --gold: #caa15a;
-  }
-}
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Space Grotesk", system-ui, sans-serif; min-height: 100vh; }
 main { max-width: 620px; margin: 0 auto; padding: 24px 16px 48px; }

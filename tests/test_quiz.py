@@ -16,9 +16,7 @@ ANSWERS = {
     "energie": 2,
     "reussie": ["yeux", "musique"],
     "audace": "surprenez",
-    "assiette": "table",
     "musique": ["jazz"],
-    "fin": "verre",
     "eviter": ["noir", "peur", "maillot"],
     "budget": "genereux",
     "premiere": "2026-10-09",
@@ -48,11 +46,12 @@ def test_no_precise_hour_is_asked():
 
 def test_profile_from_answers():
     profile = quiz.profile_from(ANSWERS)
-    assert {"romantique", "savourer"} == set(profile["vibes"][:2]) and len(profile["vibes"]) <= 4
+    assert profile["vibes"][0] == "romantique" and len(profile["vibes"]) <= 4
     assert profile["persona"]["name"] == "Les Romantiques"
-    assert profile["audace"] == 0.7 and profile["dinner"] and profile["budget"] == 200
+    assert profile["audace"] == 0.7 and profile["budget"] == 200
     assert {"dans_le_noir", "frisson", "spa", "baignade"} <= set(profile["avoid"]) and profile["prefer"] == ["jazz"]
-    assert (profile["first_day"], profile["end"], profile["names"]) == ("2026-10-09", "00:30", "Léa & Sam")
+    assert (profile["first_day"], profile["names"]) == ("2026-10-09", "Léa & Sam")
+    assert "end" not in profile and "dinner" not in profile
 
 
 def test_empty_answers_still_make_a_profile():
@@ -63,7 +62,7 @@ def test_empty_answers_still_make_a_profile():
 def test_requests_follow_the_profile():
     [request] = quiz.requests_for(quiz.profile_from(ANSWERS))
     assert request.day == date(2026, 10, 9) and request.start.hour == 19 and request.start.minute == 0
-    assert request.end.day == 10 and request.dinner and request.audace == 0.7 and "dans_le_noir" in request.avoid
+    assert request.end.day == 10 and request.audace == 0.7 and "dans_le_noir" in request.avoid
     assert set(request.vibes) == set(quiz.profile_from(ANSWERS)["vibes"])
 
 
@@ -90,6 +89,19 @@ def test_up_to_three_wishes_mix_in_one_evening():
     assert quiz.evening(profile)["vibes"] == profile["vibes"]
 
 
+def test_start_end_and_budget_are_chosen_per_evening_not_in_the_profile():
+    assert not any(q["id"] in {"fin"} for q in quiz.QUESTIONS)
+    profile = quiz.profile_from(ANSWERS)  # budget "genereux" -> 200, no start/end in the profile
+    [normal] = quiz.requests_for(profile, [date(2026, 10, 10)], ["nous"])
+    assert normal.start.hour == 19 and normal.end.hour == 0 and normal.budget == 200  # the profile's defaults
+    [early] = quiz.requests_for(profile, [date(2026, 10, 10)], ["nous"], start="tot")
+    assert early.start.hour == 17
+    [late] = quiz.requests_for(profile, [date(2026, 10, 10)], ["nous"], end="danser")
+    assert late.end.hour == 3
+    [cheaper] = quiz.requests_for(profile, [date(2026, 10, 10)], ["nous"], budget=60)
+    assert cheaper.budget == 60
+
+
 def test_profile_is_stored_through_the_api(tmp_path):
     server = ThreadingHTTPServer(("127.0.0.1", 0), quiz.make_handler(tmp_path / "s.db", checks=0))
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -104,6 +116,7 @@ def test_profile_is_stored_through_the_api(tmp_path):
             assert [p["id"] for p in store.list_profiles()] == [created["id"]]
         evening = json.load(urlopen(f"{url}/api/soiree"))
         assert evening["max"] == 3 and evening["envies"] and evening["occasions"]
+        assert evening["starts"] and evening["ends"] and evening["budgets"]
         assert b"Ce soir" in urlopen(f"{url}/soiree").read() and urlopen(f"{url}/client.js").status == 200
         # One site: the client's home, the quiz, and the moderation page with its API.
         assert b"Faire notre profil" in urlopen(f"{url}/").read()
@@ -122,14 +135,15 @@ def test_profile_is_stored_through_the_api(tmp_path):
 
 
 def test_each_evening_says_whether_they_eat():
-    profile = quiz.profile_from(ANSWERS)  # a profile that likes a fine table
-    assert profile["dinner"]
+    profile = quiz.profile_from(ANSWERS)
     [ate] = quiz.requests_for(profile, [date(2026, 10, 10)], ["romantique"], dinner=False)
-    assert ate.no_dinner and not ate.dinner
+    assert ate.no_dinner and not ate.dinner  # an explicit "no" wins over the wish
     [eats] = quiz.requests_for(quiz.profile_from({}), [date(2026, 10, 10)], ["fete"], dinner=True)
-    assert eats.dinner and not eats.no_dinner
-    [unsaid] = quiz.requests_for(profile, [date(2026, 10, 10)], ["fete"])
-    assert unsaid.dinner and not unsaid.no_dinner
-    assert not unsaid.overnight
+    assert eats.dinner and not eats.no_dinner  # an explicit "yes" even without a wish that calls for one
+    [unsaid] = quiz.requests_for(profile, [date(2026, 10, 10)], ["romantique"])
+    assert unsaid.dinner and not unsaid.no_dinner  # not said: inferred from the wish ("romantique" wants one)
+    [unwished] = quiz.requests_for(profile, [date(2026, 10, 10)], ["fete"])
+    assert not unwished.dinner and not unwished.no_dinner  # "fete" doesn't call for one
+    assert not unwished.overnight
     [out] = quiz.requests_for(profile, [date(2026, 10, 10)], ["romantique"], overnight=True)
     assert out.overnight

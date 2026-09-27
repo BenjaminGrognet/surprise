@@ -97,8 +97,6 @@ async function renderProfile() {
   showProfile(saved.id, saved.profile);
 }
 
-const ENDS = { "23:30": "avant minuit", "00:30": "sur un dernier verre", "03:30": "au bout de la nuit" };
-
 function showProfile(id, p) {
   rememberProfile(id);
   $("bar").style.width = "100%";
@@ -112,8 +110,7 @@ function showProfile(id, p) {
       h("div", {}, p.vibes.map((v) => h("span", { class: "tag" }, state.vibes[v] || v))),
       h("ul", { class: "facts" },
         h("li", {}, h("strong", {}, p.first_day ? longDay(p.first_day) : "Bientôt"), "première sortie"),
-        h("li", {}, h("strong", {}, `${p.budget >= 350 ? "sans compter" : `≈ ${p.budget} €`}`), "pour deux"),
-        h("li", {}, h("strong", {}, ENDS[p.end] || p.end), "d'habitude"),
+        h("li", {}, h("strong", {}, `${p.budget >= 350 ? "sans compter" : `≈ ${p.budget} €`}`), "pour une soirée type"),
         h("li", {}, h("strong", {}, "Audace"), h("div", { class: "meter", role: "img", "aria-label": `${Math.round(p.audace * 100)} %` }, h("span", { style: `width:${p.audace * 100}%` }))),
       ),
       never.length > 0 && h("p", { class: "never" }, h("strong", {}, "Jamais : "), never.map((o) => o.label.toLowerCase()).join(", ")),

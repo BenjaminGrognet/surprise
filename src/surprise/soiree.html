@@ -21,7 +21,10 @@
 <script>
 // One evening, apart from the questionnaire: up to MAX wishes, an occasion, a day.
 // With a profile (#p=<id>), its refusals, budget, audace and tastes apply; without, default ones.
-const state = { envies: [], occasions: [], max: 3, profile: null, night: { envies: [], diner: null, decoucher: false, occasion: null, day: nextFriday() } };
+const state = {
+  envies: [], occasions: [], starts: [], ends: [], budgets: [], max: 3, profile: null,
+  night: { envies: [], diner: null, decoucher: false, occasion: null, start: null, end: null, budget: null, day: nextFriday() },
+};
 const MEALS = [
   { value: true, label: "Oui, on dîne pendant la soirée", emoji: "🍽️" },
   { value: false, label: "Non, on aura déjà mangé", emoji: "✅" },
@@ -58,6 +61,21 @@ function render() {
       class: "option", "aria-pressed": String(night.occasion === o.value),
       onclick: () => { night.occasion = night.occasion === o.value ? null : o.value; render(); },
     }, choiceContent(o))));
+  const starts = h("div", { class: "chips", role: "group", "aria-label": "Et pour commencer ?" },
+    state.starts.map((o) => h("button", {
+      class: "option", "aria-pressed": String(night.start === o.value),
+      onclick: () => { night.start = night.start === o.value ? null : o.value; render(); },
+    }, choiceContent(o))));
+  const ends = h("div", { class: "chips", role: "group", "aria-label": "Et pour finir ?" },
+    state.ends.map((o) => h("button", {
+      class: "option", "aria-pressed": String(night.end === o.value),
+      onclick: () => { night.end = night.end === o.value ? null : o.value; render(); },
+    }, choiceContent(o))));
+  const budgets = h("div", { class: "chips", role: "group", "aria-label": "Et le budget, pour cette soirée ?" },
+    state.budgets.map((o) => h("button", {
+      class: "option", "aria-pressed": String(night.budget === o.budget),
+      onclick: () => { night.budget = night.budget === o.budget ? null : o.budget; render(); },
+    }, choiceContent(o))));
   $("screen").replaceChildren(
     p
       ? h("p", { class: "profile-line" }, h("strong", {}, p.names || p.persona.name), p.names ? ` · ${p.persona.name}` : "",
@@ -71,6 +89,15 @@ function render() {
     meals,
     h("h2", { class: "sub", id: "night-title" }, "Et après ?"),
     nights,
+    h("h2", { class: "sub" }, "Et pour commencer ?"),
+    h("p", { class: "hint" }, "Sans choix : l'heure habituelle, ou plus tôt si une envie le demande."),
+    starts,
+    h("h2", { class: "sub" }, "Et pour finir ?"),
+    h("p", { class: "hint" }, "Sans choix : ce que vos envies demandent, ou minuit et demi."),
+    ends,
+    h("h2", { class: "sub" }, "Et le budget, pour cette soirée ?"),
+    h("p", { class: "hint" }, p ? "Sans choix : le budget habituel de votre profil." : "Sans choix : 120 €."),
+    budgets,
     h("h2", { class: "sub" }, "Une occasion ?"),
     occasions,
     dayField("night-day", night.day, (value) => { night.day = value; }),
@@ -98,7 +125,7 @@ async function compose(status) {
 (async () => {
   renderAccountNav($("account-nav"));
   const data = await (await fetch("/api/soiree")).json();
-  Object.assign(state, { envies: data.envies, occasions: data.occasions, max: data.max });
+  Object.assign(state, { envies: data.envies, occasions: data.occasions, max: data.max, starts: data.starts, ends: data.ends, budgets: data.budgets });
   const saved = location.hash.match(/p=([\w-]+)/);
   if (saved) {
     const r = await fetch(`/api/profiles/${saved[1]}`);
