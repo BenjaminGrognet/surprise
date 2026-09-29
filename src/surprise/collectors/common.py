@@ -44,9 +44,9 @@ GROUP_PARTY = re.compile(
     r"\bEVG\b|\bEVJF\b|enterrements? de vie de (?:garçon|jeune fille|célibataires?)|bachelor(?:ette)? party|hen party|stag party|girls only|ladies only|entre filles",
     re.IGNORECASE,
 )
-_EUROS = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)", re.IGNORECASE)
+_EUROS = re.compile(r"(?<!\d)(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)", re.IGNORECASE)
 # "de 24 à 45 €": the lower bound carries no currency sign.
-_EURO_RANGE = re.compile(r"(\d+(?:[.,]\d{1,2})?)\s*(?:à|-|–)\s*\d+(?:[.,]\d{1,2})?\s*(?:€|euros?)", re.IGNORECASE)
+_EURO_RANGE = re.compile(r"(?<!\d)(\d+(?:[.,]\d{1,2})?)\s*(?:à|-|–)\s*\d+(?:[.,]\d{1,2})?\s*(?:€|euros?)", re.IGNORECASE)
 
 
 @dataclass

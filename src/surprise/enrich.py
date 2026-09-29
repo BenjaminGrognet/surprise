@@ -48,7 +48,7 @@ MAX_SOURCE_CHARS = 2000
 MAX_DESCRIPTION_CHARS = 280
 
 _META = re.compile(r"<meta\s[^>]*>", re.IGNORECASE)
-_ATTRIBUTE = re.compile(r"([\w:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
+_ATTRIBUTE = re.compile(r"(?<![\w:-])([\w:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
 _TAG = re.compile(r"<[^>]+>")
 _ANCHOR = re.compile(r"<a\s[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL)
 # Links that look like booking but lead elsewhere.

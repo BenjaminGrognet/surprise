@@ -77,6 +77,19 @@ def test_require_booking_keeps_open_walk_in_places():
         assert require_booking(client, place("https://bar.example/", "expo")).rejection == "ni gratuit ni réservable en ligne"
 
 
+def test_a_page_with_an_inline_image_is_read_quickly():
+    import time
+
+    from surprise.booking import booking_form
+
+    # A 1 MB base64 photo in the page: "[\w-]+\.qweekle" tried at each of its letters took hours.
+    page = '<img src="data:image/png;base64,' + "A" * 1_000_000 + '"> <a href="https://x.qweekle.com/shop/">Réserver</a>'
+    started = time.perf_counter()
+    assert engine_in(page) == "Qweekle"
+    assert booking_form("https://site.example/", page) is None
+    assert time.perf_counter() - started < 2
+
+
 @respx.mock
 def test_each_page_is_read_once_per_run():
     from surprise.booking import PageChecks

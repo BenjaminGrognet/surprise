@@ -35,7 +35,7 @@ _MAP = re.compile(r'id="map"[^>]*data-text="([^"]*)"[^>]*data-lat="([^"]*)"[^>]*
 _FACT = re.compile(r'<li class="mr-4[^"]*">\s*<i class="[^"]*\bfa-([\w-]+) fa-lg[^>]*></i>(.*?)</li>', re.DOTALL)
 _CRUMB = re.compile(r'<a itemprop="item" href="/fr/category/[^"]*">\s*<span itemprop="name">([^<]*)</span>')
 _OG_IMAGE = re.compile(r'<meta property="og:image" content="([^"]+)"')
-_DURATION = re.compile(r"(?:(\d+)\s*h\s*(\d{2})?)|(\d+)\s*min", re.IGNORECASE)
+_DURATION = re.compile(r"(?:(?<!\d)(\d+)\s*h\s*(\d{2})?)|(?<!\d)(\d+)\s*min", re.IGNORECASE)
 _CHILD_AUDIENCE = re.compile(r"\benfants?\b|parent|anniversaire|kids?\b", re.IGNORECASE)
 _TAG = re.compile(r"<[^>]+>")
 _BLOCK_BREAK = re.compile(r"<(?:/?p\b|/?h\d|br|/?li)[^>]*>", re.IGNORECASE)

@@ -49,7 +49,7 @@ WORKERS = 8
 BATCH = 16
 
 _META = re.compile(r"<meta\s[^>]*>", re.IGNORECASE)
-_ATTRIBUTE = re.compile(r'([\w:-]+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\')')
+_ATTRIBUTE = re.compile(r'(?<![\w:-])([\w:-]+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\')')
 _URL = re.compile(r"https?://[^\s\"'<>\\)]+")
 _ASSET = re.compile(r"\.(?:js|css|png|svg|jpe?g|woff2?)(?:[?#]|$)", re.IGNORECASE)
 

@@ -41,8 +41,8 @@ _BOOKING = re.compile(r'id="jsBookingSection">.*?<a href="(https?://[^"]+)"', re
 _HERO = re.compile(r'<img src="([^"]+)"[^>]*itemprop="image"')
 _DESCRIPTION = re.compile(r'<meta itemprop="description" content="([^"]*)"')
 _MAIN = re.compile(r'id="jsMainColumn"(.*?)id="avis"', re.DOTALL)
-_PLAYERS = re.compile(r"(\d+)\s*(?:à\s*(\d+))?\s*joueurs?", re.IGNORECASE)
-_MINUTES = re.compile(r"(\d+)\s*min", re.IGNORECASE)
+_PLAYERS = re.compile(r"(?<!\d)(\d+)\s*(?:à\s*(\d+))?\s*joueurs?", re.IGNORECASE)
+_MINUTES = re.compile(r"(?<!\d)(\d+)\s*min", re.IGNORECASE)
 _TRACKING = re.compile(r"^(?:utm_\w+|source)$")
 # The kind said in the title, for the tags: "Escape game : Crypte".
 _KIND_IN_NAME = re.compile(r"escape|game|virtuel|\bvr\b|immersi|enquête|quiz|murder", re.IGNORECASE)

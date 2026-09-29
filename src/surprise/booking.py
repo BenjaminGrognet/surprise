@@ -41,7 +41,7 @@ ENGINES = {
     "Ticketac": r"ticketac\.com",
     "BilletRéduc": r"billetreduc\.com",
     "Mapado": r"mapado\.com",
-    "Notre Billetterie": r"[\w-]+\.notre-billetterie\.com",
+    "Notre Billetterie": r"(?<![\w-])[\w-]+\.notre-billetterie\.com",
     "Tickeasy": r"tickeasy\.com",
     "Themis": r"themisweb\.fr",
     "Secutix": r"/selection/(?:timeslotpass|event)\b|secutix\.com",
@@ -53,7 +53,7 @@ ENGINES = {
     "FareHarbor": r"fareharbor\.com",
     "Bookeo": r"bookeo\.com/(?:widget\.js|[\w-]+)",
     "4escape": r"4escape\.(?:io|app)|class=\"forescape(?:-catalog|-cart)?\"",
-    "Qweekle": r"[\w-]+\.qweekle\.com",
+    "Qweekle": r"(?<![\w-])[\w-]+\.qweekle\.com",
     # WordPress "Event Tickets": the venue sells its seats on the event's page ("Le Son de la Terre").
     "Event Tickets": r"id=\"tribe-tickets__tickets-form\"",
     "SimplyBook": r"simplybook\.(?:it|me)",
@@ -100,7 +100,7 @@ _TICKETING_HOST = re.compile(r"^(?:www\.)?(?:billetterie|billeterie|tickets?|boo
 _TICKETING_PATH = re.compile(r"/(?:billetterie|billeterie|tickets?|ticketing|e-?billets?)/[\w-]{3,}", re.IGNORECASE)
 # An organiser's booking form ("Réservation préalable sur notre site" → a Google form): booked online too.
 _FORM = re.compile(
-    r"forms\.gle/|docs\.google\.com/forms/|tally\.so/r/|[\w-]+\.typeform\.com/to/|form\.jotform\.com/|framaforms\.org/",
+    r"forms\.gle/|docs\.google\.com/forms/|tally\.so/r/|(?<![\w-])[\w-]+\.typeform\.com/to/|form\.jotform\.com/|framaforms\.org/",
     re.IGNORECASE,
 )
 _ASKS_BOOKING = re.compile(r"r[ée]serv|inscri", re.IGNORECASE)

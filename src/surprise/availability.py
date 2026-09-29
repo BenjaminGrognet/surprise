@@ -51,7 +51,7 @@ _ZENCHEF_ID = re.compile(r"bookings\.zenchef\.com/[^\"'\s<>]*?[?&](?:amp;)?rid=(
 _SEVENROOMS_VENUE = re.compile(r"sevenrooms\.com/reservations/([\w-]+)")
 _4ESCAPE_SETTINGS = re.compile(r'class="forescape-[\w-]+"[^>]*data-settings="b64\.([A-Za-z0-9+/=]+)"')
 _4ESCAPE_SUBDOMAIN = re.compile(r'class="forescape"[^>]*data-subdomain="([\w-]+)"')
-_4ESCAPE_DOMAIN = re.compile(r"\b(?!www\.)[\w-]+\.4escape\.io\b")
+_4ESCAPE_DOMAIN = re.compile(r"(?<![\w-])(?!www\.)[\w-]+\.4escape\.io\b")
 
 _WECANDOO_ID = re.compile(r"&quot;workshop&quot;:\{&quot;id&quot;:(\d+)")
 _LEAST_PLAYERS = re.compile(r"\b(\d+)\s*(?:à|-)\s*\d+\s*(?:joueurs|personnes|pers\b)|à partir de (\d+)", re.IGNORECASE)
