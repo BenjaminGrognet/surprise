@@ -8,7 +8,8 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   paris_city_game, come_to_paris, paris_secret, concerts_paris, paris_jetaime, paris_jetaime_billetterie,
   visit_paris_region, explore_paris, wecandoo, fever, getyourguide, tiqets, civitatis, eventbrite, shotgun,
   billetreduc, time_out, le_bonbon, selections_couple, osm_restaurants, time_out_hotels, nuits_couple,
-  sortir_a_paris, dice, escape_game, osm_loisirs), chacune avec `--store local --limit 50`. Jamais sans limite : on valide le
+  sortir_a_paris, dice, escape_game, osm_loisirs), chacune avec `--store supabase --limit 50` (scripts lancés par
+  `uv run --env-file .env …`). Jamais sans limite : on valide le
   fonctionnement ensemble, source par source, sur un petit volume.
 - Enrichissement : `--no-descriptions` tant que les descriptions Claude ne sont pas demandées ;
   `--source` pour ne retraiter que les sources modifiées.
@@ -22,4 +23,5 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   à part dans la modération (« Écartées à la collecte »), pour améliorer les règles.
 - Données manquantes d'une fiche (adresse, horaires, coordonnées) : scraping ciblé de sources publiques ;
   OpenStreetMap (Nominatim) d'abord, déjà branché dans l'enrichissement.
-- La base locale `data/surprise.db` n'est pas versionnée : elle se recrée en relançant les collecteurs.
+- Base : Supabase (`public.raw_records` + schéma `pipeline`), par `SUPABASE_DB_URL` (session pooler IPv4). Sans elle,
+  les scripts retombent sur `data/surprise.db` (non versionnée) ; `python -m surprise.local_store` la copie dans Supabase.

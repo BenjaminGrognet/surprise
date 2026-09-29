@@ -35,7 +35,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from surprise.collectors import come_to_paris, funbooker, wecandoo
-from surprise.local_store import LocalStore
+from surprise.local_store import open_store
 
 USER_AGENT = "Mozilla/5.0 (compatible; surprise-availability/0.1)"
 DELAY_SECONDS = 1.0
@@ -335,7 +335,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, help="nombre maximum d'activités vérifiées")
     args = parser.parse_args()
 
-    with LocalStore() as store:
+    with open_store() as store:
         activities = [
             a for a in store.list_for_moderation()
             if a["status"] not in ("rejected", "filtered") and (not args.source or a["source_id"] in args.source)

@@ -3,14 +3,14 @@
   "configurations": [
     {
       "name": "admin",
-      "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "surprise.admin"],
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "--env-file", ".env", "python", "-m", "surprise.admin", "--no-browser"],
       "port": 8000
     },
     {
       "name": "quiz",
-      "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "surprise.quiz", "--no-open"],
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "--env-file", ".env", "python", "-m", "surprise.quiz", "--no-open"],
       "port": 8001
     },
     {

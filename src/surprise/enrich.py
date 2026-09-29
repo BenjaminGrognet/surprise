@@ -34,7 +34,7 @@ import httpx
 
 from surprise.categories import CATEGORIES
 from surprise.collectors.common import BOOKING
-from surprise.local_store import LocalStore
+from surprise.local_store import open_store
 
 USER_AGENT = "surprise-collector/0.1"
 PLACES_URL = "https://places.googleapis.com/v1"
@@ -396,7 +396,7 @@ def main() -> None:
     if not places_key:
         print("Photos Google Places désactivées (GOOGLE_PLACES_API_KEY absente)")
 
-    with LocalStore() as store:
+    with open_store() as store:
         items = store.pending_enrichment(args.refresh, missing_description=describer is not None)
         items = [item for item in items if not args.source or item["source_id"] in args.source][: args.limit]
         print(f"{len(items)} activités à enrichir")

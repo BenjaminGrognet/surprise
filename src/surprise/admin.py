@@ -1,7 +1,7 @@
 """Local moderation UI: review collected activities and approve or reject them.
 
 Serves a single page (/admin) and a small JSON API on 127.0.0.1, backed by the
-local SQLite store. Standard library only. The client's server (surprise.quiz)
+pipeline's store (Supabase when SUPABASE_DB_URL is set, else SQLite). The client's server (surprise.quiz)
 serves it too, at the same address.
 """
 
@@ -23,7 +23,7 @@ import httpx
 from surprise import images
 from surprise.categories import CATEGORIES
 from surprise.enrich import place_photo
-from surprise.local_store import DEFAULT_PATH, STATUSES, LocalStore
+from surprise.local_store import STATUSES, open_store
 from surprise.originality import Scorer
 from surprise.sources import SOURCES, source_name
 from surprise.tags import FACETS, TAGS, VIBES, describe
@@ -32,9 +32,9 @@ PAGE = files("surprise").joinpath("admin.html")
 _PLACE_ID = re.compile(r"^[A-Za-z0-9_-]{10,300}$")
 
 
-def activities_json(db_path: Path) -> bytes:
+def activities_json(db: Path | str | None) -> bytes:
     """Every activity with its tags, vibes and originality, as JSON."""
-    with LocalStore(db_path) as store:
+    with open_store(db) as store:
         items = store.list_for_moderation()
     scorer = Scorer(items)
     payload = []
@@ -53,8 +53,8 @@ def activities_json(db_path: Path) -> bytes:
     return json.dumps(payload, ensure_ascii=False).encode()
 
 
-def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
-    # The list takes seconds to build: kept until the database file changes.
+def make_handler(db: Path | str | None) -> type[BaseHTTPRequestHandler]:
+    # The list takes seconds to build: kept until the data changes.
     cache: dict[str, Any] = {}
 
     class Handler(BaseHTTPRequestHandler):
@@ -68,9 +68,10 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
                 self.send_header("Content-Length", "0")
                 self.end_headers()
             elif path == "/api/activities":
-                stamp = db_path.stat().st_mtime_ns
+                with open_store(db) as store:
+                    stamp = store.version()
                 if cache.get("stamp") != stamp:
-                    cache.update(stamp=stamp, body=activities_json(db_path))
+                    cache.update(stamp=stamp, body=activities_json(db))
                 self._send(HTTPStatus.OK, cache["body"], "application/json; charset=utf-8")
             elif path == "/api/meta":
                 vibes = {key: {"label": v["label"], "question": v["question"]} for key, v in VIBES.items()}
@@ -96,7 +97,7 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
                 status = None
             if status not in STATUSES:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": f"statut attendu : {', '.join(STATUSES)}"})
-            with LocalStore(db_path) as store:
+            with open_store(db) as store:
                 found = store.set_status(unquote(parts[2]), unquote(parts[3]), status)
             if not found:
                 return self._send_json(HTTPStatus.NOT_FOUND, {"error": "activité inconnue"})
@@ -159,7 +160,7 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--db", type=Path, default=DEFAULT_PATH, help=f"base SQLite (défaut : {DEFAULT_PATH})")
+    parser.add_argument("--db", help="base SQLite ou URL postgresql:// (défaut : SUPABASE_DB_URL, sinon data/surprise.db)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-browser", action="store_true", help="ne pas ouvrir le navigateur")
     args = parser.parse_args()

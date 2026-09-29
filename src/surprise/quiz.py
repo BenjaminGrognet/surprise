@@ -38,7 +38,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from surprise import admin, images, parcours
-from surprise.local_store import DEFAULT_PATH, LocalStore
+from surprise.local_store import LocalStore, open_store
 from surprise.tags import VIBES
 
 RESOURCES = files("surprise")
@@ -362,7 +362,7 @@ _REDO = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)(?:/st
 BASE_MINUTES = 15
 
 
-def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTTPRequestHandler]:
+def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type[BaseHTTPRequestHandler]:
     # One composition at a time: it checks booking engines and writes the page.
     composing = threading.Lock()
     # The activities take seconds to load: loaded when the server starts, then again in the background
@@ -371,7 +371,7 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
     loading = threading.Lock()
 
     def reload() -> None:
-        with LocalStore(db_path) as store:
+        with open_store(db) as store:
             fresh = parcours.Base.load(store)
         with loading:
             loaded.update(at=clock.monotonic(), base=fresh, refreshing=False)
@@ -387,14 +387,14 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
 
     def warm_up() -> None:
         # Holds the lock while loading: a composition asked meanwhile waits for it rather than loading again.
-        with LocalStore(db_path) as store:
+        with open_store(db) as store:
             base(store)
 
     if warm:
         threading.Thread(target=warm_up, daemon=True).start()
 
     # The moderation page and its API (/admin, /api/activities, /api/meta…) come with it.
-    class Handler(admin.make_handler(db_path)):
+    class Handler(admin.make_handler(db)):
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
             if path in STATIC:
@@ -468,7 +468,7 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
                 profile = profile_from({})
             elif (profile := valid_profile(body.get("profile"))) is None:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "profil invalide"})
-            with LocalStore(db_path) as store:
+            with open_store(db) as store:
                 overnight = body.get("decoucher") is True
                 name = f"soiree-{new_id()}-{'-'.join(envies)}-{'diner' if body['diner'] else 'sans-diner'}"
                 name += "-nuit" if overnight else ""
@@ -482,7 +482,7 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
 
         def _redo(self, name: str, index: int, position: int | None) -> None:
             """Another route in place of route `index`, or another activity at its step `position`."""
-            with LocalStore(db_path) as store, composing:
+            with open_store(db) as store, composing:
                 error = parcours.regenerate(store, base(store), name, index, position, checks=min(checks, 10))
                 state = parcours.load(name)
             if error:
@@ -499,7 +499,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Questionnaire client : profil du couple, puis ses soirées")
     parser.add_argument("--port", type=int, default=8001)
     parser.add_argument("--host", default="127.0.0.1", help="0.0.0.0 pour tester depuis un téléphone sur le même Wi-Fi")
-    parser.add_argument("--db", type=Path, default=DEFAULT_PATH)
+    parser.add_argument("--db", help="base SQLite ou URL postgresql:// (défaut : SUPABASE_DB_URL, sinon data/surprise.db)")
     parser.add_argument("--checks", type=int, default=30, help="vérifications de disponibilité en direct par soirée composée")
     parser.add_argument("--no-open", action="store_true")
     args = parser.parse_args()

@@ -14,19 +14,17 @@ import inspect
 import json
 import sys
 from collections import Counter
-from pathlib import Path
 
 import httpx
 
 from surprise.collectors.common import USER_AGENT, require_booking
 from surprise.collectors.facts import utc_now
-from surprise.local_store import DEFAULT_PATH, LocalStore
+from surprise.local_store import LocalStore, open_store
 
 
 def renormalize(store: LocalStore, sources: list[str] | None = None, rejections: list[str] | None = None) -> Counter:
     """Normalizes the chosen records again and saves them; the count of changes ("rejet → retenue")."""
-    query = "select r.source_id, r.payload, n.rejection from raw_records r left join normalized n using (source_id, external_id)"
-    rows = [row for row in store._db.execute(query) if (not sources or row[0] in sources) and (not rejections or row[2] in rejections)]
+    rows = [row for row in store.raw_with_rejection() if (not sources or row[0] in sources) and (not rejections or row[2] in rejections)]
     print(f"{len(rows)} fiches à normaliser de nouveau")
     now, changes, results = utc_now(), Counter(), []
     with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
@@ -51,10 +49,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", action="append", help="ne traiter que cette source (répétable)")
     parser.add_argument("--rejet", action="append", help="ne traiter que les fiches écartées pour ce motif (répétable)")
-    parser.add_argument("--db", type=Path, default=DEFAULT_PATH)
+    parser.add_argument("--db", help="base SQLite ou URL postgresql:// (défaut : SUPABASE_DB_URL, sinon data/surprise.db)")
     args = parser.parse_args()
     sys.stdout.reconfigure(errors="replace")
-    with LocalStore(args.db) as store:
+    with open_store(args.db) as store:
         changes = renormalize(store, args.source, args.rejet)
     for change, count in changes.most_common():
         print(f"  {change} : {count}")

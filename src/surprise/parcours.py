@@ -49,7 +49,7 @@ import httpx
 from surprise import availability, images
 from surprise.collectors import come_to_paris, funbooker, wecandoo
 from surprise.collectors.common import GROUP_PARTY
-from surprise.local_store import DEFAULT_PATH, LocalStore
+from surprise.local_store import LocalStore, open_store
 from surprise.originality import Scorer
 from surprise.sources import source_name
 from surprise.tags import TAGS, VIBES, describe
@@ -1566,7 +1566,7 @@ def main() -> None:
     parser.add_argument("--decoucher", action="store_true", help="finir la soirée dans un hôtel ou une love room près de la dernière étape")
     parser.add_argument("--budget-nuit", type=float, help="budget de la chambre pour deux, ajouté à --budget (1,5 fois --budget par défaut, 120 à 600 €)")
     parser.add_argument("--strict", action="store_true", help="sans bars ni clubs non réservables")
-    parser.add_argument("--db", type=Path, default=DEFAULT_PATH)
+    parser.add_argument("--db", help="base SQLite ou URL postgresql:// (défaut : SUPABASE_DB_URL, sinon data/surprise.db)")
     parser.add_argument("--no-claude", action="store_true", help="titres et pitchs par règles, sans Claude")
     parser.add_argument("--no-open", action="store_true", help="ne pas ouvrir la page")
     args = parser.parse_args()
@@ -1588,7 +1588,7 @@ def main() -> None:
             night_budget=args.budget_nuit,
         ))
 
-    with LocalStore(args.db) as store:
+    with open_store(args.db) as store:
         routes, name = generate(store, requests, args.parcours, args.checks, claude=not args.no_claude)
     for index, route in enumerate(routes, 1):
         print(f"\n{index}. {_weekday(route.request.day)} {route.request.day:%d/%m} · {route.title} — {route.price:.0f} € à deux")

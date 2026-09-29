@@ -242,12 +242,12 @@ def describe(activity: dict[str, Any]) -> dict[str, list[str]]:
 
 def main() -> None:
     """Report tag and vibe coverage of the local base, to tune the rules."""
-    from surprise.local_store import LocalStore
+    from surprise.local_store import open_store
 
     parser = argparse.ArgumentParser(description="Couverture des tags et vibes sur la base locale")
     parser.add_argument("--untagged", action="store_true", help="lister les activités sans vibe")
     args = parser.parse_args()
-    with LocalStore() as store:
+    with open_store() as store:
         items = [item for item in store.list_for_moderation() if item["status"] != "filtered"]
     tag_counts: Counter[str] = Counter()
     vibe_counts: Counter[str] = Counter()

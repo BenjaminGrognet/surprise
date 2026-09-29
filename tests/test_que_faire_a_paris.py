@@ -7,7 +7,6 @@ import httpx
 import respx
 
 from surprise.collectors import que_faire_a_paris as qfap
-from surprise.store import SupabaseStore
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "que_faire_a_paris.json").read_text(encoding="utf-8"))
 NOW = datetime(2026, 9, 24, 22, tzinfo=timezone.utc)
@@ -81,18 +80,6 @@ def test_portal_url_can_be_overridden(monkeypatch):
     assert qfap.export_url() == (
         "https://parisdata.opendatasoft.com/api/explore/v2.1/catalog/datasets/que-faire-a-paris-/exports/json"
     )
-
-
-@respx.mock
-def test_store_skips_duplicate_raw_records():
-    route = respx.post("https://db.example.com/rest/v1/raw_records").mock(return_value=httpx.Response(201))
-    records = [qfap.to_raw_record(p) for p in FIXTURE]
-    with SupabaseStore("https://db.example.com/", "service-key") as store:
-        assert store.save_raw_records(records) == 4
-    request = route.calls.last.request
-    assert request.url.params["on_conflict"] == "source_id,external_id,content_hash"
-    assert "resolution=ignore-duplicates" in request.headers["Prefer"]
-    assert json.loads(request.content)[0]["source_id"] == "que_faire_a_paris"
 
 
 def test_occurrence_offset_is_ignored_in_winter():

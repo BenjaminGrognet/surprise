@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from surprise.collectors import que_faire_a_paris as qfap
-from surprise.local_store import LocalStore
+from surprise.local_store import LocalStore, copy, open_store
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "que_faire_a_paris.json").read_text(encoding="utf-8"))
 NOW = datetime(2026, 9, 24, 22, tzinfo=timezone.utc)
@@ -118,3 +118,15 @@ def test_availability_cache(tmp_path):
         assert cached[("wecandoo", "a")] == {"engine": "Wecandoo", "available": True, "slots": ["19:00-21:00"], "detail": ""}
         assert cached[("fever", "b")]["engine"] is None
         assert store.cached_availability("2026-10-10", 2, max_age_hours=6) == {}
+
+
+def test_copy_adds_only_missing_rows(tmp_path, monkeypatch):
+    monkeypatch.delenv("SUPABASE_DB_URL", raising=False)
+    source, _ = _store_with_fixture(tmp_path / "a.db")
+    with source, open_store(tmp_path / "b.db") as target:
+        source.set_status("que_faire_a_paris", "12345", "approved")
+        source.save_enrichment("que_faire_a_paris", "12345", {"image_url": "https://example.com/a.jpg"})
+        assert isinstance(target, LocalStore)
+        assert copy(source, target) == {"raw_records": 4, "normalized": 4, "moderation": 1, "enrichment": 1, "keywords": 0}
+        assert set(copy(source, target).values()) == {0}
+        assert target.list_for_moderation() == source.list_for_moderation()

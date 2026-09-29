@@ -5,10 +5,24 @@
 uv run pytest
 # Que Faire à Paris : résumé des fiches retenues / rejetées (6 prochaines semaines)
 uv run python -m surprise.collectors.que_faire_a_paris
-# … en local dans data/surprise.db (SQLite, ignoré par git)
+# … dans Supabase (SUPABASE_DB_URL dans .env)
+uv run --env-file .env python -m surprise.collectors.que_faire_a_paris --store supabase
+# … ou hors ligne dans data/surprise.db (SQLite, ignoré par git)
 uv run python -m surprise.collectors.que_faire_a_paris --store local
-# … ou les payloads bruts dans Supabase (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-uv run python -m surprise.collectors.que_faire_a_paris --store supabase
+```
+
+### Base
+
+Tout le pipeline (payloads bruts, normalisation, modération, enrichissement, mots-clés, disponibilités) vit dans
+Supabase : `public.raw_records` et le schéma privé `pipeline` (migration `20260929000000_pipeline_store.sql`), non
+exposé aux clés de l'API. Les scripts Python s'y connectent en Postgres par `SUPABASE_DB_URL` ; sans elle, ils
+retombent sur `data/surprise.db`, mêmes tables. L'hôte direct `db.<projet>.supabase.co` n'a qu'une adresse IPv6 :
+prendre l'URL du *session pooler* (IPv4), `postgresql://postgres.<projet>:<mot de passe>@aws-0-eu-west-2.pooler.supabase.com:5432/postgres`.
+Tous les scripts se lancent avec `uv run --env-file .env …` pour la lire.
+
+```bash
+# copie une base SQLite locale dans Supabase (seules les lignes absentes sont ajoutées)
+uv run --env-file .env python -m surprise.local_store --db data/surprise.db
 ```
 
 Paris ZigZag (média de curation : nom, lieu, dates, lien officiel et photo de l'article, pas de texte) :
@@ -252,10 +266,11 @@ de Supabase, désactiver la confirmation par email a du sens pour un usage perso
 
 ## Modération
 
-Interface locale pour relire les activités collectées (`--store local`) et les valider ou les rejeter :
+Interface locale pour relire les activités collectées (dans Supabase, ou la base SQLite sans `SUPABASE_DB_URL`) et
+les valider ou les rejeter :
 
 ```bash
-uv run python -m surprise.admin
+uv run --env-file .env python -m surprise.admin
 ```
 
 Ouvre http://127.0.0.1:8000/admin (`--port` pour changer, `--db` pour une autre base) ; aussi servie par le

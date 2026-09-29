@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable
@@ -86,7 +87,7 @@ def run(description: str, collect: Callable[[], Iterable[Normalized]]) -> None:
     parser.add_argument(
         "--store",
         choices=["local", "supabase"],
-        help="local : data/surprise.db (SQLite) ; supabase : payloads bruts dans raw_records",
+        help="local : data/surprise.db (SQLite) ; supabase : les mêmes tables dans Supabase (SUPABASE_DB_URL)",
     )
     parser.add_argument("--limit", type=int, help="nombre maximum de fiches lues (les pages suivantes ne sont pas chargées)")
     args = parser.parse_args()
@@ -99,15 +100,10 @@ def run(description: str, collect: Callable[[], Iterable[Normalized]]) -> None:
     for reason, count in Counter(r.rejection for r in results if r.rejection).most_common():
         print(f"  rejet — {reason} : {count}")
 
-    if args.store == "local":
-        from surprise.local_store import DEFAULT_PATH, LocalStore
+    if args.store:
+        from surprise.local_store import LocalStore, PostgresStore
 
-        with LocalStore() as store:
+        with LocalStore() if args.store == "local" else PostgresStore(os.environ["SUPABASE_DB_URL"]) as store:
             added = store.save_raw_records([r.raw for r in results])
             store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
-        print(f"{added} nouveaux payloads bruts dans {DEFAULT_PATH}")
-    elif args.store == "supabase":
-        from surprise.store import SupabaseStore
-
-        with SupabaseStore.from_env() as store:
-            print(f"{store.save_raw_records([r.raw for r in results])} payloads bruts envoyés")
+        print(f"{added} nouveaux payloads bruts ({args.store})")

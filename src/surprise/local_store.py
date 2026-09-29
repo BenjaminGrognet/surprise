@@ -1,8 +1,15 @@
-"""Local SQLite store, used until Supabase is reachable. Mirrors raw_records."""
+"""The pipeline's store: a SQLite file, or the same tables in Supabase Postgres (schema pipeline).
 
+The SQL is written once for both. `open_store()` picks Supabase when SUPABASE_DB_URL is set;
+`python -m surprise.local_store` copies the SQLite file to Supabase.
+"""
+
+import argparse
 import json
+import os
 import sqlite3
 from collections.abc import Sequence
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -93,9 +100,17 @@ _ENRICHMENT_COLUMNS = (
 )
 
 
+def _no_nul(text: str | None) -> str | None:
+    # Postgres jsonb refuses the NUL character, which a few scraped pages carry.
+    return text.replace("\\u0000", "") if text else text
+
+
 class LocalStore:
+    """SQLite file; PostgresStore runs the same statements on Supabase."""
+
     def __init__(self, path: Path = DEFAULT_PATH) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        self._path = path
         self._db = sqlite3.connect(path)
         self._db.executescript(SCHEMA)
         # Columns added after the first databases were created.
@@ -110,49 +125,71 @@ class LocalStore:
     def __exit__(self, *exc: object) -> None:
         self._db.close()
 
+    def _run(self, sql: str, params: Sequence[Any] = ()) -> Any:
+        return self._db.execute(sql, params)
+
+    def _run_many(self, sql: str, rows: Sequence[Sequence[Any]]) -> int:
+        cursor = self._db.cursor()
+        cursor.executemany(sql, rows)
+        return cursor.rowcount
+
+    def _transaction(self) -> Any:
+        return self._db
+
+    def version(self) -> Any:
+        """Changes whenever the data does: the moderation list is cached on it."""
+        return self._path.stat().st_mtime_ns
+
     def save_raw_records(self, records: Sequence[RawRecord]) -> int:
         """Insert raw payloads; an unchanged payload (same hash) is skipped. Returns new rows."""
-        with self._db:
-            before = self._db.total_changes
-            self._db.executemany(
-                "insert or ignore into raw_records values (?, ?, ?, ?, ?, ?)",
+        with self._transaction():
+            return self._run_many(
+                "insert into raw_records (source_id, external_id, url, payload, content_hash, fetched_at)"
+                " values (?, ?, ?, ?, ?, ?) on conflict do nothing",
                 [
                     (
                         r.source_id,
                         r.external_id,
                         str(r.url) if r.url else None,
-                        json.dumps(r.payload, ensure_ascii=False),
+                        _no_nul(json.dumps(r.payload, ensure_ascii=False)),
                         r.content_hash,
                         r.fetched_at.isoformat(),
                     )
                     for r in records
                 ],
             )
-            return self._db.total_changes - before
 
     def save_normalized(self, results: Sequence[tuple[RawRecord, Activity | None, str | None]]) -> None:
         """Keep the latest normalization of each record."""
-        with self._db:
-            self._db.executemany(
-                "insert or replace into normalized (source_id, external_id, content_hash, activity, rejection)"
-                " values (?, ?, ?, ?, ?)",
+        with self._transaction():
+            self._run_many(
+                "insert into normalized (source_id, external_id, content_hash, activity, rejection)"
+                " values (?, ?, ?, ?, ?)"
+                " on conflict (source_id, external_id) do update set content_hash = excluded.content_hash,"
+                " activity = excluded.activity, rejection = excluded.rejection, normalized_at = current_timestamp",
                 [
-                    (raw.source_id, raw.external_id, raw.content_hash, activity and activity.model_dump_json(), rejection)
+                    (raw.source_id, raw.external_id, raw.content_hash, activity and _no_nul(activity.model_dump_json()), rejection)
                     for raw, activity, rejection in results
                 ],
             )
+
+    def raw_with_rejection(self) -> list[tuple[str, str, str | None]]:
+        """Every raw payload (source, JSON text) with its current rejection, to normalize again."""
+        return self._run(
+            "select r.source_id, r.payload, n.rejection from raw_records r left join normalized n using (source_id, external_id)"
+        ).fetchall()
 
     def list_for_moderation(self) -> list[dict[str, Any]]:
         """Normalized activities with their moderation status and a little source context.
 
         Activities rejected at collection are "filtered", with their reason, until a moderator decides.
         """
-        rows = self._db.execute(
+        rows = self._run(
             """
             select n.source_id, n.external_id, n.activity,
                    coalesce(m.status, case when n.rejection is null then 'proposed' else 'filtered' end), n.rejection,
-                   m.content_hash is not null and m.content_hash != n.content_hash, m.decided_at,
-                   r.url, json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.cover_url'),
+                   m.content_hash is not null and m.content_hash != n.content_hash, cast(m.decided_at as text),
+                   r.url, r.payload ->> 'lead_text', r.payload ->> 'cover_url',
                    e.image_url, e.image_origin, e.place_id, e.site_excerpt, e.description, e.booking_url,
                    e.opening_hours, e.osm_address, e.osm_url, e.latitude, e.longitude, k.keywords
             from normalized n
@@ -202,37 +239,37 @@ class LocalStore:
         """Record a moderation decision against the current payload. False if the activity is unknown."""
         if status not in STATUSES:
             raise ValueError(f"statut inconnu : {status}")
-        with self._db:
-            exists = self._db.execute(
+        with self._transaction():
+            exists = self._run(
                 "select 1 from normalized where source_id = ? and external_id = ? and activity is not null",
                 (source_id, external_id),
             ).fetchone()
             if not exists:
                 return False
             if status == "proposed":
-                self._db.execute(
-                    "delete from moderation where source_id = ? and external_id = ?", (source_id, external_id)
-                )
+                self._run("delete from moderation where source_id = ? and external_id = ?", (source_id, external_id))
             else:
-                self._db.execute(
-                    "insert or replace into moderation (source_id, external_id, status, content_hash)"
-                    " select source_id, external_id, ?, content_hash from normalized"
-                    " where source_id = ? and external_id = ?",
+                self._run(
+                    "insert into moderation (source_id, external_id, status, content_hash)"
+                    " select source_id, external_id, cast(? as text), content_hash from normalized"
+                    " where source_id = ? and external_id = ?"
+                    " on conflict (source_id, external_id) do update set status = excluded.status,"
+                    " content_hash = excluded.content_hash, decided_at = current_timestamp",
                     (status, source_id, external_id),
                 )
             return True
 
     def pending_enrichment(self, refresh: bool = False, missing_description: bool = False) -> list[dict[str, Any]]:
         """Kept activities without enrichment (or without description, or all with refresh), with the source's text."""
-        rows = self._db.execute(
+        rows = self._run(
             """
             select n.source_id, n.external_id, n.activity,
-                   json_extract(r.payload, '$.lead_text'), json_extract(r.payload, '$.description')
+                   r.payload ->> 'lead_text', r.payload ->> 'description'
             from normalized n
-            left join raw_records r
-              on r.source_id = n.source_id and r.external_id = n.external_id and r.content_hash = n.content_hash
             left join enrichment e using (source_id, external_id)
             left join moderation m using (source_id, external_id)
+            left join raw_records r
+              on r.source_id = n.source_id and r.external_id = n.external_id and r.content_hash = n.content_hash
             -- Activities rejected at collection only once a moderator keeps them.
             where n.activity is not null and (n.rejection is null or m.status = 'approved') and (? or e.source_id is null or (? and e.description is null))
             """,
@@ -250,18 +287,20 @@ class LocalStore:
 
     def save_keywords(self, keywords: dict[tuple[str, str], str]) -> None:
         """Store each activity's keywords (JSON list), replacing the previous ones."""
-        with self._db:
-            self._db.executemany(
-                "insert or replace into keywords (source_id, external_id, keywords) values (?, ?, ?)",
+        with self._transaction():
+            self._run_many(
+                "insert into keywords (source_id, external_id, keywords) values (?, ?, ?)"
+                " on conflict (source_id, external_id) do update set keywords = excluded.keywords,"
+                " computed_at = current_timestamp",
                 [(source_id, external_id, words) for (source_id, external_id), words in keywords.items()],
             )
 
     def save_enrichment(self, source_id: str, external_id: str, fields: dict[str, str | None]) -> None:
         """Upsert the given fields only: a refresh without descriptions keeps the ones already written."""
         columns = [column for column in _ENRICHMENT_COLUMNS if column in fields]
-        updates = ", ".join([f"{column} = excluded.{column}" for column in columns] + ["enriched_at = datetime('now')"])
-        with self._db:
-            self._db.execute(
+        updates = ", ".join([f"{column} = excluded.{column}" for column in columns] + ["enriched_at = current_timestamp"])
+        with self._transaction():
+            self._run(
                 f"insert into enrichment (source_id, external_id{''.join(f', {c}' for c in columns)})"
                 f" values (?, ?{', ?' * len(columns)})"
                 f" on conflict (source_id, external_id) do update set {updates}",
@@ -270,10 +309,11 @@ class LocalStore:
 
     def cached_availability(self, day: str, party: int, max_age_hours: float) -> dict[tuple[str, str], dict[str, Any]]:
         """Availability answers for the date checked less than `max_age_hours` ago; engine None: no supported engine."""
-        rows = self._db.execute(
+        since = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        rows = self._run(
             "select source_id, external_id, engine, available, slots, detail from availability"
-            " where day = ? and party = ? and checked_at >= datetime('now', ?)",
-            (day, party, f"-{max_age_hours * 3600:.0f} seconds"),
+            " where day = ? and party = ? and checked_at >= ?",
+            (day, party, since),
         )
         return {
             (source_id, external_id): {
@@ -289,9 +329,87 @@ class LocalStore:
         self, source_id: str, external_id: str, day: str, party: int,
         engine: str | None, available: bool | None, slots: list[str], detail: str,
     ) -> None:
-        with self._db:
-            self._db.execute(
-                "insert or replace into availability (source_id, external_id, day, party, engine, available, slots, detail)"
-                " values (?, ?, ?, ?, ?, ?, ?, ?)",
+        with self._transaction():
+            self._run(
+                "insert into availability (source_id, external_id, day, party, engine, available, slots, detail)"
+                " values (?, ?, ?, ?, ?, ?, ?, ?)"
+                " on conflict (source_id, external_id, day, party) do update set engine = excluded.engine,"
+                " available = excluded.available, slots = excluded.slots, detail = excluded.detail,"
+                " checked_at = current_timestamp",
                 (source_id, external_id, day, party, engine, available, json.dumps(slots), detail),
             )
+
+
+class PostgresStore(LocalStore):
+    """The same tables in Supabase: schema pipeline, raw_records in public (SUPABASE_DB_URL)."""
+
+    def __init__(self, url: str) -> None:
+        import psycopg
+        from psycopg.types.string import TextLoader
+
+        self._db = psycopg.connect(url, autocommit=True)
+        # JSON columns read back as text, like SQLite's.
+        for kind in ("json", "jsonb"):
+            self._db.adapters.register_loader(kind, TextLoader)
+        self._db.execute("set search_path = pipeline, public")
+        self._db.execute("set timezone = 'UTC'")
+
+    def _run(self, sql: str, params: Sequence[Any] = ()) -> Any:
+        return self._db.execute(sql.replace("?", "%s"), params)
+
+    def _run_many(self, sql: str, rows: Sequence[Sequence[Any]]) -> int:
+        with self._db.cursor() as cursor:
+            cursor.executemany(sql.replace("?", "%s"), rows)
+            return cursor.rowcount
+
+    def _transaction(self) -> Any:
+        return self._db.transaction()
+
+    def version(self) -> Any:
+        return self._run(
+            "select (select max(normalized_at) from normalized), (select max(decided_at) from moderation),"
+            " (select max(enriched_at) from enrichment), (select max(computed_at) from keywords)"
+        ).fetchone()
+
+
+def open_store(db: Path | str | None = None) -> LocalStore:
+    """`db` (a SQLite path or a postgresql:// URL), else SUPABASE_DB_URL when set, else data/surprise.db."""
+    db = db or os.environ.get("SUPABASE_DB_URL") or DEFAULT_PATH
+    if str(db).startswith(("postgres://", "postgresql://")):
+        return PostgresStore(str(db))
+    return LocalStore(Path(db))
+
+
+# Copied to Supabase; availability is a 6-hour cache, left behind.
+_COPIED = {
+    "raw_records": ("source_id", "external_id", "url", "payload", "content_hash", "fetched_at"),
+    "normalized": ("source_id", "external_id", "content_hash", "activity", "rejection", "normalized_at"),
+    "moderation": ("source_id", "external_id", "status", "content_hash", "decided_at"),
+    "enrichment": ("source_id", "external_id", *_ENRICHMENT_COLUMNS, "enriched_at"),
+    "keywords": ("source_id", "external_id", "keywords", "computed_at"),
+}
+
+
+def copy(source: LocalStore, target: LocalStore) -> dict[str, int]:
+    """Rows of `source` missing from `target`, table by table; the count added to each."""
+    added = {}
+    for table, columns in _COPIED.items():
+        rows = [[_no_nul(v) if isinstance(v, str) else v for v in row] for row in source._run(f"select {', '.join(columns)} from {table}")]
+        with target._transaction():
+            added[table] = target._run_many(
+                f"insert into {table} ({', '.join(columns)}) values ({', '.join('?' * len(columns))}) on conflict do nothing", rows
+            )
+    return added
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Copie la base SQLite vers Supabase (SUPABASE_DB_URL)")
+    parser.add_argument("--db", type=Path, default=DEFAULT_PATH)
+    args = parser.parse_args()
+    with LocalStore(args.db) as source, PostgresStore(os.environ["SUPABASE_DB_URL"]) as target:
+        for table, count in copy(source, target).items():
+            print(f"{table} : {count} lignes ajoutées")
+
+
+if __name__ == "__main__":
+    main()

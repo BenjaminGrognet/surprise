@@ -100,12 +100,12 @@ def extract(text: str) -> list[str]:
 
 
 def main() -> None:
-    from surprise.local_store import LocalStore
+    from surprise.local_store import open_store
 
     parser = argparse.ArgumentParser(description="Mots-clés des activités, stockés dans l'enrichissement")
     parser.add_argument("--dry-run", action="store_true", help="afficher la couverture sans enregistrer")
     args = parser.parse_args()
-    with LocalStore() as store:
+    with open_store() as store:
         items = [item for item in store.list_for_moderation() if item["status"] != "filtered"]
         found = {(item["source_id"], item["external_id"]): extract(texts(item)) for item in items}
         if not args.dry_run:

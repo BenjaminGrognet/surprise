@@ -123,9 +123,9 @@ class Scorer:
 
 
 def main() -> None:
-    from surprise.local_store import LocalStore
+    from surprise.local_store import open_store
 
-    with LocalStore() as store:
+    with open_store() as store:
         items = [item for item in store.list_for_moderation() if item["status"] not in ("filtered", "rejected")]
     scorer = Scorer(items)
     scored = sorted(((scorer.score(item), item) for item in items), key=lambda pair: -pair[0].score)
