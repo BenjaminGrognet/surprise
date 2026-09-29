@@ -13,7 +13,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, ld_address, ld_node, normalize_facts, utc_now
 from surprise.models import RawRecord
 
@@ -80,13 +80,9 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
     for item in fetch_events(client, delay):
-        clock.sleep(delay)
-        try:
-            response = client.get(item["url"])
-            page = response.text if response.status_code == 200 else None
-        except httpx.HTTPError:
-            page = None
-        yield normalize(parse_event(item, page), now)
+        # Unreadable, the event keeps what the listing says.
+        for payload in page(client, item["url"], lambda r: parse_event(item, r.text), delay) or [parse_event(item, None)]:
+            yield normalize(payload, now)
 
 
 def main() -> None:

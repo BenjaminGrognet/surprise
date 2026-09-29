@@ -9,6 +9,8 @@ Bars, clubs and restaurants need no booking: a couple can walk in while they are
 """
 
 import re
+import threading
+from collections import defaultdict
 from collections.abc import Iterable
 from urllib.parse import urlsplit
 
@@ -128,30 +130,61 @@ def booking_form(url: str, page: str) -> str | None:
     return "formulaire de réservation" if (_FORM.search(url) or _FORM.search(page)) and _ASKS_BOOKING.search(page) else None
 
 
-def booking_engine(client: httpx.Client, urls: Iterable[str]) -> str | None:
+def page_verdict(client: httpx.Client, url: str) -> tuple[str | None, bool] | None:
+    """What a page says: the booking engine it leads to, and whether the place has closed; None if unreachable."""
+    # Imported here: the enrichment imports the collectors, which check bookings with this module.
+    from surprise.enrich import booking_link
+
+    page = _get(client, url)
+    if page is None:
+        return None
+    closed = bool(CLOSED.search(page.text))
+    engine = (
+        engine_in(str(page.url)) or engine_in(page.text) or booking_form(str(page.url), page.text)
+        or ticketing_of_site(str(page.url), page.text)
+    )
+    # The site's "Réserver" page ("perpette.com/reserver/") embeds the widget.
+    if not engine and (link := booking_link(str(page.url), page.text)):
+        engine = own_ticketing(link)
+        if not engine and (linked := _get(client, link)):
+            engine = engine_in(str(linked.url)) or engine_in(linked.text) or ticketing_of_site(str(linked.url), linked.text)
+    return engine, closed
+
+
+class PageChecks:
+    """Page verdicts of a collection run, each page read once: 46 concerts of a club check its site once.
+
+    Shared by threads: one page at a time per site. `known` are verdicts kept in the store; `new` the ones to save.
+    """
+
+    def __init__(self, known: dict[str, tuple[str | None, bool]] | None = None) -> None:
+        self.verdicts: dict[str, tuple[str | None, bool] | None] = dict(known or {})
+        self.new: dict[str, tuple[str | None, bool]] = {}
+        self._lock = threading.Lock()
+        self._hosts: dict[str, threading.Lock] = defaultdict(threading.Lock)
+
+    def get(self, client: httpx.Client, url: str) -> tuple[str | None, bool] | None:
+        if url not in self.verdicts:
+            with self._lock:
+                host = self._hosts[urlsplit(url).hostname or ""]
+            with host:
+                if url not in self.verdicts:
+                    verdict = self.verdicts[url] = page_verdict(client, url)
+                    if verdict is not None:
+                        self.new[url] = verdict
+        return self.verdicts[url]
+
+
+def booking_engine(client: httpx.Client, urls: Iterable[str], checks: PageChecks | None = None) -> str | None:
     """Where the activity can be booked online: in its links first, then in the pages they lead to."""
     urls = list(dict.fromkeys(urls))
     for url in urls:
         if engine := engine_in(url) or own_ticketing(url):
             return engine
-    # Imported here: the enrichment imports the collectors, which check bookings with this module.
-    from surprise.enrich import booking_link
-
+    checks = checks or PageChecks()
     for url in urls:
-        page = _get(client, url)
-        if page is None:
-            continue
-        if engine := engine_in(str(page.url)) or engine_in(page.text) or booking_form(str(page.url), page.text):
-            return engine
-        if engine := ticketing_of_site(str(page.url), page.text):
-            return engine
-        # The site's "Réserver" page ("perpette.com/reserver/") embeds the widget.
-        link = booking_link(str(page.url), page.text)
-        if link and (engine := own_ticketing(link)):
-            return engine
-        if link and (linked := _get(client, link)):
-            if engine := engine_in(str(linked.url)) or engine_in(linked.text) or ticketing_of_site(str(linked.url), linked.text):
-                return engine
+        if (verdict := checks.get(client, url)) and verdict[0]:
+            return verdict[0]
     return None
 
 
@@ -172,12 +205,12 @@ def is_walk_in(activity: Activity) -> bool:
     return bool(WALK_IN_CATEGORIES & set(activity.categories)) and "hotel" not in activity.categories
 
 
-def is_open(client: httpx.Client, activity: Activity, source_text: str = "") -> bool:
+def is_open(client: httpx.Client, activity: Activity, source_text: str = "", checks: PageChecks | None = None) -> bool:
     """Neither the source nor the official site says the place has closed for good."""
     if CLOSED.search(source_text):
         return False
-    page = _get(client, str(activity.website)) if activity.website else None
-    return not (page and CLOSED.search(page.text))
+    verdict = (checks or PageChecks()).get(client, str(activity.website)) if activity.website else None
+    return not (verdict and verdict[1])
 
 
 def booking_urls(activity: Activity) -> list[str]:

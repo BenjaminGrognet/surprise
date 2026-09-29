@@ -19,7 +19,7 @@ import httpx
 
 from surprise.booking import engine_in
 from surprise.collectors import funbooker
-from surprise.collectors.common import BOOKING, Normalized, run, safe_url
+from surprise.collectors.common import BOOKING, Normalized, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, address_in_text, complete_place, lines, normalize_facts, text, utc_now
 from surprise.collectors.paris_zigzag import _clean_url, _slug, postal_code
 from surprise.models import RawRecord
@@ -123,17 +123,9 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
-    for index, url in enumerate(ARTICLES):
-        if index:
-            clock.sleep(delay)
-        try:
-            response = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if response.status_code != 200:
-            continue
-        for idea in parse_article(url, response.text):
-            yield normalize(complete_place(with_listing(client, idea)), now)
+    for url in ARTICLES:
+        for idea in page(client, url, lambda r: [complete_place(with_listing(client, i)) for i in parse_article(url, r.text)], delay):
+            yield normalize(idea, now)
 
 
 def with_listing(client: httpx.Client, idea: dict[str, Any]) -> dict[str, Any]:

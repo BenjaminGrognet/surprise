@@ -12,14 +12,13 @@ on OpenStreetMap by its name. Rooms outside Paris intra-muros are rejected.
 
 import html
 import re
-import time as clock
 from datetime import datetime
 from typing import Any, Iterator
 from urllib.parse import urlsplit
 
 import httpx
 
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, complete_place, ld_node, lines, normalize_facts, sitemap, utc_now
 from surprise.collectors.paris_zigzag import _slug
 from surprise.collectors.selections_couple import parse_article
@@ -129,23 +128,11 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
     for url in room_pages(client):
-        clock.sleep(delay)
-        page = _get(client, url)
-        if page and (payload := parse_room(url, page)):
-            yield normalize(complete_place(payload), now)
+        for payload in page(client, url, lambda r: complete_place(room) if (room := parse_room(url, r.text)) else None, delay):
+            yield normalize(payload, now)
     for url in GUIDES:
-        clock.sleep(delay)
-        if page := _get(client, url):
-            for room in guide_rooms(url, page):
-                yield normalize(complete_place(room), now)
-
-
-def _get(client: httpx.Client, url: str) -> str | None:
-    try:
-        response = client.get(url)
-    except httpx.HTTPError:
-        return None
-    return response.text if response.status_code == 200 else None
+        for room in page(client, url, lambda r: [complete_place(room) for room in guide_rooms(url, r.text)], delay):
+            yield normalize(room, now)
 
 
 def main() -> None:

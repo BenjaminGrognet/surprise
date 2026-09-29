@@ -20,7 +20,6 @@ public use.
 
 import html
 import re
-import time as clock
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterator
 from urllib.parse import urlsplit
@@ -29,7 +28,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, page, run, safe_url
 from surprise.collectors.paris_zigzag import (
     PARIS,
     WINDOW,
@@ -217,16 +216,8 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or datetime.now(timezone.utc)
     seen: set[str] = set()
-    for index, url in enumerate(fetch_articles(client, now.astimezone(PARIS).date())):
-        if index:
-            clock.sleep(delay)
-        try:
-            response = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if response.status_code != 200:
-            continue
-        for payload in parse_article(url, response.text):
+    for url in fetch_articles(client, now.astimezone(PARIS).date()):
+        for payload in page(client, url, lambda r: parse_article(url, r.text), delay):
             result = normalize(payload, now)
             if result.raw.external_id not in seen:
                 seen.add(result.raw.external_id)

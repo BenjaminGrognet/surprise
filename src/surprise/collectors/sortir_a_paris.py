@@ -22,14 +22,13 @@ before any public use.
 import html
 import json
 import re
-import time as clock
 from datetime import datetime, timedelta
 from typing import Any, Iterator
 from urllib.parse import urlsplit
 
 import httpx
 
-from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, ld_node, normalize_facts, sitemap, text, utc_now
 from surprise.collectors.paris_zigzag import PARIS, _clean_url, is_evening
 from surprise.models import RawRecord
@@ -128,12 +127,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
     for url in fetch_pages(client, now):
-        clock.sleep(delay)
-        try:
-            response = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if response.status_code == 200 and (payload := parse_article(url, response.text)):
+        for payload in page(client, url, lambda r: parse_article(url, r.text), delay):
             yield normalize(payload, now)
 
 

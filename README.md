@@ -25,6 +25,21 @@ Tous les scripts se lancent avec `uv run --env-file .env …` pour la lire.
 uv run --env-file .env python -m surprise.local_store --db data/surprise.db
 ```
 
+### Collecte complète
+
+`surprise.collect` lance les 30 sources, 4 à la fois (`--jobs`). Chaque source enregistre par lots de 50 fiches au
+fil de l'eau, et une source en échec n'arrête pas les autres. Une page de détail lue il y a moins d'une semaine
+n'est pas relue : ses payloads stockés (`_page`) sont renormalisés à la date du jour, sauf si le sitemap la dit
+modifiée depuis (Paris ZigZag). Une page de réservation ou un site officiel n'est vérifié qu'une fois par mois
+(`pipeline.page_checks`, migration `20260930000000_page_checks.sql`), et une fois par passage même si 46 concerts y
+renvoient. Ces vérifications se font à 16 en parallèle, une seule à la fois par site. Nominatim reste à 1 requête/s.
+
+```bash
+uv run --env-file .env python -m surprise.collect --limit 50
+# certaines sources, en relisant tout, 20 min au plus chacune
+uv run --env-file .env python -m surprise.collect --source fever --source tiqets --refresh --minutes 20
+```
+
 Paris ZigZag (média de curation : nom, lieu, dates, lien officiel et photo de l'article, pas de texte) :
 
 ```bash

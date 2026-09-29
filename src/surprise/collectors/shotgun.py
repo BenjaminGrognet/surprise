@@ -16,7 +16,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, ld_address, ld_node, normalize_facts, utc_now
 from surprise.models import RawRecord
 
@@ -81,15 +81,12 @@ def collect(client: httpx.Client, now: datetime | None = None, delay: float = DE
     now = now or utc_now()
     beyond = 0
     for slug in fetch_event_slugs(client, delay):
-        clock.sleep(delay)
-        response = client.get(f"{BASE_URL}/fr/events/{slug}")
-        if response.status_code != 200:
-            continue
-        normalized = normalize(parse_event(slug, response.text), now)
-        yield normalized
-        beyond = beyond + 1 if normalized.rejection == "hors fenêtre" else 0
-        if beyond >= OUT_OF_WINDOW_STOP:
-            return
+        for payload in page(client, f"{BASE_URL}/fr/events/{slug}", lambda r: parse_event(slug, r.text), delay):
+            normalized = normalize(payload, now)
+            yield normalized
+            beyond = beyond + 1 if normalized.rejection == "hors fenêtre" else 0
+            if beyond >= OUT_OF_WINDOW_STOP:
+                return
 
 
 def main() -> None:

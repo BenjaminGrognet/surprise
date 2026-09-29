@@ -15,7 +15,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, USER_AGENT, lines, normalize_facts, text, utc_now
 from surprise.collectors.funbooker import duration_minutes
 from surprise.collectors.paris_zigzag import _MONTHS, postal_code
@@ -123,10 +123,8 @@ def collect(client: httpx.Client, now: datetime | None = None, delay: float = DE
     now = now or utc_now()
     with httpx.Client(timeout=30, headers={"User-Agent": USER_AGENT}) as osm_client:
         for url, tour_id in fetch_tour_urls(client, delay):
-            clock.sleep(delay)
-            response = client.get(url)
-            if response.status_code == 200:
-                yield normalize(locate(osm_client, parse_tour(url, tour_id, response.text)), now)
+            for payload in page(client, url, lambda r: locate(osm_client, parse_tour(url, tour_id, r.text)), delay):
+                yield normalize(payload, now)
 
 
 def main() -> None:

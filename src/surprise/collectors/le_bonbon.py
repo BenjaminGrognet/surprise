@@ -18,14 +18,13 @@ for Claude to rewrite a description: to remove before any public use.
 
 import itertools
 import re
-import time as clock
 from datetime import datetime, timedelta
 from typing import Any, Iterator
 from urllib.parse import urlsplit
 
 import httpx
 
-from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, normalize_facts, sitemap, utc_now
 from surprise.collectors.paris_zigzag import PARIS, _fields, _slug, booking_link, is_evening, parse_article, parse_dates
 from surprise.models import RawRecord
@@ -104,14 +103,8 @@ def normalize(block: dict[str, Any], now: datetime) -> Normalized:
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
     for url in itertools.islice(fetch_articles(client, now), MAX_ARTICLES):
-        clock.sleep(delay)
-        try:
-            response = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if response.status_code == 200:
-            for block in parse_blocks(url, response.text):
-                yield normalize(block, now)
+        for block in page(client, url, lambda r: parse_blocks(url, r.text), delay):
+            yield normalize(block, now)
 
 
 def _section(url: str) -> str:

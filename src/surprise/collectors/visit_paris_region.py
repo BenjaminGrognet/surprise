@@ -8,13 +8,12 @@ left out by their breadcrumb.
 """
 
 import re
-import time as clock
 from datetime import datetime
 from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, normalize_facts, sitemap, text, utc_now
 from surprise.collectors.paris_zigzag import is_evening
 from surprise.models import RawRecord
@@ -87,12 +86,9 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
-    for index, url in enumerate(fetch_place_urls(client)):
-        if index:
-            clock.sleep(delay)
-        response = client.get(url)
-        if response.status_code == 200:
-            yield normalize(parse_place(url, response.text), now)
+    for url in fetch_place_urls(client):
+        for payload in page(client, url, lambda r: parse_place(url, r.text), delay):
+            yield normalize(payload, now)
 
 
 def main() -> None:

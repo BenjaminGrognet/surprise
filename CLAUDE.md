@@ -9,8 +9,9 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   visit_paris_region, explore_paris, wecandoo, fever, getyourguide, tiqets, civitatis, eventbrite, shotgun,
   billetreduc, time_out, le_bonbon, selections_couple, osm_restaurants, time_out_hotels, nuits_couple,
   sortir_a_paris, dice, escape_game, osm_loisirs), chacune avec `--store supabase --limit 50` (scripts lancés par
-  `uv run --env-file .env …`). Jamais sans limite : on valide le
-  fonctionnement ensemble, source par source, sur un petit volume.
+  `uv run --env-file .env …`), ou toutes ensemble par `python -m surprise.collect --limit 50`. Jamais sans limite : on valide le
+  fonctionnement ensemble, source par source, sur un petit volume. Les pages lues il y a moins d'une semaine ne sont
+  pas relues (`--refresh` pour forcer).
 - Enrichissement : `--no-descriptions` tant que les descriptions Claude ne sont pas demandées ;
   `--source` pour ne retraiter que les sources modifiées.
 - Images : prendre celles des sites (source ou site officiel) sans se soucier des licences pour

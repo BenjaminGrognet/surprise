@@ -12,13 +12,12 @@ A hotel is kept only if its site books rooms through a known engine.
 
 import html
 import re
-import time as clock
 from datetime import datetime
 from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, run
+from surprise.collectors.common import Normalized, page, run
 from surprise.collectors.facts import BROWSER_HEADERS, normalize_facts, sitemap, utc_now
 from surprise.collectors.time_out import BASE_URL, DELAY_SECONDS, SITEMAP_INDEX, parse_review
 from surprise.collectors.time_out import to_raw_record as _to_raw_record
@@ -90,12 +89,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
     for url in fetch_pages(client):
-        clock.sleep(delay)
-        try:
-            response = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if response.status_code == 200 and (payload := parse_hotel(url, response.text)):
+        for payload in page(client, url, lambda r: parse_hotel(url, r.text), delay):
             yield normalize(payload, now)
 
 

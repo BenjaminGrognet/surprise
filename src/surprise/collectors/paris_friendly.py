@@ -9,7 +9,6 @@ before any public use). Pages without a venue in Paris (products, trips) are rej
 
 import html
 import re
-import time as clock
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
@@ -18,7 +17,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, page, run, safe_url
 from surprise.collectors.paris_zigzag import PARIS, WINDOW, is_evening, parse_dates, postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -152,12 +151,10 @@ def collect(client: httpx.Client, now: datetime | None = None, delay: float = DE
     now = now or datetime.now(timezone.utc)
     latest = latest_id(client)
     for page_id in range(latest, max(latest - MAX_PAGES, 0), -1):
-        if page_id != latest:
-            clock.sleep(delay)
-        response = client.get(PAGE_URL.format(page_id))
         # Deleted pages redirect to erreur-404.php.
-        if response.status_code == 200 and str(response.url).endswith(".html"):
-            yield normalize(parse_page(page_id, str(response.url), response.text), now)
+        read = lambda r: parse_page(page_id, str(r.url), r.text) if str(r.url).endswith(".html") else None  # noqa: E731
+        for payload in page(client, PAGE_URL.format(page_id), read, delay):
+            yield normalize(payload, now)
 
 
 def _value(fragment: str | None) -> str | None:

@@ -8,14 +8,13 @@ Only these facts, the title and the first gallery photo are kept.
 
 import html
 import re
-import time as clock
 from typing import Any, Iterator
 
 import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import BOOKING, OFF_TOPIC, Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import BOOKING, OFF_TOPIC, Normalized, euro_amounts, page, run, safe_url
 from surprise.collectors.paris_zigzag import postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -132,12 +131,9 @@ def normalize(payload: dict[str, Any]) -> Normalized:
 
 
 def collect(client: httpx.Client, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
-    for index, project in enumerate(fetch_projects(client)):
-        if index:
-            clock.sleep(delay)
-        response = client.get(project["link"])
-        if response.status_code == 200:
-            yield normalize(parse_project(project, response.text))
+    for project in fetch_projects(client):
+        for payload in page(client, project["link"], lambda r: parse_project(project, r.text), delay):
+            yield normalize(payload)
 
 
 def _text(fragment: str) -> str:

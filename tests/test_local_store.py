@@ -16,10 +16,46 @@ def test_raw_records_are_deduplicated(tmp_path):
     path = tmp_path / "surprise.db"
     records = [qfap.to_raw_record(p) for p in FIXTURE]
     with LocalStore(path) as store:
-        assert store.save_raw_records(records) == 4
-        assert store.save_raw_records(records) == 0
+        store.save_raw_records(records)
+        store.save_raw_records(records)  # read again unchanged: only its fetch time moves
         changed = qfap.to_raw_record({**FIXTURE[0], "title": "Nouveau titre"})
-        assert store.save_raw_records([changed]) == 1
+        store.save_raw_records([changed])
+    assert sqlite3.connect(path).execute("select count(*) from raw_records").fetchone() == (5,)
+
+
+def test_fresh_pages_are_not_read_again(tmp_path):
+    from surprise.collectors import common
+
+    calls = []
+
+    def read():
+        calls.append(1)
+        return {"id": "12345", "title": "Concert"}
+
+    common._fresh.clear()
+    [payload] = common.remembered("https://site.example/a", read)
+    assert payload["_page"] == "https://site.example/a" and calls == [1]
+    raw = qfap.to_raw_record(FIXTURE[0] | {"_page": "https://site.example/a"})
+    assert raw.content_hash == qfap.to_raw_record(FIXTURE[0]).content_hash  # bookkeeping is not content
+    with LocalStore(tmp_path / "s.db") as store:
+        result = qfap.normalize(raw.payload, NOW)
+        store.save_raw_records([result.raw])
+        store.save_normalized([(result.raw, result.activity, result.rejection)])
+        common._fresh.update(store.fresh_pages("que_faire_a_paris"))
+        assert store.fresh_pages("que_faire_a_paris", days=0) == {}
+    [stored] = common.remembered("https://site.example/a", read)
+    assert stored["_cached"] and calls == [1]
+    # Modified since it was read (sitemap lastmod): read again.
+    common.remembered("https://site.example/a", read, modified="2026-09-30")
+    assert calls == [1, 1]
+    common._fresh.clear()
+
+
+def test_page_checks_are_kept(tmp_path):
+    with LocalStore(tmp_path / "s.db") as store:
+        store.save_page_checks({"https://club.example/": ("billetterie du lieu", False), "https://ferme.example/": (None, True)})
+        assert store.page_checks() == {"https://club.example/": ("billetterie du lieu", False), "https://ferme.example/": (None, True)}
+        assert store.page_checks(days=-1) == {}
 
 
 def test_latest_normalization_is_kept(tmp_path):

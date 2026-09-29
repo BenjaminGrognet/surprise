@@ -10,13 +10,12 @@ Bots get a prerendered page without these props: requests look like a browser's.
 import html
 import json
 import re
-import time as clock
 from datetime import datetime
 from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, lines, normalize_facts, sitemap, utc_now
 from surprise.models import RawRecord
 
@@ -77,12 +76,9 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
-    for index, url in enumerate(fetch_workshop_urls(client)):
-        if index:
-            clock.sleep(delay)
-        response = client.get(url)
-        if response.status_code == 200:
-            yield normalize(parse_workshop(url, response.text), now)
+    for url in fetch_workshop_urls(client):
+        for payload in page(client, url, lambda r: parse_workshop(url, r.text), delay):
+            yield normalize(payload, now)
 
 
 def main() -> None:

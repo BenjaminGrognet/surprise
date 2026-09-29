@@ -49,7 +49,9 @@ class RawRecord(BaseModel):
     @computed_field
     @property
     def content_hash(self) -> str:
-        canonical = json.dumps(self.payload, sort_keys=True, ensure_ascii=False, default=str)
+        # "_page", "_cached": the collection's bookkeeping, not content.
+        content = {key: value for key, value in self.payload.items() if not key.startswith("_")}
+        canonical = json.dumps(content, sort_keys=True, ensure_ascii=False, default=str)
         return hashlib.sha256(canonical.encode()).hexdigest()
 
 

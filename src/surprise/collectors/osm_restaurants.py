@@ -22,7 +22,7 @@ from urllib.parse import urljoin
 import httpx
 
 from surprise.booking import engine_in, own_ticketing
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, remembered, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, complete_place, normalize_facts, utc_now
 from surprise.models import RawRecord
 
@@ -76,6 +76,11 @@ def overpass(client: httpx.Client, query: str) -> list[dict[str, Any]]:
     else:
         raise failure
     return response.json().get("elements") or []
+
+
+def osm_url(place: dict[str, Any]) -> str:
+    """The place's page on OpenStreetMap: the key of what its website said, not read again while fresh."""
+    return f"https://www.openstreetmap.org/{place['type']}/{place['id']}"
 
 
 def _website(tags: dict[str, str]) -> str | None:
@@ -186,9 +191,10 @@ def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Norma
         # Batches keep --limit meaningful: the next websites are read only when asked for.
         for start in range(0, len(places), BATCH):
             batch = places[start : start + BATCH]
-            read = pool.map(lambda place: read_site(sites, _website(place["tags"])), batch)
-            for place, site in zip(batch, read):
-                yield normalize(facts(place, site), now)
+            read = pool.map(lambda place: remembered(osm_url(place), lambda: facts(place, read_site(sites, _website(place["tags"])))), batch)
+            for payloads in read:
+                for payload in payloads:
+                    yield normalize(payload, now)
 
 
 def main() -> None:

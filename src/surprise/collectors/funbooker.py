@@ -9,7 +9,6 @@ age), the breadcrumb (categories), the og:image and the description (lead_text).
 import html
 import json
 import re
-import time as clock
 from typing import Any, Iterator
 from urllib.parse import urlsplit
 
@@ -17,7 +16,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, Normalized, run, safe_url
+from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, Normalized, page, run, safe_url
 from surprise.collectors.paris_zigzag import postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -139,12 +138,9 @@ def duration_minutes(text: str | None) -> int | None:
 
 
 def collect(client: httpx.Client, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
-    for index, url in enumerate(fetch_listing_urls(client)):
-        if index:
-            clock.sleep(delay)
-        response = client.get(url)
-        if response.status_code == 200:
-            yield normalize(parse_listing(url, response.text))
+    for url in fetch_listing_urls(client):
+        for payload in page(client, url, lambda r: parse_listing(url, r.text), delay):
+            yield normalize(payload)
 
 
 def _ld_nodes(page: str) -> list[dict[str, Any]]:

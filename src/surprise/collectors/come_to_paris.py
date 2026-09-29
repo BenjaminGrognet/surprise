@@ -11,14 +11,13 @@ Museum pages that give no address get the place's on OpenStreetMap, by name.
 import html
 import json
 import re
-import time as clock
 from typing import Any, Iterator
 
 import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import OFF_TOPIC, Normalized, run, safe_url
+from surprise.collectors.common import OFF_TOPIC, Normalized, page, run, safe_url
 from surprise.collectors.paris_zigzag import is_evening, postal_code, split_venue
 from surprise.enrich import osm_place
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
@@ -158,12 +157,9 @@ def normalize(payload: dict[str, Any]) -> Normalized:
 
 
 def collect(client: httpx.Client, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
-    for index, url in enumerate(fetch_product_urls(client)):
-        if index:
-            clock.sleep(delay)
-        response = client.get(url)
-        if response.status_code == 200:
-            yield normalize(with_osm_address(client, parse_product(url, response.text)))
+    for url in fetch_product_urls(client):
+        for payload in page(client, url, lambda r: with_osm_address(client, parse_product(url, r.text)), delay):
+            yield normalize(payload)
 
 
 def with_osm_address(client: httpx.Client, payload: dict[str, Any]) -> dict[str, Any]:

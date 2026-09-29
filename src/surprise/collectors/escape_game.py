@@ -12,7 +12,6 @@ three players or more is not for a couple.
 
 import html
 import re
-import time as clock
 from datetime import datetime
 from typing import Any, Iterator
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -20,7 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
 
 from surprise.booking import CLOSED
-from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, complete_place, normalize_facts, sitemap, text, utc_now
 from surprise.collectors.paris_zigzag import postal_code
 from surprise.models import RawRecord
@@ -116,14 +115,9 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
     for url in fetch_rooms(client):
-        clock.sleep(delay)
-        try:
-            response = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if response.status_code == 200 and (payload := parse_room(url, response.text)):
-            # "8 Rue Blondel, Paris": the postcode from the coordinates.
-            yield normalize(complete_place(payload), now)
+        # "8 Rue Blondel, Paris": the postcode from the coordinates.
+        for payload in page(client, url, lambda r: complete_place(room) if (room := parse_room(url, r.text)) else None, delay):
+            yield normalize(payload, now)
 
 
 def _clean(url: str) -> str:

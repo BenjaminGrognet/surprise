@@ -77,6 +77,21 @@ def test_require_booking_keeps_open_walk_in_places():
         assert require_booking(client, place("https://bar.example/", "expo")).rejection == "ni gratuit ni réservable en ligne"
 
 
+@respx.mock
+def test_each_page_is_read_once_per_run():
+    from surprise.booking import PageChecks
+
+    site = respx.get("https://club.example/").mock(
+        return_value=httpx.Response(200, text='<a href="https://billetterie.club.example/">Billets</a>')
+    )
+    checks = PageChecks({"https://connu.example/": ("Zenchef", False)})
+    with httpx.Client() as client:
+        assert [booking_engine(client, ["https://club.example/"], checks) for _ in range(3)] == ["billetterie du lieu"] * 3
+        assert booking_engine(client, ["https://connu.example/"], checks) == "Zenchef"  # kept from the store: not read
+    assert site.call_count == 1
+    assert checks.new == {"https://club.example/": ("billetterie du lieu", False)}
+
+
 def test_a_venue_ticketing_page_and_an_organiser_booking_form_count_as_online_booking():
     from surprise.booking import booking_form, own_ticketing
 

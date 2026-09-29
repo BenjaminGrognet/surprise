@@ -87,7 +87,17 @@ create table if not exists availability (
   checked_at text not null default (datetime('now')),
   primary key (source_id, external_id, day, party)
 );
+-- What a booking link or official site says (surprise.booking.page_verdict), read again after a month.
+create table if not exists page_checks (
+  url text primary key,
+  engine text,
+  closed boolean not null,
+  checked_at text not null default (datetime('now'))
+);
 """
+# A page read less than this long ago is not read again: its stored payloads are normalized anew.
+FRESH_DAYS = 7
+PAGE_CHECK_DAYS = 30
 
 
 _LATER_COLUMNS = {
@@ -141,11 +151,12 @@ class LocalStore:
         return self._path.stat().st_mtime_ns
 
     def save_raw_records(self, records: Sequence[RawRecord]) -> int:
-        """Insert raw payloads; an unchanged payload (same hash) is skipped. Returns new rows."""
+        """Insert raw payloads; an unchanged payload (same hash) only gets its new fetch time. Returns rows written."""
         with self._transaction():
             return self._run_many(
                 "insert into raw_records (source_id, external_id, url, payload, content_hash, fetched_at)"
-                " values (?, ?, ?, ?, ?, ?) on conflict do nothing",
+                " values (?, ?, ?, ?, ?, ?) on conflict (source_id, external_id, content_hash)"
+                " do update set fetched_at = excluded.fetched_at, payload = excluded.payload",
                 [
                     (
                         r.source_id,
@@ -178,6 +189,34 @@ class LocalStore:
         return self._run(
             "select r.source_id, r.payload, n.rejection from raw_records r left join normalized n using (source_id, external_id)"
         ).fetchall()
+
+    def fresh_pages(self, source_id: str, days: float = FRESH_DAYS) -> dict[str, list[dict[str, Any]]]:
+        """Payloads of the source's pages read less than `days` ago, by page ("_page"): not to be read again."""
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = self._run(
+            "select r.payload ->> '_page', r.payload from raw_records r join normalized n"
+            " on n.source_id = r.source_id and n.external_id = r.external_id and n.content_hash = r.content_hash"
+            " where r.source_id = ? and r.fetched_at >= ? and r.payload ->> '_page' is not null",
+            (source_id, since),
+        )
+        pages: dict[str, list[dict[str, Any]]] = {}
+        for page, payload in rows:
+            pages.setdefault(page, []).append(json.loads(payload) | {"_cached": True})
+        return pages
+
+    def page_checks(self, days: float = PAGE_CHECK_DAYS) -> dict[str, tuple[str | None, bool]]:
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        rows = self._run("select url, engine, closed from page_checks where checked_at >= ?", (since,))
+        return {url: (engine, bool(closed)) for url, engine, closed in rows}
+
+    def save_page_checks(self, verdicts: dict[str, tuple[str | None, bool]]) -> None:
+        with self._transaction():
+            self._run_many(
+                "insert into page_checks (url, engine, closed) values (?, ?, ?)"
+                " on conflict (url) do update set engine = excluded.engine, closed = excluded.closed,"
+                " checked_at = current_timestamp",
+                [(url, engine, closed) for url, (engine, closed) in verdicts.items()],
+            )
 
     def list_for_moderation(self) -> list[dict[str, Any]]:
         """Normalized activities with their moderation status and a little source context.

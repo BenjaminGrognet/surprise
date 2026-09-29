@@ -8,13 +8,12 @@ verdict (reviewBody) is kept as lead_text. List articles have no Review and
 are skipped.
 """
 
-import time as clock
 from datetime import datetime, timedelta
 from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, ld_address, ld_node, normalize_facts, sitemap, utc_now
 from surprise.collectors.paris_zigzag import PARIS
 from surprise.models import RawRecord
@@ -75,12 +74,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:
     now = now or utc_now()
     for url in fetch_pages(client, now):
-        clock.sleep(delay)
-        try:
-            response = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if response.status_code == 200 and (payload := parse_review(url, response.text)):
+        for payload in page(client, url, lambda r: parse_review(url, r.text), delay):
             yield normalize(payload, now)
 
 

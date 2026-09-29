@@ -17,6 +17,7 @@ from collections import Counter
 
 import httpx
 
+from surprise.booking import PageChecks
 from surprise.collectors.common import USER_AGENT, require_booking
 from surprise.collectors.facts import utc_now
 from surprise.local_store import LocalStore, open_store
@@ -26,7 +27,7 @@ def renormalize(store: LocalStore, sources: list[str] | None = None, rejections:
     """Normalizes the chosen records again and saves them; the count of changes ("rejet → retenue")."""
     rows = [row for row in store.raw_with_rejection() if (not sources or row[0] in sources) and (not rejections or row[2] in rejections)]
     print(f"{len(rows)} fiches à normaliser de nouveau")
-    now, changes, results = utc_now(), Counter(), []
+    now, changes, results, checks = utc_now(), Counter(), [], PageChecks(store.page_checks())
     with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
         for index, (source_id, payload, before) in enumerate(rows, 1):
             try:
@@ -34,7 +35,7 @@ def renormalize(store: LocalStore, sources: list[str] | None = None, rejections:
             except (ImportError, AttributeError):
                 continue
             arguments = (json.loads(payload), now) if "now" in inspect.signature(normalize).parameters else (json.loads(payload),)
-            result = require_booking(client, normalize(*arguments))
+            result = require_booking(client, normalize(*arguments), checks)
             results.append(result)
             changes[f"{before or 'retenue'} → {result.rejection or 'retenue'}"] += 1
             if index % 200 == 0:
@@ -42,6 +43,7 @@ def renormalize(store: LocalStore, sources: list[str] | None = None, rejections:
                 results = []
                 print(f"  {index}/{len(rows)}")
     store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
+    store.save_page_checks(checks.new)
     return changes
 
 

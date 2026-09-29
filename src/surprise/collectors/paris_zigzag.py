@@ -18,7 +18,6 @@ and left for LLM extraction.
 import calendar
 import html
 import re
-import time as clock
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -30,7 +29,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import BOOKING, Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import BOOKING, Normalized, euro_amounts, page, run, safe_url
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "paris_zigzag"
@@ -338,13 +337,10 @@ def collect(client: httpx.Client, now: datetime | None = None, delay: float = DE
     now = now or datetime.now(timezone.utc)
     articles = fetch_articles(client, now.astimezone(PARIS).date())
     without_block = 0
-    for index, article in enumerate(articles):
-        if index:
-            clock.sleep(delay)
-        response = client.get(article.url)
-        if response.status_code != 200:
-            continue
-        blocks = parse_article(article.url, response.text, article.modified)
+    for article in articles:
+        # A fresh article modified since is read again.
+        read = lambda r: parse_article(article.url, r.text, article.modified)  # noqa: E731
+        blocks = page(client, article.url, read, delay, article.modified)
         without_block += not blocks
         for payload in blocks:
             yield normalize(payload, now)

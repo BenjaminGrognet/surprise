@@ -18,9 +18,9 @@ from typing import Any
 
 import httpx
 
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, remembered, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, complete_place, normalize_facts, utc_now
-from surprise.collectors.osm_restaurants import BATCH, USER_AGENT, WORKERS, _website, overpass, read_site
+from surprise.collectors.osm_restaurants import BATCH, USER_AGENT, WORKERS, _website, osm_url, overpass, read_site
 from surprise.models import RawRecord
 
 SOURCE_ID = "osm_loisirs"
@@ -134,9 +134,10 @@ def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Norma
         # Batches keep --limit meaningful: the next websites are read only when asked for.
         for start in range(0, len(venues), BATCH):
             batch = venues[start : start + BATCH]
-            read = pool.map(lambda venue: _read(sites, _website(venue["tags"])), batch)
-            for venue, site in zip(batch, read):
-                yield normalize(facts(venue, site), now)
+            read = pool.map(lambda venue: remembered(osm_url(venue), lambda: facts(venue, _read(sites, _website(venue["tags"])))), batch)
+            for payloads in read:
+                for payload in payloads:
+                    yield normalize(payload, now)
 
 
 def _read(client: httpx.Client, url: str | None) -> dict[str, Any]:
