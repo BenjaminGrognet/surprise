@@ -61,3 +61,21 @@ export async function eveningsHistory(): Promise<EveningHistoryRow[]> {
   if (error) throw new Error(error.message);
   return data as EveningHistoryRow[];
 }
+
+// One evening kept in the couple's history: the route they actually picked, among the ones proposed.
+export async function chooseEvening(input: {
+  pageName: string;
+  routeIndex: number;
+  title: string;
+  pitch: string;
+  vibes: string[];
+  day: string | null;
+}) {
+  const user = await currentUser();
+  if (!user) throw new Error('Connectez-vous pour la garder dans votre historique.');
+  const { error } = await supabase.from('soirees_choisies').insert({
+    user_id: user.id, page_name: input.pageName, route_index: input.routeIndex,
+    title: input.title, pitch: input.pitch, vibes: input.vibes, day: input.day,
+  });
+  if (error) throw new Error(error.message);
+}

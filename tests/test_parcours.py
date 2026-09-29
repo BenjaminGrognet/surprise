@@ -189,19 +189,20 @@ def test_one_step_is_replaced_and_the_evening_still_chains():
     assert parcours.replace_step(route, 1, candidates, req, {("test", "immersif"), ("test", "autre")}) is None
 
 
-def test_regenerate_rewrites_the_page(tmp_path, monkeypatch):
+def test_regenerate_rewrites_the_saved_state(tmp_path, monkeypatch):
     req, candidates, route = _night()
     monkeypatch.setattr(parcours, "OUTPUT_DIR", tmp_path)
     monkeypatch.setattr(parcours, "candidates_for", lambda store, base, request, checks: candidates)
     parcours.name_by_rules(route, req)
     route.request = req
-    page = parcours.save("essai", {"routes": [route], "requests": [req], "seen": {s.candidate.key for s in route.steps}})
-    assert 'data-page="essai"' in page.read_text(encoding="utf-8") and 'data-redo="routes/0/steps/1"' in page.read_text(encoding="utf-8")
+    parcours.save("essai", {"routes": [route], "requests": [req], "seen": {s.candidate.key for s in route.steps}})
+    assert parcours.soiree_json("essai", parcours.load("essai"))["routes"][0]["steps"][1]["redo"] == "routes/0/steps/1"
 
     assert parcours.regenerate(None, None, "essai", 0, 1, claude=False) is None
     state = parcours.load("essai")
     assert [s.candidate.key[1] for s in state["routes"][0].steps] == ["bar", "autre", "club"]
-    assert ("test", "autre") in state["seen"] and "Parcours sensoriel dans le noir" in page.read_text(encoding="utf-8")
+    assert ("test", "autre") in state["seen"]
+    assert parcours.soiree_json("essai", state)["routes"][0]["steps"][1]["title"] == "Parcours sensoriel dans le noir"
     # The only other evening would repeat a step: the whole route has no other draw.
     assert parcours.regenerate(None, None, "essai", 0, claude=False) == "aucun autre parcours complet ce soir-là"
     assert parcours.regenerate(None, None, "absent", 0, claude=False) == "parcours introuvable : relancez la composition"
@@ -217,22 +218,21 @@ def test_no_stag_party_and_no_late_dinner():
     assert parcours.build_candidate(restaurant, request(), late) is None
 
 
-def test_claude_titles_come_after_the_page(tmp_path, monkeypatch):
+def test_claude_titles_come_after_saving(tmp_path, monkeypatch):
     req, _, route = _night()
     monkeypatch.setattr(parcours, "OUTPUT_DIR", tmp_path)
     parcours.name_by_rules(route, req)
     route.request = req
     parcours.save("essai", {"routes": [route], "requests": [req], "seen": set(), "naming": 1})
-    assert '<main class="page" data-page="essai" data-naming="1">' in (tmp_path / "essai.html").read_text(encoding="utf-8")
+    assert parcours.load("essai")["naming"] == 1
 
     def named(routes, request):
         routes[0].title, routes[0].pitch = "Nuit secrète", "Un verre, puis l'inconnu."
 
     monkeypatch.setattr(parcours, "name_with_claude", named)
     parcours._name_later("essai", [route], req)
-    page = (tmp_path / "essai.html").read_text(encoding="utf-8")
-    assert "Nuit secrète" in page and '<main class="page" data-page="essai">' in page
-    assert parcours.load("essai")["naming"] == 0
+    state = parcours.load("essai")
+    assert state["routes"][0].title == "Nuit secrète" and state["naming"] == 0
 
 
 def test_each_site_is_asked_every_half_second_at_most():

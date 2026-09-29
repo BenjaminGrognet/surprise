@@ -12,9 +12,9 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, saveAccountProfile } from '@/lib/account';
-import { getProfile, getQuiz, saveProfile, type Question, type QuizData, type SavedProfile } from '@/lib/api';
+import { getQuiz, saveProfile, type Profile, type Question, type QuizData } from '@/lib/api';
 import { longDay, nextFriday } from '@/lib/dates';
-import { rememberProfile } from '@/lib/local-store';
+import { rememberedProfile, rememberProfile } from '@/lib/local-store';
 
 const BANNER = 'https://images.unsplash.com/photo-1545343403-03e407630152?auto=format&fit=crop&w=1600&q=60';
 
@@ -32,23 +32,23 @@ const PERSONA_BANNERS: Record<string, string> = {
 type Phase = 'loading' | 'quiz' | 'saving' | 'error' | 'reveal';
 
 export default function ProfilScreen() {
-  const { p } = useLocalSearchParams<{ p?: string }>();
+  const { new: isNew } = useLocalSearchParams<{ new?: string }>();
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
-  const [result, setResult] = useState<SavedProfile | null>(null);
+  const [result, setResult] = useState<Profile | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
 
   async function submit(finalAnswers: Record<string, unknown>) {
     setAnswers(finalAnswers);
     setPhase('saving');
     try {
-      const saved = await saveProfile(finalAnswers);
-      await rememberProfile(saved.id);
+      const profile = await saveProfile(finalAnswers);
+      await rememberProfile(finalAnswers, profile);
       // Best-effort: a signed-in couple also keeps their profile on their account, so it
       // follows them to another device. The local copy above always works, account or not.
-      currentUser().then((user) => user && saveAccountProfile(finalAnswers, saved.profile).catch(() => {}));
-      setResult(saved);
+      currentUser().then((user) => user && saveAccountProfile(finalAnswers, profile).catch(() => {}));
+      setResult(profile);
       setPhase('reveal');
     } catch {
       setPhase('error');
@@ -59,17 +59,14 @@ export default function ProfilScreen() {
     (async () => {
       const data = await getQuiz();
       setQuiz(data);
-      if (p) {
-        try {
-          const found = await getProfile(p);
-          setAnswers(found.answers);
-          setResult(found);
+      if (!isNew) {
+        const remembered = await rememberedProfile();
+        if (remembered) {
+          setAnswers(remembered.answers);
+          setResult(remembered.profile);
           setPhase('reveal');
           return;
-        } catch {
-          // Unknown id: fall through to a fresh quiz.
         }
-      } else {
         const user = await currentUser().catch(() => null);
         if (user) {
           const found = await accountProfile().catch(() => null);
@@ -78,7 +75,7 @@ export default function ProfilScreen() {
       }
       setPhase('quiz');
     })();
-  }, [p]);
+  }, [isNew]);
 
 
   if (phase === 'loading' || phase === 'saving' || !quiz) {
@@ -221,16 +218,15 @@ function QuestionBody({
 function Reveal({
   quiz,
   answers,
-  profile,
+  profile: p,
   onRestart,
 }: {
   quiz: QuizData;
   answers: Record<string, unknown>;
-  profile: SavedProfile;
+  profile: Profile;
   onRestart: () => void;
 }) {
   const theme = useTheme();
-  const p = profile.profile;
   const eviter = quiz.questions.find((q) => q.id === 'eviter');
   const chosen = (answers.eviter as string[] | undefined) ?? [];
   const never = chosen.map((v) => eviter?.options?.find((o) => o.value === v)).filter((o): o is NonNullable<typeof o> => !!o);
@@ -271,7 +267,7 @@ function Reveal({
         )}
         <View style={styles.nav}>
           <TextButton onPress={onRestart}>Recommencer</TextButton>
-          <PrimaryLink href={{ pathname: '/soiree', params: { p: profile.id } }}>Préparer une soirée</PrimaryLink>
+          <PrimaryLink href="/soiree">Préparer une soirée</PrimaryLink>
         </View>
       </View>
     </>

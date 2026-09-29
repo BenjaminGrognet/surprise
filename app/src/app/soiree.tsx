@@ -1,17 +1,22 @@
-import { useLocalSearchParams } from 'expo-router';
 import { type ReactNode, useEffect, useState } from 'react';
-import { Image, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountNav } from '@/components/account-nav';
-import { PrimaryButton, TextLink } from '@/components/buttons';
+import { PrimaryButton, TextButton, TextLink } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
 import { OptionButton, OptionRow } from '@/components/option-button';
+import { RouteResult } from '@/components/route-result';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { API_URL, getProfile, getSoiree, composeSoiree, type Night, type SavedProfile, type SoireeData } from '@/lib/api';
+import { chooseEvening, currentUser } from '@/lib/account';
+import {
+  composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart,
+  type ComposedSoiree, type Night, type Profile, type SoireeData,
+} from '@/lib/api';
 import { isoDay, longDay, nextFriday } from '@/lib/dates';
+import { rememberedProfile } from '@/lib/local-store';
 
 const BANNER = 'https://images.unsplash.com/photo-1671691302268-e316f81c7b3e?auto=format&fit=crop&w=1600&q=60';
 
@@ -23,33 +28,55 @@ const NIGHTS = [
   { value: false, label: 'On rentre chez nous', emoji: '🏠' },
   { value: true, label: 'On découche : une nuit dans un hôtel ou une love room', emoji: '🛏️' },
 ];
+// While Claude's titles are still coming, poll for up to a minute, every couple of seconds.
+const NAMING_TIMEOUT_MS = 60000;
+const NAMING_POLL_MS = 2000;
 
 export default function SoireeScreen() {
-  const { p } = useLocalSearchParams<{ p?: string }>();
   const [data, setData] = useState<SoireeData | null>(null);
-  const [profile, setProfile] = useState<SavedProfile | null>(null);
+  const [vibes, setVibes] = useState<Record<string, string>>({});
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [night, setNight] = useState<Night>({
     envies: [], diner: null, decoucher: false, occasion: null, start: null, end: null, budget: null, day: nextFriday(), profile: null,
   });
   const [status, setStatus] = useState<'idle' | 'composing' | 'error'>('idle');
+  const [composed, setComposed] = useState<ComposedSoiree | null>(null);
+  const [busyRedo, setBusyRedo] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<Set<number>>(new Set());
+  // 'signin': not signed in, needs a link to /compte. A string: a plain error message.
+  const [notice, setNotice] = useState<'signin' | string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const soiree = await getSoiree();
+      const [soiree, quiz] = await Promise.all([getSoiree(), getQuiz()]);
       setData(soiree);
-      if (p) {
-        const found = await getProfile(p).catch(() => null);
-        if (found) {
-          setProfile(found);
-          setNight((n) => ({
-            ...n,
-            profile: found.id,
-            day: found.profile.first_day && found.profile.first_day >= isoDay(new Date()) ? found.profile.first_day : n.day,
-          }));
-        }
+      setVibes(quiz.vibes);
+      const remembered = await rememberedProfile();
+      if (remembered) {
+        setProfile(remembered.profile);
+        setNight((n) => ({
+          ...n,
+          profile: remembered.profile,
+          day: remembered.profile.first_day && remembered.profile.first_day >= isoDay(new Date()) ? remembered.profile.first_day : n.day,
+        }));
       }
     })();
-  }, [p]);
+  }, []);
+
+  // Claude's titles arrive a few seconds after the composition: poll until they do.
+  useEffect(() => {
+    if (!composed?.naming) return;
+    const since = Date.now();
+    let cancelled = false;
+    const poll = async () => {
+      const fresh = await getSoireeState(composed.name).catch(() => null);
+      if (cancelled) return;
+      if (fresh && !fresh.naming) return setComposed(fresh);
+      if (Date.now() - since < NAMING_TIMEOUT_MS) setTimeout(poll, NAMING_POLL_MS);
+    };
+    const timer = setTimeout(poll, NAMING_POLL_MS);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [composed?.naming, composed?.name]);
 
   if (!data) {
     return (
@@ -62,12 +89,77 @@ export default function SoireeScreen() {
   async function compose() {
     setStatus('composing');
     try {
-      const { url } = await composeSoiree(night);
-      await Linking.openURL(`${API_URL}${url}`);
+      setComposed(await composeSoiree(night));
+      setChosen(new Set());
       setStatus('idle');
     } catch {
       setStatus('error');
     }
+  }
+
+  async function redo(redoPath: string) {
+    if (!composed) return;
+    setBusyRedo(redoPath);
+    setNotice(null);
+    try {
+      setComposed(await redoPart(composed.name, redoPath));
+    } catch {
+      setNotice('Pas de nouvelle proposition : réessayez dans un instant.');
+    } finally {
+      setBusyRedo(null);
+    }
+  }
+
+  async function choose(route: ComposedSoiree['routes'][number]) {
+    if (!composed) return;
+    setNotice(null);
+    if (!(await currentUser())) {
+      setNotice('signin');
+      return;
+    }
+    try {
+      await chooseEvening({
+        pageName: composed.name, routeIndex: route.index, title: route.title, pitch: route.pitch,
+        vibes: composed.vibes.map((v) => vibes[v] || v), day: route.day,
+      });
+      setChosen((prev) => new Set(prev).add(route.index));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Impossible de la garder.');
+    }
+  }
+
+  if (composed) {
+    return (
+      <Screen>
+        <AccountNav />
+        <TextButton onPress={() => setComposed(null)}>← Recomposer la soirée</TextButton>
+        <ThemedText type="title" style={styles.sub}>
+          {composed.routes.length > 0 ? `${composed.routes.length} soirées pour vous deux` : 'Aucun parcours ce soir-là'}
+        </ThemedText>
+        {composed.routes.length === 0 ? (
+          <ThemedText themeColor="textSecondary">Élargissez les horaires, le budget ou les envies, et recomposez.</ThemedText>
+        ) : null}
+        {notice === 'signin' ? (
+          <ThemedView type="backgroundElement" style={styles.profileLine}>
+            <ThemedText type="small" themeColor="textSecondary">Connectez-vous pour garder cette soirée dans votre historique. </ThemedText>
+            <TextLink href="/compte">Aller à mon compte</TextLink>
+          </ThemedView>
+        ) : notice ? (
+          <ThemedText style={styles.error}>{notice}</ThemedText>
+        ) : null}
+        {composed.routes.map((route) => (
+          <RouteResult
+            key={route.index}
+            route={route}
+            vibes={vibes}
+            chosen={chosen.has(route.index)}
+            busyRedo={busyRedo}
+            onRedo={redo}
+            onChoose={() => choose(route)}
+          />
+        ))}
+      </Screen>
+    );
   }
 
   function toggleEnvie(value: string) {
@@ -80,7 +172,7 @@ export default function SoireeScreen() {
   const toggleStart = (value: string) => setNight((n) => ({ ...n, start: n.start === value ? null : value }));
   const toggleEnd = (value: string) => setNight((n) => ({ ...n, end: n.end === value ? null : value }));
 
-  const p2 = profile?.profile;
+  const p2 = profile;
   const ready = night.envies.length > 0 && night.diner !== null && !!night.day;
 
   return (
@@ -92,7 +184,7 @@ export default function SoireeScreen() {
             {p2.names || p2.persona.name}
             {p2.names ? ` · ${p2.persona.name}` : ''} — vos « jamais », votre budget et vos goûts s&apos;appliquent.{' '}
           </ThemedText>
-          <TextLink href={{ pathname: '/profil', params: { p: profile!.id } }}>Voir le profil</TextLink>
+          <TextLink href="/profil">Voir le profil</TextLink>
         </ThemedView>
       ) : (
         <ThemedView type="backgroundElement" style={styles.profileLine}>

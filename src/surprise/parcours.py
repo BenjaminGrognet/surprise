@@ -1099,11 +1099,84 @@ def name_with_claude(routes: list[Route], request: Request) -> bool:
 # Page -----------------------------------------------------------------------
 
 
+def _image_url(item: dict[str, Any]) -> str | None:
+    """The activity's photo, copied locally first when the source forbids showing it elsewhere."""
+    image = item["enrichment"].get("image_url") or ((item["activity"].get("image") or {}).get("url"))
+    if images.needs_copy(image):
+        copy = images.local_copy(image)
+        image = f"/images/{copy.name}" if copy else None
+    return image
+
+
+def _booking(c: Candidate, item: dict[str, Any]) -> tuple[str | None, str]:
+    """Where to book or see an activity, and what that link is for."""
+    if c.kind == "sans_resa":
+        return str(item["activity"].get("website") or item.get("source_url") or "") or None, "voir_lieu"
+    if c.price == 0:
+        return c.booking_url or item.get("source_url") or None, "voir_fiche"
+    return c.booking_url or item.get("source_url") or None, "reserver"
+
+
+def step_json(step: Step, redo: str | None) -> dict[str, Any]:
+    """One step of a route, its data reshaped for a client to display however it likes."""
+    c, item = step.candidate, step.candidate.item
+    link, action = _booking(c, item)
+    return {
+        "start": step.start.isoformat(), "end": step.end.isoformat(),
+        "travel_minutes": step.travel, "distance_km": step.distance,
+        "title": c.title, "venue": c.venue, "arrondissement": c.arrondissement,
+        "town": (item["activity"].get("venue") or {}).get("town"),
+        "lat": c.lat, "lon": c.lon,
+        "role": c.role, "kind": c.kind,
+        "price": c.price, "price_estimated": c.price_estimated,
+        "booking_url": link, "booking_action": action,
+        "image_url": _image_url(item),
+        "text": item["enrichment"].get("description") or (item.get("lead_text") or "").strip() or None,
+        "vibes": c.vibes, "keywords": c.keywords, "originality": c.originality,
+        "basis": step.basis,
+        "source_id": item["source_id"], "source_name": source_name(item["source_id"]),
+        "redo": redo,
+    }
+
+
+def route_json(index: int, route: Route) -> dict[str, Any]:
+    """One route (an evening's timeline), its data reshaped for a client to display however it likes."""
+    steps = [step_json(step, f"routes/{index}/steps/{position}") for position, step in enumerate(route.steps)]
+    return {
+        "index": index, "title": route.title, "pitch": route.pitch,
+        "day": route.steps[0].start.date().isoformat(),
+        "start": route.steps[0].start.isoformat(), "end": route.steps[-1].end.isoformat(),
+        "price": route.price, "price_estimated": any(s.candidate.price_estimated for s in route.steps),
+        "steps": steps,
+        "night": step_json(route.night, None) if route.night else None,
+        "redo": f"routes/{index}",
+    }
+
+
+def soiree_json(name: str, state: dict[str, Any]) -> dict[str, Any]:
+    """A composed evening (or several), as data: what the client needs to draw it and to ask for a redraw.
+
+    Sent by surprise.quiz in place of a rendered page — see `render()` below, kept for the command line only.
+    """
+    routes, requests = state["routes"], state["requests"]
+    request = requests[0]
+    return {
+        "name": name,
+        "naming": bool(state.get("naming")),  # Claude's titles are still coming; poll GET /api/parcours/<name>
+        "days": [r.day.isoformat() for r in requests],
+        "start": request.start.isoformat(), "end": request.end.isoformat(),
+        "budget": request.budget, "night_budget": request.room_budget if request.overnight else None,
+        "vibes": request.vibes, "trame": request.trame,
+        "routes": [route_json(index, route) for index, route in enumerate(routes)],
+    }
+
+
 def render(routes: list[Route], request: Request, days: list[date] | None = None, name: str = "", naming: bool = False) -> str:
     """The routes as timelines; with several evenings, each route says its date.
 
-    Served by surprise.quiz, the page (its `name`) offers to draw a route or a step again;
-    while Claude writes the titles (`naming`), it waits for them and reloads.
+    Command-line only (see `write_page`) — surprise.quiz sends `soiree_json` instead. The page (its
+    `name`) offers to draw a route or a step again; while Claude writes the titles (`naming`), it
+    waits for them and reloads.
     """
     days = days or [request.day]
     vibes = "".join(f'<span class="chip">{html.escape(VIBES[v]["label"])}</span>' for v in request.vibes)
@@ -1516,7 +1589,7 @@ def main() -> None:
         ))
 
     with LocalStore(args.db) as store:
-        routes, path = generate(store, requests, args.parcours, args.checks, claude=not args.no_claude)
+        routes, name = generate(store, requests, args.parcours, args.checks, claude=not args.no_claude)
     for index, route in enumerate(routes, 1):
         print(f"\n{index}. {_weekday(route.request.day)} {route.request.day:%d/%m} · {route.title} — {route.price:.0f} € à deux")
         for step in route.steps:
@@ -1524,6 +1597,7 @@ def main() -> None:
         if night := route.night:
             price = f"{'≈ ' if night.candidate.price_estimated else 'dès '}{night.candidate.price:.0f} €"
             print(f"   {night.start:%H:%M}-{night.end:%H:%M}  nuit : {night.candidate.title[:60]}  [{price}, {night.travel} min]")
+    path = write_page(name)
     print(f"\nPage : {path.resolve()}")
     if not args.no_open:
         webbrowser.open(path.resolve().as_uri())
@@ -1532,11 +1606,11 @@ def main() -> None:
 def generate(
     store: LocalStore, requests: list[Request], count: int, checks: int = 60, claude: bool = True, name: str | None = None,
     base: Base | None = None, name_later: bool = False,
-) -> tuple[list[Route], Path]:
-    """The best routes over the evenings asked, named, and the page showing them.
+) -> tuple[list[Route], str]:
+    """The best routes over the evenings asked, named, and the name they are saved under (see `soiree_json`).
 
-    `base`: the activities already loaded (a server keeps them). `name_later`: the page is written at
-    once with titles by rules, and Claude's titles replace them when they come (the page reloads on them).
+    `base`: the activities already loaded (a server keeps them). `name_later`: routes are saved at
+    once, named by rules, and Claude's titles replace them when they come (`soiree_json`'s `naming`).
     """
     base = base or Base.load(store)
     routes: list[Route] = []
@@ -1559,10 +1633,10 @@ def generate(
     name = name or (days[0].isoformat() if len(days) == 1 else f"{days[0].isoformat()}_{days[-1].isoformat()}")
     state = {"routes": routes, "requests": requests, "seen": {s.candidate.key for r in routes for s in r.steps}, "naming": int(later)}
     with _SAVING:
-        path = save(name, state)
+        save(name, state)
     if later:
         threading.Thread(target=_name_later, args=(name, routes, requests[0]), daemon=True).start()
-    return routes, path
+    return routes, name
 
 
 def _route_key(route: Route) -> tuple:
@@ -1594,12 +1668,18 @@ def _name_later(name: str, routes: list[Route], request: Request) -> None:
 _SAVING = threading.RLock()
 
 
-def save(name: str, state: dict[str, Any]) -> Path:
-    """The page and its routes, written under this name."""
+def save(name: str, state: dict[str, Any]) -> None:
+    """The routes and requests behind a composed evening, kept under this name so a route or a
+    step of it can be drawn again (see `regenerate`) — not a page: surprise.quiz sends JSON."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUTPUT_DIR / f"{name}.pkl").write_bytes(pickle.dumps(state))
-    path = OUTPUT_DIR / f"{name}.html"
+
+
+def write_page(name: str) -> Path:
+    """The routes saved under `name`, as a page — command-line only, see `render`."""
+    state = load(name)
     requests = state["requests"]
+    path = OUTPUT_DIR / f"{name}.html"
     path.write_text(render(state["routes"], requests[0], [r.day for r in requests], name, bool(state.get("naming"))), encoding="utf-8")
     return path
 

@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { getProfile, type SavedProfile } from '@/lib/api';
+import type { Profile } from '@/lib/api';
 import { rememberedProfile } from '@/lib/local-store';
 
 const BANNER = 'https://images.unsplash.com/photo-1504730513966-dfcd6e53fdc8?auto=format&fit=crop&w=1600&q=60';
@@ -21,19 +21,13 @@ const STEPS = [
 
 export default function AccueilScreen() {
   const theme = useTheme();
-  const [profile, setProfile] = useState<SavedProfile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const id = await rememberedProfile();
-      if (id) {
-        try {
-          setProfile(await getProfile(id));
-        } catch {
-          // No saved profile reachable — fall back to the first-visit flow below.
-        }
-      }
+      const remembered = await rememberedProfile();
+      setProfile(remembered?.profile ?? null);
       setLoaded(true);
     })();
   }, []);
@@ -77,8 +71,8 @@ export default function AccueilScreen() {
   );
 }
 
-function Start({ profile }: { profile: SavedProfile | null }) {
-  if (!profile) {
+function Start({ profile: p }: { profile: Profile | null }) {
+  if (!p) {
     return (
       <ThemedView style={styles.actions}>
         <PrimaryLink href="/profil">Faire notre profil</PrimaryLink>
@@ -86,7 +80,6 @@ function Start({ profile }: { profile: SavedProfile | null }) {
       </ThemedView>
     );
   }
-  const p = profile.profile;
   return (
     <ThemedView style={styles.persona} type="backgroundElement">
       <ThemedText type="small" themeColor="textSecondary">
@@ -95,9 +88,9 @@ function Start({ profile }: { profile: SavedProfile | null }) {
       <ThemedText type="subtitle">{p.persona.name}</ThemedText>
       <ThemedText>{p.persona.text}</ThemedText>
       <ThemedView style={styles.actions} type="backgroundElement">
-        <PrimaryLink href={{ pathname: '/soiree', params: { p: profile.id } }}>Préparer une soirée</PrimaryLink>
-        <TextLink href={{ pathname: '/profil', params: { p: profile.id } }}>Revoir notre profil</TextLink>
-        <TextLink href="/profil">Refaire le quiz</TextLink>
+        <PrimaryLink href="/soiree">Préparer une soirée</PrimaryLink>
+        <TextLink href="/profil">Revoir notre profil</TextLink>
+        <TextLink href={{ pathname: '/profil', params: { new: '1' } }}>Refaire le quiz</TextLink>
       </ThemedView>
     </ThemedView>
   );

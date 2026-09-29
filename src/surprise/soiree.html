@@ -20,7 +20,7 @@
 <script src="/account.js"></script>
 <script>
 // One evening, apart from the questionnaire: up to MAX wishes, an occasion, a day.
-// With a profile (#p=<id>), its refusals, budget, audace and tastes apply; without, default ones.
+// With a remembered profile, its refusals, budget, audace and tastes apply; without, default ones.
 const state = {
   envies: [], occasions: [], starts: [], ends: [], budgets: [], max: 3, profile: null,
   night: { envies: [], diner: null, decoucher: false, occasion: null, start: null, end: null, budget: null, day: nextFriday() },
@@ -35,8 +35,7 @@ const NIGHTS = [
 ];
 
 function render() {
-  const { night, profile: found } = state;
-  const p = found?.profile;
+  const { night, profile: p } = state;
   const status = h("div", { id: "status" });
   const envies = h("div", { class: "options", role: "group", "aria-labelledby": "q-title" },
     state.envies.map((o) => {
@@ -79,7 +78,7 @@ function render() {
   $("screen").replaceChildren(
     p
       ? h("p", { class: "profile-line" }, h("strong", {}, p.names || p.persona.name), p.names ? ` · ${p.persona.name}` : "",
-          " — vos « jamais », votre budget et vos goûts s'appliquent. ", h("a", { href: `/#p=${found.id}` }, "Voir le profil"))
+          " — vos « jamais », votre budget et vos goûts s'appliquent. ", h("a", { href: "/profil" }, "Voir le profil"))
       : h("p", { class: "profile-line" }, "Sans profil, on compose avec des réglages par défaut. ", h("a", { href: "/profil" }, "Faire le quiz")),
     h("h1", { id: "q-title" }, "Ce soir, envie de quoi ?"),
     h("p", { class: "hint" }, `Jusqu'à ${state.max} envies, on les mêle dans la soirée.`),
@@ -112,7 +111,7 @@ async function compose(status) {
   const { night } = state;
   status.replaceChildren(h("div", { class: "loading" }, h("div", { class: "spinner" }), `On vérifie les disponibilités et on compose votre soirée du ${longDay(night.day)}… (une minute environ)`));
   try {
-    const body = JSON.stringify({ ...night, profile: state.profile?.id || null });
+    const body = JSON.stringify({ ...night, profile: state.profile || null });
     const r = await fetch("/api/soirees", { method: "POST", headers: { "Content-Type": "application/json" }, body });
     if (!r.ok) throw new Error(r.status);
     const { url } = await r.json();
@@ -126,14 +125,11 @@ async function compose(status) {
   renderAccountNav($("account-nav"));
   const data = await (await fetch("/api/soiree")).json();
   Object.assign(state, { envies: data.envies, occasions: data.occasions, max: data.max, starts: data.starts, ends: data.ends, budgets: data.budgets });
-  const saved = location.hash.match(/p=([\w-]+)/);
-  if (saved) {
-    const r = await fetch(`/api/profiles/${saved[1]}`);
-    if (r.ok) {
-      state.profile = await r.json();
-      const first = state.profile.profile.first_day;
-      if (first && first >= isoDay(new Date())) state.night.day = first;
-    }
+  const remembered = rememberedProfile();
+  if (remembered) {
+    state.profile = remembered.profile;
+    const first = state.profile.first_day;
+    if (first && first >= isoDay(new Date())) state.night.day = first;
   }
   render();
 })();

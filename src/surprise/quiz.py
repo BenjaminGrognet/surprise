@@ -257,6 +257,28 @@ def valid_day(value: Any) -> str | None:
         return None
 
 
+def valid_profile(value: Any) -> dict[str, Any] | None:
+    """A profile as the page sends it back (its own, computed by /api/profiles or synced from Supabase), or None.
+
+    The profile itself is no longer kept server-side, so this is the trust boundary: reshape it into
+    exactly what `requests_for`/`evening` read, dropping anything unexpected.
+    """
+    if not isinstance(value, dict):
+        return None
+    try:
+        return {
+            "vibes": [v for v in value["vibes"] if v in VIBES][:MAX_VIBES] or ["romantique"],
+            "audace": max(0.0, min(1.0, float(value["audace"]))),
+            "avoid": [v for v in value.get("avoid") or [] if isinstance(v, str)],
+            "prefer": [v for v in value.get("prefer") or [] if isinstance(v, str)],
+            "budget": max(1.0, min(1000.0, float(value["budget"]))),
+            "first_day": valid_day(value.get("first_day")),
+            "names": (str(value["names"])[:80] if value.get("names") else None),
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 ENVIE_KEYS = {envie["value"]: envie for envie in ENVIES}
 OCCASION_KEYS = {occasion["value"]: occasion for occasion in OCCASIONS}
 START_KEYS = {option["value"]: option for option in START_OPTIONS}
@@ -335,7 +357,6 @@ def new_id() -> str:
     return secrets.token_urlsafe(6)
 
 
-_ID = re.compile(r"^[\w-]{4,20}$")
 # /api/parcours/<page>/routes/<index>[/steps/<position>]: draw a route, or one of its steps, again.
 _REDO = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)(?:/steps/(?P<step>\d+))?$")
 BASE_MINUTES = 15
@@ -394,16 +415,12 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
                     "supabaseUrl": os.environ.get("SUPABASE_URL", ""),
                     "supabaseAnonKey": os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_PUBLISHABLE_KEY", ""),
                 })
-            elif path.startswith("/api/profiles/") and _ID.match(path.rsplit("/", 1)[1]):
-                with LocalStore(db_path) as store:
-                    found = store.get_profile(path.rsplit("/", 1)[1])
-                self._send_json(HTTPStatus.OK if found else HTTPStatus.NOT_FOUND, found or {"error": "profil inconnu"})
-            elif re.match(r"^/parcours/[\w-]+\.html$", path):
-                page = parcours.OUTPUT_DIR / path.removeprefix("/parcours/")
-                if page.exists():
-                    self._send(HTTPStatus.OK, page.read_bytes(), "text/html; charset=utf-8")
-                else:
-                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
+            elif re.match(r"^/api/parcours/[\w-]+$", path):
+                # Polled while `naming` (Claude's titles still coming), and to reload a redrawn evening.
+                state = parcours.load(path.rsplit("/", 1)[1])
+                if state is None:
+                    return self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
+                self._send_json(HTTPStatus.OK, parcours.soiree_json(path.rsplit("/", 1)[1], state))
             elif re.match(r"^/images/\w+\.\w+$", path) and (image := images.DIRECTORY / path.removeprefix("/images/")).exists():
                 self._send(HTTPStatus.OK, image.read_bytes(), images.MEDIA_TYPES.get(image.suffix, "application/octet-stream"))
             else:
@@ -421,11 +438,10 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
             except ValueError:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "JSON invalide"})
             if path == "/api/profiles":
+                # Stateless: the couple's profile now lives client-side (localStorage, and Supabase
+                # for a signed-in couple), not here. This only runs the quiz's scoring rules.
                 answers = body.get("answers") if isinstance(body.get("answers"), dict) else {}
-                profile_id, profile = new_id(), profile_from(answers)
-                with LocalStore(db_path) as store:
-                    store.save_profile(profile_id, answers, profile)
-                return self._send_json(HTTPStatus.CREATED, {"id": profile_id, "profile": profile})
+                return self._send_json(HTTPStatus.OK, {"profile": profile_from(answers)})
             if path == "/api/soirees":
                 return self._compose(body)
             if redo := _REDO.match(path):
@@ -448,31 +464,30 @@ def make_handler(db_path: Path, checks: int, warm: bool = False) -> type[BaseHTT
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "budget invalide"})
             day = valid_day(body.get("day"))
             days = [date.fromisoformat(day)] if day else None
-            profile_id = body.get("profile")
+            if body.get("profile") is None:
+                profile = profile_from({})
+            elif (profile := valid_profile(body.get("profile"))) is None:
+                return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "profil invalide"})
             with LocalStore(db_path) as store:
-                if profile_id is None:
-                    profile = profile_from({})
-                elif isinstance(profile_id, str) and _ID.match(profile_id) and (found := store.get_profile(profile_id)):
-                    profile = found["profile"]
-                else:
-                    return self._send_json(HTTPStatus.NOT_FOUND, {"error": "profil inconnu"})
                 overnight = body.get("decoucher") is True
-                name = f"soiree-{profile_id or 'libre'}-{'-'.join(envies)}-{'diner' if body['diner'] else 'sans-diner'}"
+                name = f"soiree-{new_id()}-{'-'.join(envies)}-{'diner' if body['diner'] else 'sans-diner'}"
                 name += "-nuit" if overnight else ""
                 with composing:
-                    routes, page = parcours.generate(
+                    _, name = parcours.generate(
                         store, requests_for(profile, days, envies, occasion, body["diner"], overnight, start, end, budget),
                         count=3, checks=checks, name=name, base=base(store), name_later=True,
                     )
-            self._send_json(HTTPStatus.OK, {"url": f"/parcours/{page.name}", "count": len(routes)})
+                    state = parcours.load(name)
+            self._send_json(HTTPStatus.OK, parcours.soiree_json(name, state))
 
         def _redo(self, name: str, index: int, position: int | None) -> None:
             """Another route in place of route `index`, or another activity at its step `position`."""
             with LocalStore(db_path) as store, composing:
                 error = parcours.regenerate(store, base(store), name, index, position, checks=min(checks, 10))
+                state = parcours.load(name)
             if error:
                 return self._send_json(HTTPStatus.CONFLICT, {"error": error})
-            self._send_json(HTTPStatus.OK, {"url": f"/parcours/{name}.html"})
+            self._send_json(HTTPStatus.OK, parcours.soiree_json(name, state))
 
         def log_message(self, format: str, *args: Any) -> None:
             pass

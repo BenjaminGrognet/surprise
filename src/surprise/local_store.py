@@ -67,13 +67,6 @@ create table if not exists keywords (
   computed_at text not null default (datetime('now')),
   primary key (source_id, external_id)
 );
--- Couples' answers to the questionnaire (surprise.quiz) and the profile drawn from them.
-create table if not exists profiles (
-  id text primary key,
-  answers text not null,
-  profile text not null,
-  created_at text not null default (datetime('now'))
-);
 -- Last answer of the booking engines for a date and a party size (surprise.availability).
 create table if not exists availability (
   source_id text not null,
@@ -254,21 +247,6 @@ class LocalStore:
             }
             for source_id, external_id, activity, lead_text, description in rows
         ]
-
-    def save_profile(self, profile_id: str, answers: dict[str, Any], profile: dict[str, Any]) -> None:
-        with self._db:
-            self._db.execute(
-                "insert or replace into profiles (id, answers, profile) values (?, ?, ?)",
-                (profile_id, json.dumps(answers, ensure_ascii=False), json.dumps(profile, ensure_ascii=False)),
-            )
-
-    def get_profile(self, profile_id: str) -> dict[str, Any] | None:
-        row = self._db.execute("select answers, profile, created_at from profiles where id = ?", (profile_id,)).fetchone()
-        return row and {"id": profile_id, "answers": json.loads(row[0]), "profile": json.loads(row[1]), "created_at": row[2]}
-
-    def list_profiles(self) -> list[dict[str, Any]]:
-        rows = self._db.execute("select id, profile, created_at from profiles order by created_at desc")
-        return [{"id": profile_id, "profile": json.loads(profile), "created_at": created_at} for profile_id, profile, created_at in rows]
 
     def save_keywords(self, keywords: dict[tuple[str, str], str]) -> None:
         """Store each activity's keywords (JSON list), replacing the previous ones."""

@@ -81,24 +81,23 @@ function body(q) {
 async function renderProfile() {
   const screen = $("screen");
   screen.replaceChildren(h("div", { class: "loading" }, h("div", { class: "spinner" }), "On dessine votre profil…"));
-  let saved;
+  let profile;
   try {
     const r = await fetch("/api/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers: state.answers }) });
     if (!r.ok) throw new Error(r.status);
-    saved = await r.json();
+    ({ profile } = await r.json());
   } catch (e) {
     screen.replaceChildren(h("p", { class: "error" }, "Le profil n'a pas pu être enregistré. Réessayez."), h("button", { class: "primary", onclick: renderProfile }, "Réessayer"));
     return;
   }
-  history.replaceState(null, "", `#p=${saved.id}`);
   // Best-effort: a signed-in couple also keeps their profile on their account, so it
   // follows them to another device. The local copy above always works, account or not.
-  if (currentUser()) saveAccountProfile(state.answers, saved.profile).catch(() => {});
-  showProfile(saved.id, saved.profile);
+  if (currentUser()) saveAccountProfile(state.answers, profile).catch(() => {});
+  showProfile(profile);
 }
 
-function showProfile(id, p) {
-  rememberProfile(id);
+function showProfile(p) {
+  rememberProfile(state.answers, p);
   $("bar").style.width = "100%";
   const eviter = state.questions.find((q) => q.id === "eviter");
   const never = (state.answers.eviter || []).map((v) => eviter?.options.find((o) => o.value === v)).filter(Boolean);
@@ -116,8 +115,8 @@ function showProfile(id, p) {
       never.length > 0 && h("p", { class: "never" }, h("strong", {}, "Jamais : "), never.map((o) => o.label.toLowerCase()).join(", ")),
     ),
     h("nav", {},
-      h("button", { class: "link", onclick: () => { state.index = 0; history.replaceState(null, "", "#"); render(); } }, "Recommencer"),
-      h("a", { class: "primary", href: `/soiree#p=${id}` }, "Préparer une soirée")),
+      h("button", { class: "link", onclick: () => { state.index = 0; render(); } }, "Recommencer"),
+      h("a", { class: "primary", href: "/soiree" }, "Préparer une soirée")),
   );
 }
 
@@ -125,13 +124,16 @@ function showProfile(id, p) {
   renderAccountNav($("account-nav"));
   const data = await (await fetch("/api/quiz")).json();
   Object.assign(state, { questions: data.questions, vibes: data.vibes });
-  const saved = location.hash.match(/p=([\w-]+)/);
-  if (saved) {
-    const r = await fetch(`/api/profiles/${saved[1]}`);
-    if (r.ok) { const found = await r.json(); state.answers = found.answers; return showProfile(found.id, found.profile); }
-  } else if (currentUser()) {
+  // "?new": explicitly asked to redo it, skip straight to a fresh quiz.
+  if (new URLSearchParams(location.search).has("new")) return render();
+  const remembered = rememberedProfile();
+  if (remembered) {
+    state.answers = remembered.answers;
+    return showProfile(remembered.profile);
+  }
+  if (currentUser()) {
     // Restore the account's saved answers, then let renderProfile's usual flow give this
-    // device its own local id (soirées are composed against the local store) and sync back.
+    // browser its own local copy and sync back.
     try {
       const found = await accountProfile();
       if (found) { state.answers = found.answers; return renderProfile(); }

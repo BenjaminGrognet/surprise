@@ -7,7 +7,6 @@ from urllib.request import Request, urlopen
 
 from surprise import quiz
 from surprise.categories import CATEGORIES
-from surprise.local_store import LocalStore
 from surprise.tags import TAGS, VIBES
 
 ANSWERS = {
@@ -102,7 +101,21 @@ def test_start_end_and_budget_are_chosen_per_evening_not_in_the_profile():
     assert cheaper.budget == 60
 
 
-def test_profile_is_stored_through_the_api(tmp_path):
+def test_valid_profile_reshapes_the_trusted_fields():
+    profile = quiz.profile_from(ANSWERS)
+    reshaped = quiz.valid_profile(profile)
+    assert reshaped["vibes"] == profile["vibes"] and reshaped["budget"] == profile["budget"]
+    assert reshaped["audace"] == profile["audace"] and reshaped["first_day"] == profile["first_day"]
+
+
+def test_valid_profile_rejects_the_wrong_shape():
+    assert quiz.valid_profile("pas un profil") is None
+    assert quiz.valid_profile({"vibes": ["romantique"]}) is None  # no audace, no budget
+    clamped = quiz.valid_profile({"vibes": ["pas-une-vibe", "romantique"], "audace": 5, "avoid": [1], "budget": 99999})
+    assert clamped["vibes"] == ["romantique"] and clamped["audace"] == 1.0 and clamped["avoid"] == [] and clamped["budget"] == 1000.0
+
+
+def test_profile_is_computed_through_the_api(tmp_path):
     server = ThreadingHTTPServer(("127.0.0.1", 0), quiz.make_handler(tmp_path / "s.db", checks=0))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -110,10 +123,6 @@ def test_profile_is_stored_through_the_api(tmp_path):
         body = json.dumps({"answers": ANSWERS}).encode()
         created = json.load(urlopen(Request(f"{url}/api/profiles", data=body, headers={"Content-Type": "application/json"})))
         assert created["profile"]["persona"]["name"] == "Les Romantiques"
-        fetched = json.load(urlopen(f"{url}/api/profiles/{created['id']}"))
-        assert fetched["answers"]["prenoms"] == "Léa & Sam"
-        with LocalStore(tmp_path / "s.db") as store:
-            assert [p["id"] for p in store.list_profiles()] == [created["id"]]
         evening = json.load(urlopen(f"{url}/api/soiree"))
         assert evening["max"] == 3 and evening["envies"] and evening["occasions"]
         assert evening["starts"] and evening["ends"] and evening["budgets"]
@@ -122,7 +131,7 @@ def test_profile_is_stored_through_the_api(tmp_path):
         assert b"Faire notre profil" in urlopen(f"{url}/").read()
         assert b"profil de couple" in urlopen(f"{url}/profil").read()
         assert b"<title>Surprise" in urlopen(f"{url}/admin").read() and json.load(urlopen(f"{url}/api/meta"))["vibes"]
-        for body, code in [({"envies": [], "diner": True}, 400), ({"envies": ["fete"]}, 400), ({"envies": ["fete"], "diner": False, "profile": "inconnu"}, 404)]:
+        for body, code in [({"envies": [], "diner": True}, 400), ({"envies": ["fete"]}, 400), ({"envies": ["fete"], "diner": False, "profile": "inconnu"}, 400)]:
             request = Request(f"{url}/api/soirees", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
             try:
                 urlopen(request)

@@ -24,8 +24,9 @@ function dayField(id, value, set) {
     h("input", { type: "date", id, min: isoDay(new Date()), value, oninput: (e) => set(e.target.value) }));
 }
 
-// The couple's last profile, for the home page to offer it again (only in this browser).
-function rememberProfile(id) { try { localStorage.setItem("surprise.profile", id); } catch {} }
-function rememberedProfile() { try { return localStorage.getItem("surprise.profile"); } catch { return null; } }
+// The couple's last profile, for the home page to offer it again (only in this browser;
+// a signed-in couple's profile also lives in Supabase, see account.js's accountProfile()).
+function rememberProfile(answers, profile) { try { localStorage.setItem("surprise.profile", JSON.stringify({ answers, profile })); } catch {} }
+function rememberedProfile() { try { return JSON.parse(localStorage.getItem("surprise.profile") || "null"); } catch { return null; } }
 
 const choiceContent = (o) => [h("span", { class: "emoji", "aria-hidden": "true" }, o.emoji), h("span", {}, o.label)];

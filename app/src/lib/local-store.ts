@@ -1,15 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// The couple's last profile id, kept only on this device (mirrors the old localStorage use).
+import type { Profile } from '@/lib/api';
+
+// The couple's last profile, kept only on this device (mirrors the old localStorage use).
+// A signed-in couple's profile also lives in Supabase, see lib/account.ts.
 const KEY = 'surprise.profile';
 
-export async function rememberProfile(id: string) {
-  if (Platform.OS === 'web') return localStorage.setItem(KEY, id);
-  await AsyncStorage.setItem(KEY, id);
+export type RememberedProfile = { answers: Record<string, unknown>; profile: Profile };
+
+async function getItem(key: string) {
+  return Platform.OS === 'web' ? localStorage.getItem(key) : AsyncStorage.getItem(key);
+}
+async function setItem(key: string, value: string) {
+  if (Platform.OS === 'web') return localStorage.setItem(key, value);
+  await AsyncStorage.setItem(key, value);
 }
 
-export async function rememberedProfile(): Promise<string | null> {
-  if (Platform.OS === 'web') return localStorage.getItem(KEY);
-  return AsyncStorage.getItem(KEY);
+export async function rememberProfile(answers: Record<string, unknown>, profile: Profile) {
+  await setItem(KEY, JSON.stringify({ answers, profile }));
+}
+
+export async function rememberedProfile(): Promise<RememberedProfile | null> {
+  try {
+    return JSON.parse((await getItem(KEY)) || 'null');
+  } catch {
+    return null;
+  }
 }

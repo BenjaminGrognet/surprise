@@ -20,8 +20,6 @@ export type Profile = {
   budget: number;
   audace: number;
 };
-export type SavedProfile = { id: string; profile: Profile; answers: Record<string, unknown> };
-
 export type QuizOption = { value: unknown; label?: string; emoji?: string };
 export type Question = {
   id: string;
@@ -34,9 +32,10 @@ export type Question = {
 export type QuizData = { questions: Question[]; vibes: Record<string, string> };
 
 export const getQuiz = () => api<QuizData>('/api/quiz');
-export const getProfile = (id: string) => api<SavedProfile>(`/api/profiles/${encodeURIComponent(id)}`);
+// Stateless: the server only scores the answers, it doesn't keep them — the profile itself
+// lives on this device (see lib/local-store.ts) and, for a signed-in couple, in Supabase.
 export const saveProfile = (answers: Record<string, unknown>) =>
-  api<SavedProfile>('/api/profiles', { method: 'POST', body: JSON.stringify({ answers }) });
+  api<{ profile: Profile }>('/api/profiles', { method: 'POST', body: JSON.stringify({ answers }) }).then((r) => r.profile);
 
 export type ChipOption = { value: string; label: string; emoji?: string };
 export type BudgetOption = { budget: number; label: string; emoji?: string };
@@ -57,9 +56,67 @@ export type Night = {
   end: string | null;
   budget: number | null;
   day: string;
-  profile: string | null;
+  profile: Profile | null;
 };
 
 export const getSoiree = () => api<SoireeData>('/api/soiree');
-export const composeSoiree = (night: Night) =>
-  api<{ url: string; count: number }>('/api/soirees', { method: 'POST', body: JSON.stringify(night) });
+
+// One step of a composed route (surprise.parcours.step_json): all the raw data, no HTML —
+// this screen decides how to lay it out.
+export type SoireeStep = {
+  start: string;
+  end: string;
+  travel_minutes: number;
+  distance_km: number;
+  title: string;
+  venue: string;
+  arrondissement: number | null;
+  town: string | null;
+  lat: number;
+  lon: number;
+  role: 'repas' | 'verre' | 'sortie' | 'nuit';
+  kind: 'verifie' | 'seance' | 'gratuit' | 'sans_resa' | 'nuit';
+  price: number;
+  price_estimated: boolean;
+  booking_url: string | null;
+  booking_action: 'voir_lieu' | 'voir_fiche' | 'reserver';
+  image_url: string | null;
+  text: string | null;
+  vibes: string[];
+  keywords: string[];
+  originality: number;
+  basis: string;
+  source_id: string;
+  source_name: string;
+  redo: string | null;
+};
+export type SoireeRoute = {
+  index: number;
+  title: string;
+  pitch: string;
+  day: string;
+  start: string;
+  end: string;
+  price: number;
+  price_estimated: boolean;
+  steps: SoireeStep[];
+  night: SoireeStep | null;
+  redo: string;
+};
+export type ComposedSoiree = {
+  name: string;
+  naming: boolean; // Claude's titles are still coming: poll getSoireeState until it clears
+  days: string[];
+  start: string;
+  end: string;
+  budget: number;
+  night_budget: number | null;
+  vibes: string[];
+  trame: string[];
+  routes: SoireeRoute[];
+};
+
+export const composeSoiree = (night: Night) => api<ComposedSoiree>('/api/soirees', { method: 'POST', body: JSON.stringify(night) });
+export const getSoireeState = (name: string) => api<ComposedSoiree>(`/api/parcours/${encodeURIComponent(name)}`);
+export const redoPart = (name: string, redo: string) =>
+  api<ComposedSoiree>(`/api/parcours/${name}/${redo}`, { method: 'POST', body: '{}' });

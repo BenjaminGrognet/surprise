@@ -42,19 +42,14 @@ function start(profile) {
       h("h2", {}, p.persona.name),
       h("p", {}, p.persona.text)),
     h("div", { class: "actions" },
-      h("a", { class: "primary", href: `/soiree#p=${profile.id}` }, "Préparer une soirée"),
-      h("a", { class: "link", href: `/profil#p=${profile.id}` }, "Revoir notre profil"),
-      h("a", { class: "link", href: "/profil" }, "Refaire le quiz")));
+      h("a", { class: "primary", href: "/soiree" }, "Préparer une soirée"),
+      h("a", { class: "link", href: "/profil" }, "Revoir notre profil"),
+      h("a", { class: "link", href: "/profil?new" }, "Refaire le quiz")));
 }
 
 (async () => {
   renderAccountNav($("account-nav"));
-  const id = rememberedProfile();
-  let profile = null;
-  if (id) {
-    try { const r = await fetch(`/api/profiles/${encodeURIComponent(id)}`); if (r.ok) profile = await r.json(); } catch {}
-  }
-  start(profile);
+  start(rememberedProfile());
 })();
 </script>
 </body>

@@ -10,3 +10,7 @@ export function nextFriday() {
 
 export const longDay = (day: string) =>
   new Date(`${day}T12:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+// The evening runs on Paris time regardless of the device's own timezone.
+export const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
