@@ -49,22 +49,26 @@ export default function AccueilScreen() {
 
           {loaded && <Start profile={profile} />}
 
-          <View style={styles.progressTrack}>
-            <View style={styles.progressBar} />
-          </View>
-          <ThemedText type="small" themeColor="textSecondary">3 étapes, à votre rythme</ThemedText>
+          {!profile && (
+            <>
+              <View style={styles.progressTrack}>
+                <View style={styles.progressBar} />
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">3 étapes, à votre rythme</ThemedText>
 
-          <ThemedView style={styles.steps}>
-            {STEPS.map((s) => (
-              <ThemedView key={s.title} style={styles.step} type="backgroundElement">
-                <ThemedText style={styles.stepEmoji}>{s.emoji}</ThemedText>
-                <ThemedView style={styles.stepBody} type="backgroundElement">
-                  <ThemedText type="smallBold">{s.title}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">{s.text}</ThemedText>
-                </ThemedView>
+              <ThemedView style={styles.steps}>
+                {STEPS.map((s) => (
+                  <ThemedView key={s.title} style={styles.step} type="backgroundElement">
+                    <ThemedText style={styles.stepEmoji}>{s.emoji}</ThemedText>
+                    <ThemedView style={styles.stepBody} type="backgroundElement">
+                      <ThemedText type="smallBold">{s.title}</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">{s.text}</ThemedText>
+                    </ThemedView>
+                  </ThemedView>
+                ))}
               </ThemedView>
-            ))}
-          </ThemedView>
+            </>
+          )}
         </SafeAreaView>
       </ScrollView>
     </ThemedView>

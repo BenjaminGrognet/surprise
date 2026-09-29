@@ -17,7 +17,7 @@
   <h1>Des soirées uniques à deux dans Paris.</h1>
   <p class="lead">Dites-nous qui vous êtes, puis ce qui vous fait envie ce soir-là : on compose trois soirées complètes.</p>
   <section id="start" aria-live="polite"></section>
-  <ol>
+  <ol id="steps">
     <li><span class="emoji" aria-hidden="true">💬</span><div><strong>Votre profil, une fois</strong>Quelques questions sur vous deux :
       ce qui vous plaît, ce que vous ne voulez jamais, votre budget.</div></li>
     <li><span class="emoji" aria-hidden="true">✨</span><div><strong>Une envie par soirée</strong>Faire la fête, se poser, pimenter,
@@ -49,7 +49,9 @@ function start(profile) {
 
 (async () => {
   renderAccountNav($("account-nav"));
-  start(rememberedProfile());
+  const remembered = rememberedProfile();
+  start(remembered);
+  if (remembered) $("steps").style.display = "none";
 })();
 </script>
 </body>
