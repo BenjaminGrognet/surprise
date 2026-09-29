@@ -1,0 +1,560 @@
+{
+  ".claude/launch.json": {
+    "mtime": 1790668297.1992931,
+    "seen": 1790672042.4126344,
+    "ast_hash": "2d19ff580f3d6db1a96c106570029518",
+    "semantic_hash": "2d19ff580f3d6db1a96c106570029518"
+  },
+  "pyproject.toml": {
+    "mtime": 1790668297.2229173,
+    "seen": 1790672042.4126394,
+    "ast_hash": "fecca4d6b5bb2dddac25dbd199e40742",
+    "semantic_hash": "fecca4d6b5bb2dddac25dbd199e40742"
+  },
+  "src/surprise/__init__.py": {
+    "mtime": 1790668297.4086864,
+    "seen": 1790672042.4126418,
+    "ast_hash": "bbb0875294365cbdc0d00768286cedea",
+    "semantic_hash": "bbb0875294365cbdc0d00768286cedea"
+  },
+  "src/surprise/account.js": {
+    "mtime": 1790668297.41169,
+    "seen": 1790672042.4126434,
+    "ast_hash": "6b382f3422b7d3edcde9a4b4c43481ed",
+    "semantic_hash": "6b382f3422b7d3edcde9a4b4c43481ed"
+  },
+  "src/surprise/admin.py": {
+    "mtime": 1790668297.6926398,
+    "seen": 1790672042.4126446,
+    "ast_hash": "faab3caccc14531c99081868dab40fc2",
+    "semantic_hash": "faab3caccc14531c99081868dab40fc2"
+  },
+  "src/surprise/availability.py": {
+    "mtime": 1790668297.6956618,
+    "seen": 1790672042.4126458,
+    "ast_hash": "58af37d3d999f26306220dea4dab328c",
+    "semantic_hash": "58af37d3d999f26306220dea4dab328c"
+  },
+  "src/surprise/booking.py": {
+    "mtime": 1790668297.697659,
+    "seen": 1790672042.4126472,
+    "ast_hash": "c7e66608767bf566c4f45ed15a32623c",
+    "semantic_hash": "c7e66608767bf566c4f45ed15a32623c"
+  },
+  "src/surprise/categories.py": {
+    "mtime": 1790668297.7002285,
+    "seen": 1790672042.4126482,
+    "ast_hash": "c707891c6b93d98b69b9283c16bdc4d8",
+    "semantic_hash": "c707891c6b93d98b69b9283c16bdc4d8"
+  },
+  "src/surprise/client.js": {
+    "mtime": 1790668297.7052283,
+    "seen": 1790672042.4126492,
+    "ast_hash": "18621ba6e6f97cf892720ce16fbccfd1",
+    "semantic_hash": "18621ba6e6f97cf892720ce16fbccfd1"
+  },
+  "src/surprise/collectors/__init__.py": {
+    "mtime": 1790668297.8963141,
+    "seen": 1790672042.4126506,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "src/surprise/collectors/billetreduc.py": {
+    "mtime": 1790668297.9016514,
+    "seen": 1790672042.4126515,
+    "ast_hash": "874cf9b3b78c45602af202c2fe88a98a",
+    "semantic_hash": "874cf9b3b78c45602af202c2fe88a98a"
+  },
+  "src/surprise/collectors/civitatis.py": {
+    "mtime": 1790668298.027967,
+    "seen": 1790672042.4126527,
+    "ast_hash": "3ba91ba6f7ae6c8b047302e54aa73a4f",
+    "semantic_hash": "3ba91ba6f7ae6c8b047302e54aa73a4f"
+  },
+  "src/surprise/collectors/come_to_paris.py": {
+    "mtime": 1790668298.3146863,
+    "seen": 1790672042.412654,
+    "ast_hash": "e0cec35b3003915e5010c5081eba96f9",
+    "semantic_hash": "e0cec35b3003915e5010c5081eba96f9"
+  },
+  "src/surprise/collectors/common.py": {
+    "mtime": 1790668298.434007,
+    "seen": 1790672042.4126549,
+    "ast_hash": "335e1209cd235f057ca48226a596304e",
+    "semantic_hash": "335e1209cd235f057ca48226a596304e"
+  },
+  "src/surprise/collectors/concerts_paris.py": {
+    "mtime": 1790668298.522684,
+    "seen": 1790672042.412656,
+    "ast_hash": "a0194d6bdd3513680a8640a3ad3dfbda",
+    "semantic_hash": "a0194d6bdd3513680a8640a3ad3dfbda"
+  },
+  "src/surprise/collectors/dice.py": {
+    "mtime": 1790668298.6693425,
+    "seen": 1790672042.4126568,
+    "ast_hash": "f99a825b906c4b2d1d7cacc1350c034b",
+    "semantic_hash": "f99a825b906c4b2d1d7cacc1350c034b"
+  },
+  "src/surprise/collectors/escape_game.py": {
+    "mtime": 1790668298.6733544,
+    "seen": 1790672042.412658,
+    "ast_hash": "48f011fccdfe9880456ef1740b39badc",
+    "semantic_hash": "48f011fccdfe9880456ef1740b39badc"
+  },
+  "src/surprise/collectors/eventbrite.py": {
+    "mtime": 1790668298.6773403,
+    "seen": 1790672042.4126592,
+    "ast_hash": "1839efd12ac68c282aabd268aa3d8196",
+    "semantic_hash": "1839efd12ac68c282aabd268aa3d8196"
+  },
+  "src/surprise/collectors/explore_paris.py": {
+    "mtime": 1790668298.825826,
+    "seen": 1790672042.4126601,
+    "ast_hash": "f558be12a34453f86c4d7d550ce8bfc7",
+    "semantic_hash": "f558be12a34453f86c4d7d550ce8bfc7"
+  },
+  "src/surprise/collectors/facts.py": {
+    "mtime": 1790668299.2364485,
+    "seen": 1790672042.412661,
+    "ast_hash": "2dc13bb7decf30599fbe200054d44653",
+    "semantic_hash": "2dc13bb7decf30599fbe200054d44653"
+  },
+  "src/surprise/collectors/fever.py": {
+    "mtime": 1790668299.4682362,
+    "seen": 1790672042.4126623,
+    "ast_hash": "91a93e3b50d8a9b2fd0be108485b0ada",
+    "semantic_hash": "91a93e3b50d8a9b2fd0be108485b0ada"
+  },
+  "src/surprise/collectors/funbooker.py": {
+    "mtime": 1790668299.5840454,
+    "seen": 1790672042.4126632,
+    "ast_hash": "2de5ccbeb0573dca8ec002034f610ab9",
+    "semantic_hash": "2de5ccbeb0573dca8ec002034f610ab9"
+  },
+  "src/surprise/collectors/getyourguide.py": {
+    "mtime": 1790668299.738063,
+    "seen": 1790672042.4126651,
+    "ast_hash": "f1cbc690be0397185ac935f17b293bfe",
+    "semantic_hash": "f1cbc690be0397185ac935f17b293bfe"
+  },
+  "src/surprise/collectors/le_bonbon.py": {
+    "mtime": 1790668299.7400172,
+    "seen": 1790672042.412666,
+    "ast_hash": "052909315d6c306161b8d056f17b5925",
+    "semantic_hash": "052909315d6c306161b8d056f17b5925"
+  },
+  "src/surprise/collectors/nuits_couple.py": {
+    "mtime": 1790668299.7420158,
+    "seen": 1790672042.412667,
+    "ast_hash": "564d4fbd661890c383358bd0de080f9e",
+    "semantic_hash": "564d4fbd661890c383358bd0de080f9e"
+  },
+  "src/surprise/collectors/osm_loisirs.py": {
+    "mtime": 1790668299.840462,
+    "seen": 1790672042.4126682,
+    "ast_hash": "897699f14fd919399b9b1f4e7127a662",
+    "semantic_hash": "897699f14fd919399b9b1f4e7127a662"
+  },
+  "src/surprise/collectors/osm_restaurants.py": {
+    "mtime": 1790668299.8424523,
+    "seen": 1790672042.4126694,
+    "ast_hash": "d8256bee9cbe22e98bcf46c259cbad48",
+    "semantic_hash": "d8256bee9cbe22e98bcf46c259cbad48"
+  },
+  "src/surprise/collectors/paris_city_game.py": {
+    "mtime": 1790668300.057916,
+    "seen": 1790672042.4126704,
+    "ast_hash": "24b21b45f8b1dd4b525bf10c377f9a28",
+    "semantic_hash": "24b21b45f8b1dd4b525bf10c377f9a28"
+  },
+  "src/surprise/collectors/paris_friendly.py": {
+    "mtime": 1790668300.0639153,
+    "seen": 1790672042.4126716,
+    "ast_hash": "359909ee4bb0e6582a65d4053e673586",
+    "semantic_hash": "359909ee4bb0e6582a65d4053e673586"
+  },
+  "src/surprise/collectors/paris_jetaime.py": {
+    "mtime": 1790668300.1773117,
+    "seen": 1790672042.4126725,
+    "ast_hash": "9def5249f56d9684eace5dd613c63e17",
+    "semantic_hash": "9def5249f56d9684eace5dd613c63e17"
+  },
+  "src/surprise/collectors/paris_jetaime_billetterie.py": {
+    "mtime": 1790668300.1793175,
+    "seen": 1790672042.4126737,
+    "ast_hash": "93734492ff9a325146e3b6296d2b618b",
+    "semantic_hash": "93734492ff9a325146e3b6296d2b618b"
+  },
+  "src/surprise/collectors/paris_secret.py": {
+    "mtime": 1790668300.2044632,
+    "seen": 1790672042.412675,
+    "ast_hash": "6d12536c32a47b21faefad526a7c957d",
+    "semantic_hash": "6d12536c32a47b21faefad526a7c957d"
+  },
+  "src/surprise/collectors/paris_zigzag.py": {
+    "mtime": 1790668300.2335334,
+    "seen": 1790672042.4126759,
+    "ast_hash": "8c2822e6e2f32aa03a8ee588e583e3dd",
+    "semantic_hash": "8c2822e6e2f32aa03a8ee588e583e3dd"
+  },
+  "src/surprise/collectors/que_faire_a_paris.py": {
+    "mtime": 1790668300.4482872,
+    "seen": 1790672042.412677,
+    "ast_hash": "7464610863129bb730fad6e7e10c2b31",
+    "semantic_hash": "7464610863129bb730fad6e7e10c2b31"
+  },
+  "src/surprise/collectors/selections_couple.py": {
+    "mtime": 1790668300.4511495,
+    "seen": 1790672042.4126782,
+    "ast_hash": "fe05cd567119b71be154d2a00c7d0417",
+    "semantic_hash": "fe05cd567119b71be154d2a00c7d0417"
+  },
+  "src/surprise/collectors/shotgun.py": {
+    "mtime": 1790668300.5360143,
+    "seen": 1790672042.4126792,
+    "ast_hash": "349b1276974b35adc44d5b9e9795ad0f",
+    "semantic_hash": "349b1276974b35adc44d5b9e9795ad0f"
+  },
+  "src/surprise/collectors/sortir_a_paris.py": {
+    "mtime": 1790668300.5535443,
+    "seen": 1790672042.4126804,
+    "ast_hash": "1e4ff5057af3eba028e80c026eb55c2e",
+    "semantic_hash": "1e4ff5057af3eba028e80c026eb55c2e"
+  },
+  "src/surprise/collectors/time_out.py": {
+    "mtime": 1790668300.7122731,
+    "seen": 1790672042.4126818,
+    "ast_hash": "c0413b75536a0cf795e3d80b0914bc8e",
+    "semantic_hash": "c0413b75536a0cf795e3d80b0914bc8e"
+  },
+  "src/surprise/collectors/time_out_hotels.py": {
+    "mtime": 1790668300.720273,
+    "seen": 1790672042.4126828,
+    "ast_hash": "ad43e30f1d05f37e2e8bcd6f11978b4e",
+    "semantic_hash": "ad43e30f1d05f37e2e8bcd6f11978b4e"
+  },
+  "src/surprise/collectors/tiqets.py": {
+    "mtime": 1790668300.7222733,
+    "seen": 1790672042.4126837,
+    "ast_hash": "f9134c2f61b19f63c68371a24f2a2cd1",
+    "semantic_hash": "f9134c2f61b19f63c68371a24f2a2cd1"
+  },
+  "src/surprise/collectors/visit_paris_region.py": {
+    "mtime": 1790668300.7262774,
+    "seen": 1790672042.412685,
+    "ast_hash": "69d375dd3ff81f2ddc3f09a61dd543c7",
+    "semantic_hash": "69d375dd3ff81f2ddc3f09a61dd543c7"
+  },
+  "src/surprise/collectors/wecandoo.py": {
+    "mtime": 1790668300.7302773,
+    "seen": 1790672042.412686,
+    "ast_hash": "906b957620bf579b11122ad5f5d4ad34",
+    "semantic_hash": "906b957620bf579b11122ad5f5d4ad34"
+  },
+  "src/surprise/enrich.py": {
+    "mtime": 1790668300.7372923,
+    "seen": 1790672042.4126873,
+    "ast_hash": "6a9693acec3c0a959b42b6278f1847fa",
+    "semantic_hash": "6a9693acec3c0a959b42b6278f1847fa"
+  },
+  "src/surprise/images.py": {
+    "mtime": 1790668300.7422752,
+    "seen": 1790672042.412689,
+    "ast_hash": "60e1e2100c9ecd12e907fafc50712a91",
+    "semantic_hash": "60e1e2100c9ecd12e907fafc50712a91"
+  },
+  "src/surprise/keywords.py": {
+    "mtime": 1790668300.7452765,
+    "seen": 1790672042.4126902,
+    "ast_hash": "4eb58d053fab862f5466fb3fcf646042",
+    "semantic_hash": "4eb58d053fab862f5466fb3fcf646042"
+  },
+  "src/surprise/local_store.py": {
+    "mtime": 1790668300.7482748,
+    "seen": 1790672042.412691,
+    "ast_hash": "a40cd3f6e27dcb892ea2f75bf733d091",
+    "semantic_hash": "a40cd3f6e27dcb892ea2f75bf733d091"
+  },
+  "src/surprise/models.py": {
+    "mtime": 1790668301.026279,
+    "seen": 1790672042.4126923,
+    "ast_hash": "4fb7aa453ab4b84db68eb1415154b262",
+    "semantic_hash": "4fb7aa453ab4b84db68eb1415154b262"
+  },
+  "src/surprise/originality.py": {
+    "mtime": 1790668301.0282788,
+    "seen": 1790672042.4126933,
+    "ast_hash": "5e9bdbaa510fb77f18463dcd7c005e0e",
+    "semantic_hash": "5e9bdbaa510fb77f18463dcd7c005e0e"
+  },
+  "src/surprise/parcours.py": {
+    "mtime": 1790668301.0322902,
+    "seen": 1790672042.4126942,
+    "ast_hash": "05c696583d40fd7bb7883deb4596017b",
+    "semantic_hash": "05c696583d40fd7bb7883deb4596017b"
+  },
+  "src/surprise/quiz.py": {
+    "mtime": 1790668301.0382838,
+    "seen": 1790672042.4126954,
+    "ast_hash": "eb2e8317f9ddc126134ef1e98260e02f",
+    "semantic_hash": "eb2e8317f9ddc126134ef1e98260e02f"
+  },
+  "src/surprise/renormalize.py": {
+    "mtime": 1790668301.040894,
+    "seen": 1790672042.4126964,
+    "ast_hash": "1971a33dd7dea9c078526cf97c356c08",
+    "semantic_hash": "1971a33dd7dea9c078526cf97c356c08"
+  },
+  "src/surprise/sources.py": {
+    "mtime": 1790668301.1943715,
+    "seen": 1790672042.4126976,
+    "ast_hash": "bb1099f88280152f264a30247c4eda79",
+    "semantic_hash": "bb1099f88280152f264a30247c4eda79"
+  },
+  "src/surprise/store.py": {
+    "mtime": 1790668301.3166966,
+    "seen": 1790672042.4126985,
+    "ast_hash": "96dd57c19937fb3cacacd41d31850e0e",
+    "semantic_hash": "96dd57c19937fb3cacacd41d31850e0e"
+  },
+  "src/surprise/tags.py": {
+    "mtime": 1790668301.3188727,
+    "seen": 1790672042.4126997,
+    "ast_hash": "acdb0e65b6f865b76873da5b5484f21a",
+    "semantic_hash": "acdb0e65b6f865b76873da5b5484f21a"
+  },
+  "supabase/migrations/20260924000000_init.sql": {
+    "mtime": 1790668301.5522974,
+    "seen": 1790672042.4127007,
+    "ast_hash": "e5c078db3b6fecf31f0294d933fb9ddd",
+    "semantic_hash": "e5c078db3b6fecf31f0294d933fb9ddd"
+  },
+  "supabase/migrations/20260924000001_paris_zigzag_source.sql": {
+    "mtime": 1790668301.5542974,
+    "seen": 1790672042.4127016,
+    "ast_hash": "d0cc1608f2288ac123efc303ea7224d8",
+    "semantic_hash": "d0cc1608f2288ac123efc303ea7224d8"
+  },
+  "supabase/migrations/20260924000002_activity_categories.sql": {
+    "mtime": 1790668301.8356824,
+    "seen": 1790672042.412703,
+    "ast_hash": "963e03402d7de64df35fda768028c7c4",
+    "semantic_hash": "963e03402d7de64df35fda768028c7c4"
+  },
+  "supabase/migrations/20260924000003_new_sources.sql": {
+    "mtime": 1790668301.8376772,
+    "seen": 1790672042.412704,
+    "ast_hash": "995b3f0ee239e1dbad6ce6078309d0e7",
+    "semantic_hash": "995b3f0ee239e1dbad6ce6078309d0e7"
+  },
+  "supabase/migrations/20260924000004_come_to_paris_paris_secret.sql": {
+    "mtime": 1790668301.8961873,
+    "seen": 1790672042.412705,
+    "ast_hash": "ee6b55c7466d97e3c37e1b050079de8c",
+    "semantic_hash": "ee6b55c7466d97e3c37e1b050079de8c"
+  },
+  "supabase/migrations/20260925000000_more_sources.sql": {
+    "mtime": 1790668302.1239367,
+    "seen": 1790672042.4127061,
+    "ast_hash": "4f377b6d5c8ec172498ab57e3f4336c6",
+    "semantic_hash": "4f377b6d5c8ec172498ab57e3f4336c6"
+  },
+  "supabase/migrations/20260926000000_osm_restaurants.sql": {
+    "mtime": 1790668302.1278813,
+    "seen": 1790672042.412707,
+    "ast_hash": "ce2f27a004ba5b0e924fd200f9a0bdb7",
+    "semantic_hash": "ce2f27a004ba5b0e924fd200f9a0bdb7"
+  },
+  "supabase/migrations/20260926000001_couple_profiles.sql": {
+    "mtime": 1790668302.3595016,
+    "seen": 1790672042.412708,
+    "ast_hash": "c9f64aa0abe5a963336ee24820151d38",
+    "semantic_hash": "c9f64aa0abe5a963336ee24820151d38"
+  },
+  "supabase/migrations/20260926000002_outing_sources.sql": {
+    "mtime": 1790668302.3669496,
+    "seen": 1790672042.4127092,
+    "ast_hash": "fb15aee41ff76f3e16edb9cf67d37d0e",
+    "semantic_hash": "fb15aee41ff76f3e16edb9cf67d37d0e"
+  },
+  "supabase/migrations/20260927000000_accounts_and_history.sql": {
+    "mtime": 1790668302.601871,
+    "seen": 1790672042.4127102,
+    "ast_hash": "9b17da2e4d18adcfe6525344daa1b9a5",
+    "semantic_hash": "9b17da2e4d18adcfe6525344daa1b9a5"
+  },
+  "tests/fixtures/que_faire_a_paris.json": {
+    "mtime": 1790668302.6552477,
+    "seen": 1790672042.4127111,
+    "ast_hash": "0c685b79825e99d0716362fccfcd3647",
+    "semantic_hash": "0c685b79825e99d0716362fccfcd3647"
+  },
+  "tests/test_admin.py": {
+    "mtime": 1790668302.6572568,
+    "seen": 1790672042.412712,
+    "ast_hash": "d534ca67c4e83796bdd9f6da074fe0b5",
+    "semantic_hash": "d534ca67c4e83796bdd9f6da074fe0b5"
+  },
+  "tests/test_availability.py": {
+    "mtime": 1790668302.6592555,
+    "seen": 1790672042.4127133,
+    "ast_hash": "a74eadb44a46a97715ce07d3e59d2787",
+    "semantic_hash": "a74eadb44a46a97715ce07d3e59d2787"
+  },
+  "tests/test_booking.py": {
+    "mtime": 1790668302.97317,
+    "seen": 1790672042.4127142,
+    "ast_hash": "09b0ad3df0008f9d5ac3befaa087bb06",
+    "semantic_hash": "09b0ad3df0008f9d5ac3befaa087bb06"
+  },
+  "tests/test_enrich.py": {
+    "mtime": 1790668303.0441744,
+    "seen": 1790672042.4127154,
+    "ast_hash": "0865b762502e7ff8c044cbd5ec4fc31f",
+    "semantic_hash": "0865b762502e7ff8c044cbd5ec4fc31f"
+  },
+  "tests/test_images.py": {
+    "mtime": 1790668303.0502212,
+    "seen": 1790672042.4127166,
+    "ast_hash": "25b3142060f23da5157bcfff548375b1",
+    "semantic_hash": "25b3142060f23da5157bcfff548375b1"
+  },
+  "tests/test_local_store.py": {
+    "mtime": 1790668303.0566437,
+    "seen": 1790672042.4127176,
+    "ast_hash": "0646c293db5ccfc474673e44ff518080",
+    "semantic_hash": "0646c293db5ccfc474673e44ff518080"
+  },
+  "tests/test_models.py": {
+    "mtime": 1790668303.061674,
+    "seen": 1790672042.4127185,
+    "ast_hash": "c7898eb8b672ec62f3c09edac67ec74b",
+    "semantic_hash": "c7898eb8b672ec62f3c09edac67ec74b"
+  },
+  "tests/test_more_sources.py": {
+    "mtime": 1790668303.0661159,
+    "seen": 1790672042.4127197,
+    "ast_hash": "0b4e17cc3089e58cc9bc9c2ba842099a",
+    "semantic_hash": "0b4e17cc3089e58cc9bc9c2ba842099a"
+  },
+  "tests/test_new_sources.py": {
+    "mtime": 1790668303.0691147,
+    "seen": 1790672042.4127207,
+    "ast_hash": "3b7720b902e3799557b207cae9aa116b",
+    "semantic_hash": "3b7720b902e3799557b207cae9aa116b"
+  },
+  "tests/test_nights.py": {
+    "mtime": 1790668303.2384715,
+    "seen": 1790672042.4127238,
+    "ast_hash": "ae0828b30b81a25965daa7e78236bed1",
+    "semantic_hash": "ae0828b30b81a25965daa7e78236bed1"
+  },
+  "tests/test_originality.py": {
+    "mtime": 1790668303.2421017,
+    "seen": 1790672042.412725,
+    "ast_hash": "bd4c4e7441ee0f4cb7d5ea19247dbb91",
+    "semantic_hash": "bd4c4e7441ee0f4cb7d5ea19247dbb91"
+  },
+  "tests/test_osm_restaurants.py": {
+    "mtime": 1790668303.2461007,
+    "seen": 1790672042.4127269,
+    "ast_hash": "55927e59abb69cc12312da9d0a9a7884",
+    "semantic_hash": "55927e59abb69cc12312da9d0a9a7884"
+  },
+  "tests/test_outing_sources.py": {
+    "mtime": 1790668303.2485533,
+    "seen": 1790672042.4127278,
+    "ast_hash": "3aa7bc29e10223ad2f92118965c96f19",
+    "semantic_hash": "3aa7bc29e10223ad2f92118965c96f19"
+  },
+  "tests/test_parcours.py": {
+    "mtime": 1790668303.2512627,
+    "seen": 1790672042.4127288,
+    "ast_hash": "9d0d4fe74e40119503280b7826a45962",
+    "semantic_hash": "9d0d4fe74e40119503280b7826a45962"
+  },
+  "tests/test_paris_zigzag.py": {
+    "mtime": 1790668303.2539046,
+    "seen": 1790672042.4127297,
+    "ast_hash": "179ea3ffdd0de22412eb5320c0085527",
+    "semantic_hash": "179ea3ffdd0de22412eb5320c0085527"
+  },
+  "tests/test_que_faire_a_paris.py": {
+    "mtime": 1790668303.2559042,
+    "seen": 1790672042.412731,
+    "ast_hash": "40632cb1894ae26c182a6687a5d0cd06",
+    "semantic_hash": "40632cb1894ae26c182a6687a5d0cd06"
+  },
+  "tests/test_quiz.py": {
+    "mtime": 1790668303.2593727,
+    "seen": 1790672042.4127321,
+    "ast_hash": "83f2a1c94e4bb611058bda0976e7f64d",
+    "semantic_hash": "83f2a1c94e4bb611058bda0976e7f64d"
+  },
+  "tests/test_tags.py": {
+    "mtime": 1790668303.484394,
+    "seen": 1790672042.412733,
+    "ast_hash": "9578220efb9da3008e1cfdc002e7e55f",
+    "semantic_hash": "9578220efb9da3008e1cfdc002e7e55f"
+  },
+  "CLAUDE.md": {
+    "mtime": 1790668297.2143369,
+    "seen": 1790672042.4127343,
+    "ast_hash": "860bb70e0e3abc068b6fd9f3f922684a",
+    "semantic_hash": "860bb70e0e3abc068b6fd9f3f922684a"
+  },
+  "README.md": {
+    "mtime": 1790668297.2171187,
+    "seen": 1790672042.4127352,
+    "ast_hash": "0e6c0157617b187b31853dcb270e4b56",
+    "semantic_hash": "0e6c0157617b187b31853dcb270e4b56"
+  },
+  "docs/cadrage.md": {
+    "mtime": 1790668297.2206688,
+    "seen": 1790672042.4127364,
+    "ast_hash": "266b656314427c3231a5a831bdc35d1c",
+    "semantic_hash": "266b656314427c3231a5a831bdc35d1c"
+  },
+  "src/surprise/accueil.html": {
+    "mtime": 1790668297.4126909,
+    "seen": 1790672042.4127421,
+    "ast_hash": "508b6b6fc7029560815070c1a564a5bb",
+    "semantic_hash": "508b6b6fc7029560815070c1a564a5bb"
+  },
+  "src/surprise/admin.html": {
+    "mtime": 1790668297.4146912,
+    "seen": 1790672042.4127443,
+    "ast_hash": "fee16119e26cc6be9092c216a855042e",
+    "semantic_hash": "fee16119e26cc6be9092c216a855042e"
+  },
+  "src/surprise/compte.html": {
+    "mtime": 1790668300.7332766,
+    "seen": 1790672042.4127452,
+    "ast_hash": "f7d4e0d4cf88baeb494e57f3eee60a01",
+    "semantic_hash": "f7d4e0d4cf88baeb494e57f3eee60a01"
+  },
+  "src/surprise/historique.html": {
+    "mtime": 1790668300.7402763,
+    "seen": 1790672042.4127464,
+    "ast_hash": "11aa3459c396e3c201a44a31f41dec90",
+    "semantic_hash": "11aa3459c396e3c201a44a31f41dec90"
+  },
+  "src/surprise/quiz.html": {
+    "mtime": 1790668301.0352807,
+    "seen": 1790672042.4127476,
+    "ast_hash": "2fbd786e8f9f5a5da1bbeddf3343dd48",
+    "semantic_hash": "2fbd786e8f9f5a5da1bbeddf3343dd48"
+  },
+  "src/surprise/soiree.html": {
+    "mtime": 1790668301.0447059,
+    "seen": 1790672042.4127486,
+    "ast_hash": "0e3e3a5b53d6c20a0e76efca420ff128",
+    "semantic_hash": "0e3e3a5b53d6c20a0e76efca420ff128"
+  },
+  "tests/fixtures/paris_zigzag_article.html": {
+    "mtime": 1790668302.6531274,
+    "seen": 1790672042.4127495,
+    "ast_hash": "68e54603f59dbd940ea8debc93518aa2",
+    "semantic_hash": "68e54603f59dbd940ea8debc93518aa2"
+  }
+}
