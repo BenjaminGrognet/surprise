@@ -20,6 +20,8 @@ from surprise.collectors.paris_zigzag import PARIS, WINDOW, _nearest_year
 from surprise.models import RawRecord
 
 SOURCE_ID = "dice"
+# Pages read less than this many days ago are not read again: dated events, soon sold out or rescheduled.
+FRESH_DAYS = 2
 BASE_URL = "https://dice.fm"
 SITEMAP_INDEX = f"{BASE_URL}/sitemaps/sitemap.xml"
 DELAY_SECONDS = 1.0

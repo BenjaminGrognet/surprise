@@ -21,6 +21,8 @@ from surprise.collectors.facts import BROWSER_HEADERS, ld_address, ld_node, norm
 from surprise.models import RawRecord
 
 SOURCE_ID = "shotgun"
+# Pages read less than this many days ago are not read again: dated events, soon sold out or rescheduled.
+FRESH_DAYS = 2
 BASE_URL = "https://shotgun.live"
 PARIS_PAGE = f"{BASE_URL}/fr/cities/paris"
 MAX_PAGE = 1600  # about 22,000 events: far beyond Paris's

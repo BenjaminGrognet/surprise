@@ -28,8 +28,10 @@ uv run --env-file .env python -m surprise.local_store --db data/surprise.db
 ### Collecte complète
 
 `surprise.collect` lance les 30 sources, 4 à la fois (`--jobs`). Chaque source enregistre par lots de 50 fiches au
-fil de l'eau, et une source en échec n'arrête pas les autres. Une page de détail lue il y a moins d'une semaine
-n'est pas relue : ses payloads stockés (`_page`) sont renormalisés à la date du jour, sauf si le sitemap la dit
+fil de l'eau, et une source en échec n'arrête pas les autres. Une page de détail encore fraîche n'est pas relue.
+Le délai est donné par `FRESH_DAYS` dans chaque collecteur : 2 jours pour les événements (Shotgun, Dice, BilletRéduc,
+Eventbrite, Fever), 14 pour les catalogues d'activités, 30 pour les lieux (OSM, hôtels, escape games, Time Out),
+7 par défaut (médias). Ses payloads stockés (`_page`) sont renormalisés à la date du jour, sauf si le sitemap la dit
 modifiée depuis (Paris ZigZag). Une page de réservation ou un site officiel n'est vérifié qu'une fois par mois
 (`pipeline.page_checks`, migration `20260930000000_page_checks.sql`), et une fois par passage même si 46 concerts y
 renvoient. Ces vérifications se font à 16 en parallèle, une seule à la fois par site. Nominatim reste à 1 requête/s.

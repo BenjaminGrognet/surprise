@@ -23,6 +23,8 @@ from surprise.enrich import osm_place
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "come_to_paris"
+# Pages read less than this many days ago are not read again: a catalogue of activities, prices and slots change slowly.
+FRESH_DAYS = 14
 BASE_URL = "https://www.cometoparis.com"
 SITEMAP = f"{BASE_URL}/sitemap.xml"
 USER_AGENT = "surprise-collector/0.1"

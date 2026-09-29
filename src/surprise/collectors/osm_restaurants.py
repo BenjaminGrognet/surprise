@@ -27,6 +27,8 @@ from surprise.collectors.facts import BROWSER_HEADERS, complete_place, normalize
 from surprise.models import RawRecord
 
 SOURCE_ID = "osm_restaurants"
+# Pages read less than this many days ago are not read again: venues, which rarely change.
+FRESH_DAYS = 30
 # The main instance is often busy: its public mirrors answer the same query.
 OVERPASS_URLS = (
     "https://overpass-api.de/api/interpreter",

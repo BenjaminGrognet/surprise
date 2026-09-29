@@ -20,6 +20,8 @@ from surprise.collectors.facts import BROWSER_HEADERS, lines, normalize_facts, s
 from surprise.models import RawRecord
 
 SOURCE_ID = "wecandoo"
+# Pages read less than this many days ago are not read again: a catalogue of activities, prices and slots change slowly.
+FRESH_DAYS = 14
 BASE_URL = "https://wecandoo.fr"
 SITEMAP = f"{BASE_URL}/sitemap.xml"
 DELAY_SECONDS = 1.0

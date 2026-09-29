@@ -19,6 +19,8 @@ from surprise.collectors.paris_zigzag import is_evening
 from surprise.models import RawRecord
 
 SOURCE_ID = "visit_paris_region"
+# Pages read less than this many days ago are not read again: venues, which rarely change.
+FRESH_DAYS = 30
 BASE_URL = "https://www.visitparisregion.com"
 SITEMAP = f"{BASE_URL}/fr/sitemap.xml"
 DELAY_SECONDS = 1.0

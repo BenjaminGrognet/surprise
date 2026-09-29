@@ -24,6 +24,8 @@ from surprise.collectors.time_out import to_raw_record as _to_raw_record
 from surprise.models import RawRecord
 
 SOURCE_ID = "time_out_hotels"
+# Pages read less than this many days ago are not read again: venues, which rarely change.
+FRESH_DAYS = 30
 _NUMBER = r"(\d[\d\s.]*(?:,\d{1,2})?)"
 _NIGHT_RANGE = re.compile(rf"De\s*{_NUMBER}\s*à\s*{_NUMBER}\s*€\s*la nuit", re.IGNORECASE)
 _ROOM_PRICE = re.compile(

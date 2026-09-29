@@ -17,6 +17,8 @@ from surprise.collectors.facts import BROWSER_HEADERS, complete_place, ld_node, 
 from surprise.models import RawRecord
 
 SOURCE_ID = "tiqets"
+# Pages read less than this many days ago are not read again: a catalogue of activities, prices and slots change slowly.
+FRESH_DAYS = 14
 SITEMAP = "https://www.tiqets.com/sitemap/site-map-product-fr.xml.gz"
 DELAY_SECONDS = 1.0
 

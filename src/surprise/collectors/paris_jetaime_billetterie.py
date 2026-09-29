@@ -17,6 +17,8 @@ from surprise.collectors.facts import address_in_text, complete_place, lines, no
 from surprise.models import RawRecord
 
 SOURCE_ID = "paris_jetaime_billetterie"
+# Pages read less than this many days ago are not read again: a catalogue of activities, prices and slots change slowly.
+FRESH_DAYS = 14
 BASE_URL = "https://ticket.parisjetaime.com"
 SITEMAP = f"{BASE_URL}/__sitemap__/fr.xml"
 IMAGE_URL = "https://pjt.imgix.net/"

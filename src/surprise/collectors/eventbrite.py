@@ -18,6 +18,8 @@ from surprise.collectors.facts import BROWSER_HEADERS, ld_address, ld_node, norm
 from surprise.models import RawRecord
 
 SOURCE_ID = "eventbrite"
+# Pages read less than this many days ago are not read again: dated events, soon sold out or rescheduled.
+FRESH_DAYS = 2
 SEARCH_URL = "https://www.eventbrite.fr/d/france--paris/events/"
 DELAY_SECONDS = 1.0
 MAX_PAGES = 30

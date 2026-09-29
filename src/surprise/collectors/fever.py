@@ -17,6 +17,8 @@ from surprise.collectors.facts import BROWSER_HEADERS, complete_place, ld_node, 
 from surprise.models import RawRecord
 
 SOURCE_ID = "fever"
+# Pages read less than this many days ago are not read again: dated events, soon sold out or rescheduled.
+FRESH_DAYS = 2
 BASE_URL = "https://feverup.com"
 CITY_PAGES = [f"{BASE_URL}/fr/paris"]
 DELAY_SECONDS = 1.0

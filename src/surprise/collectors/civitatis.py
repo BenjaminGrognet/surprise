@@ -17,6 +17,8 @@ from surprise.collectors.facts import BROWSER_HEADERS, complete_place, ld_node, 
 from surprise.models import RawRecord
 
 SOURCE_ID = "civitatis"
+# Pages read less than this many days ago are not read again: a catalogue of activities, prices and slots change slowly.
+FRESH_DAYS = 14
 BASE_URL = "https://www.civitatis.com"
 SITEMAP = f"{BASE_URL}/sitemap_fr.xml"
 DELAY_SECONDS = 1.0

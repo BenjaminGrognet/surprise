@@ -19,6 +19,8 @@ from surprise.collectors.paris_zigzag import PARIS
 from surprise.models import RawRecord
 
 SOURCE_ID = "billetreduc"
+# Pages read less than this many days ago are not read again: dated events, soon sold out or rescheduled.
+FRESH_DAYS = 2
 BASE_URL = "https://www.billetreduc.com"
 LIST_URL = f"{BASE_URL}/paris/"
 DELAY_SECONDS = 1.0

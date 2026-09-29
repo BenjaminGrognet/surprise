@@ -20,6 +20,8 @@ from surprise.collectors.facts import BROWSER_HEADERS, address_in_text, complete
 from surprise.models import RawRecord
 
 SOURCE_ID = "getyourguide"
+# Pages read less than this many days ago are not read again: a catalogue of activities, prices and slots change slowly.
+FRESH_DAYS = 14
 SITEMAP_INDEX = "https://www.getyourguide.com/fr-fr/sitemap.xml"
 DELAY_SECONDS = 1.0
 

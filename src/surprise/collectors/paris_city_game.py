@@ -19,6 +19,8 @@ from surprise.collectors.paris_zigzag import postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "paris_city_game"
+# Pages read less than this many days ago are not read again: a catalogue of activities, prices and slots change slowly.
+FRESH_DAYS = 14
 BASE_URL = "https://pariscitygame.fr"
 PROJECTS_URL = f"{BASE_URL}/wp-json/wp/v2/project"
 USER_AGENT = "surprise-collector/0.1"

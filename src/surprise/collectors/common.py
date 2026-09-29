@@ -142,7 +142,9 @@ def collect_source(
     """
     started = clock.monotonic()
     if store and not refresh:
-        _fresh.update(store.fresh_pages(source_id))
+        # Each source says how long its pages stay fresh: a concert changes sooner than a restaurant.
+        days = getattr(sys.modules[collect.__module__], "FRESH_DAYS", None)
+        _fresh.update(store.fresh_pages(source_id, days) if days else store.fresh_pages(source_id))
     checks = PageChecks(store.page_checks() if store else None)
     counts: Counter = Counter()
     with (

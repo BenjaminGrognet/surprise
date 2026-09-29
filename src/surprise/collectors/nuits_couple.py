@@ -25,6 +25,8 @@ from surprise.collectors.selections_couple import parse_article
 from surprise.models import RawRecord
 
 SOURCE_ID = "nuits_couple"
+# Pages read less than this many days ago are not read again: venues, which rarely change.
+FRESH_DAYS = 30
 DELAY_SECONDS = 1.0
 LOVEROOMERS_SITEMAPS = [f"https://www.loveroomers.fr/job_listing-sitemap{n}.xml" for n in (1, 2)]
 LOVENSPA_PRODUCTS = "https://lovenspa.fr/collections/paris/products.json?limit=250"

@@ -25,6 +25,8 @@ from surprise.collectors.paris_zigzag import postal_code
 from surprise.models import RawRecord
 
 SOURCE_ID = "escape_game"
+# Pages read less than this many days ago are not read again: venues, which rarely change.
+FRESH_DAYS = 30
 BASE_URL = "https://www.escapegame.fr"
 SITEMAP = f"{BASE_URL}/sitemap-room.xml"
 DELAY_SECONDS = 1.0

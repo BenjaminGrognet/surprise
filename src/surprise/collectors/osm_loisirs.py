@@ -24,6 +24,8 @@ from surprise.collectors.osm_restaurants import BATCH, USER_AGENT, WORKERS, _web
 from surprise.models import RawRecord
 
 SOURCE_ID = "osm_loisirs"
+# Pages read less than this many days ago are not read again: venues, which rarely change.
+FRESH_DAYS = 30
 OVERPASS_QUERY = """[out:json][timeout:180];
 area["ISO3166-2"="FR-75C"]->.paris;
 (nwr["leisure"~"^(bowling_alley|miniature_golf|amusement_arcade|trampoline_park|sauna|water_park)$"]["name"](area.paris);
