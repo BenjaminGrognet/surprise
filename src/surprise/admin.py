@@ -127,9 +127,24 @@ def make_handler(db_path: Path) -> type[BaseHTTPRequestHandler]:
         def _send_json(self, code: HTTPStatus, data: object) -> None:
             self._send(code, json.dumps(data, ensure_ascii=False).encode(), "application/json; charset=utf-8")
 
+        def do_OPTIONS(self) -> None:
+            # Preflight for the Expo dev server (a different origin/port): scoped to localhost so
+            # this stays as unreachable from other sites as the JSON-content-type check above.
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self._cors_headers()
+            self.send_header("Access-Control-Allow-Methods", "GET, POST")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+
+        def _cors_headers(self) -> None:
+            origin = self.headers.get("Origin", "")
+            if origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:"):
+                self.send_header("Access-Control-Allow-Origin", origin)
+
         def _send(self, code: HTTPStatus, body: bytes, content_type: str) -> None:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
+            self._cors_headers()
             # The activity list weighs tens of megabytes: about six times less compressed.
             if len(body) > 100_000 and "gzip" in self.headers.get("Accept-Encoding", ""):
                 body = gzip.compress(body, compresslevel=5)

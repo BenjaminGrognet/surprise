@@ -12,6 +12,12 @@
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": ["-m", "surprise.quiz", "--no-open"],
       "port": 8001
+    },
+    {
+      "name": "expo-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "app", "run", "web"],
+      "port": 8081
     }
   ]
 }
