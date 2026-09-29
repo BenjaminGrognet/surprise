@@ -101,11 +101,11 @@ QUESTIONS: list[dict[str, Any]] = [
         "id": "energie", "kind": "scale",
         "question": "Plutôt cocooning ou dancefloor ?", "hint": "De 1, on se pose, à 5, on ne tient pas en place.",
         "options": [
-            {"value": 1, "label": "Cocooning", "emoji": "🛋️", "vibes": {"detente": 2}},
-            {"value": 2, "label": "", "emoji": "🍵", "vibes": {"detente": 1, "cultiver": 1}},
-            {"value": 3, "label": "", "emoji": "🚶", "vibes": {"flaner": 1}},
-            {"value": 4, "label": "", "emoji": "🕺", "vibes": {"bouger": 1, "musique": 1}},
-            {"value": 5, "label": "Dancefloor", "emoji": "🪩", "vibes": {"fete": 2, "bouger": 1}},
+            {"value": 1, "label": "1 · Cocooning", "emoji": "🛋️", "vibes": {"detente": 2}},
+            {"value": 2, "label": "2 · Calme", "emoji": "🍵", "vibes": {"detente": 1, "cultiver": 1}},
+            {"value": 3, "label": "3 · Actif", "emoji": "🚶", "vibes": {"flaner": 1}},
+            {"value": 4, "label": "4 · Festif", "emoji": "🕺", "vibes": {"bouger": 1, "musique": 1}},
+            {"value": 5, "label": "5 · Dancefloor", "emoji": "🪩", "vibes": {"fete": 2, "bouger": 1}},
         ],
     },
     {

@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { type ReactNode, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountNav } from '@/components/account-nav';
@@ -9,12 +9,25 @@ import { DayField } from '@/components/day-field';
 import { OptionButton, OptionRow } from '@/components/option-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Night, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, saveAccountProfile } from '@/lib/account';
 import { getProfile, getQuiz, saveProfile, type Question, type QuizData, type SavedProfile } from '@/lib/api';
 import { longDay, nextFriday } from '@/lib/dates';
 import { rememberProfile } from '@/lib/local-store';
+
+const BANNER = 'https://images.unsplash.com/photo-1545343403-03e407630152?auto=format&fit=crop&w=1600&q=60';
+
+const PERSONA_BANNERS: Record<string, string> = {
+  'Les Explorateurs': 'https://images.unsplash.com/photo-1504730513966-dfcd6e53fdc8?auto=format&fit=crop&w=1600&q=60',
+  'Les Romantiques': 'https://images.unsplash.com/photo-1545343403-03e407630152?auto=format&fit=crop&w=1600&q=60',
+  'Les Épicuriens': 'https://images.unsplash.com/photo-1671691302268-e316f81c7b3e?auto=format&fit=crop&w=1600&q=60',
+  'Les Noctambules': 'https://images.unsplash.com/photo-1713450605268-5f8ba67f5b55?auto=format&fit=crop&w=1600&q=60',
+  'Les Curieux': 'https://images.unsplash.com/photo-1708941432245-289f6add01c4?auto=format&fit=crop&w=1600&q=60',
+  'Les Complices': 'https://images.unsplash.com/photo-1671032290241-b0837e7a922e?auto=format&fit=crop&w=1600&q=60',
+  'Les Créatifs': 'https://images.unsplash.com/photo-1620140036708-455ed5c0426a?auto=format&fit=crop&w=1600&q=60',
+  'Les Flâneurs': 'https://images.unsplash.com/photo-1782022007537-47cdc954b386?auto=format&fit=crop&w=1600&q=60',
+};
 
 type Phase = 'loading' | 'quiz' | 'saving' | 'error' | 'reveal';
 
@@ -106,6 +119,7 @@ export default function ProfilScreen() {
   return (
     <Screen>
       <AccountNav />
+      <Image source={{ uri: BANNER }} style={styles.banner} />
       <View style={styles.badge}>
         <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
       </View>
@@ -215,51 +229,61 @@ function Reveal({
   profile: SavedProfile;
   onRestart: () => void;
 }) {
+  const theme = useTheme();
   const p = profile.profile;
   const eviter = quiz.questions.find((q) => q.id === 'eviter');
   const chosen = (answers.eviter as string[] | undefined) ?? [];
   const never = chosen.map((v) => eviter?.options?.find((o) => o.value === v)).filter((o): o is NonNullable<typeof o> => !!o);
+  const banner = PERSONA_BANNERS[p.persona.name] ?? BANNER;
   return (
-    <View style={[styles.persona, { backgroundColor: Night.background, borderColor: Night.line }]}>
-      <ThemedText style={[styles.eyebrow, { color: Night.gold }]}>{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
-      <ThemedText type="subtitle" style={{ color: Night.text }}>{p.persona.name}</ThemedText>
-      <ThemedText style={{ color: Night.muted }}>{p.persona.text}</ThemedText>
-      <OptionRow>
-        {p.vibes.map((v, i) => (
-          <ThemedText key={v} style={[styles.tag, { backgroundColor: i % 3 === 0 ? Night.accent : i % 3 === 1 ? Night.mint : Night.line, color: i % 3 === 2 ? Night.gold : Night.text }]}>
-            {quiz.vibes[v] || v}
-          </ThemedText>
-        ))}
-      </OptionRow>
-      <View style={styles.facts}>
-        <Fact label="première sortie" value={p.first_day ? longDay(p.first_day) : 'Bientôt'} />
-        <Fact label="pour une soirée type" value={p.budget >= 350 ? 'sans compter' : `≈ ${p.budget} €`} />
-        <View style={styles.factItem}>
-          <ThemedText style={{ color: Night.text, fontSize: 16 }}>Audace</ThemedText>
-          <View style={[styles.meterTrack, { backgroundColor: Night.line }]}>
-            <View style={[styles.meterBar, { width: `${p.audace * 100}%`, backgroundColor: Night.gold }]} />
+    <>
+      <AccountNav />
+      <Image source={{ uri: banner }} style={styles.banner} />
+      <View style={styles.badge}>
+        <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
+      </View>
+      <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
+        <ThemedText style={[styles.eyebrow, { color: theme.accentInk }]}>{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
+        <ThemedText type="subtitle">{p.persona.name}</ThemedText>
+        <ThemedText themeColor="textSecondary">{p.persona.text}</ThemedText>
+        <OptionRow>
+          {p.vibes.map((v, i) => (
+            <ThemedText key={v} style={[styles.tag, { backgroundColor: i % 2 === 0 ? theme.backgroundSelected : theme.line, color: theme.accentInk }]}>
+              {quiz.vibes[v] || v}
+            </ThemedText>
+          ))}
+        </OptionRow>
+        <View style={styles.facts}>
+          <Fact label="première sortie" value={p.first_day ? longDay(p.first_day) : 'Bientôt'} />
+          <Fact label="pour une soirée type" value={p.budget >= 350 ? 'sans compter' : `≈ ${p.budget} €`} />
+          <View style={styles.factItem}>
+            <ThemedText style={{ fontSize: 16 }}>Audace</ThemedText>
+            <View style={[styles.meterTrack, { backgroundColor: theme.line }]}>
+              <View style={[styles.meterBar, { width: `${p.audace * 100}%`, backgroundColor: theme.accent }]} />
+            </View>
           </View>
         </View>
+        {never.length > 0 && (
+          <ThemedText themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
+            <ThemedText>Jamais : </ThemedText>
+            {never.map((o) => (o.label ?? '').toLowerCase()).join(', ')}
+          </ThemedText>
+        )}
+        <View style={styles.nav}>
+          <TextButton onPress={onRestart}>Recommencer</TextButton>
+          <PrimaryLink href={{ pathname: '/soiree', params: { p: profile.id } }}>Préparer une soirée</PrimaryLink>
+        </View>
       </View>
-      {never.length > 0 && (
-        <ThemedText style={{ color: Night.muted, marginTop: Spacing.two }}>
-          <ThemedText style={{ color: Night.text }}>Jamais : </ThemedText>
-          {never.map((o) => (o.label ?? '').toLowerCase()).join(', ')}
-        </ThemedText>
-      )}
-      <View style={styles.nav}>
-        <TextButton onPress={onRestart}>Recommencer</TextButton>
-        <PrimaryLink href={{ pathname: '/soiree', params: { p: profile.id } }}>Préparer une soirée</PrimaryLink>
-      </View>
-    </View>
+    </>
   );
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
+  const theme = useTheme();
   return (
-    <View style={[styles.factItem, { borderColor: Night.line }]}>
-      <ThemedText style={{ color: Night.text, fontSize: 16 }}>{value}</ThemedText>
-      <ThemedText type="small" style={{ color: Night.muted }}>{label}</ThemedText>
+    <View style={[styles.factItem, { borderColor: theme.line }]}>
+      <ThemedText style={{ fontSize: 16 }}>{value}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
     </View>
   );
 }
@@ -280,6 +304,7 @@ const styles = StyleSheet.create({
   safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.three },
   badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
   badgeText: { color: '#ffffff', letterSpacing: 0.5 },
+  banner: { width: '100%', height: 160, borderRadius: Spacing.three },
   progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#efe0cf', overflow: 'hidden' },
   progressBar: { height: '100%', backgroundColor: '#caa15a' },
   nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.three },

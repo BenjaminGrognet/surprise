@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
@@ -9,6 +9,8 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, signIn, signOut, signUp, type AccountProfile } from '@/lib/account';
 import { supabaseConfigured } from '@/lib/supabase';
+
+const BANNER = 'https://images.unsplash.com/photo-1671691302268-e316f81c7b3e?auto=format&fit=crop&w=1600&q=60';
 
 type TabKey = 'in' | 'up';
 
@@ -167,7 +169,13 @@ function Screen({ children }: { children: ReactNode }) {
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <SafeAreaView style={styles.safeArea}>{children}</SafeAreaView>
+        <SafeAreaView style={styles.safeArea}>
+          <Image source={{ uri: BANNER }} style={styles.banner} />
+          <View style={styles.badge}>
+            <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
+          </View>
+          {children}
+        </SafeAreaView>
       </ScrollView>
     </ThemedView>
   );
@@ -177,6 +185,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, alignItems: 'center' },
   safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.three },
+  banner: { width: '100%', height: 160, borderRadius: Spacing.three },
+  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
+  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
   tabs: { flexDirection: 'row', gap: 4, borderRadius: 999, padding: 4, alignSelf: 'flex-start' },
   tab: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, borderRadius: 999 },
   form: { gap: Spacing.two + 2, maxWidth: 380 },

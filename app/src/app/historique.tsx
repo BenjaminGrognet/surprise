@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryLink, TextLink } from '@/components/buttons';
@@ -11,6 +11,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { currentUser, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
 import { API_URL } from '@/lib/api';
 import { supabaseConfigured } from '@/lib/supabase';
+
+const BANNER = 'https://images.unsplash.com/photo-1504730513966-dfcd6e53fdc8?auto=format&fit=crop&w=1600&q=60';
 
 const frDay = (iso: string) => new Date(`${iso}T12:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -35,6 +37,10 @@ export default function HistoriqueScreen() {
 
   return (
     <Screen>
+      <Image source={{ uri: BANNER }} style={styles.banner} />
+      <View style={styles.badge}>
+        <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
+      </View>
       <ThemedText type="title">Mon historique</ThemedText>
       {state === 'loading' && <ThemedText themeColor="textSecondary">On retrouve vos soirées…</ThemedText>}
       {state === 'error' && !supabaseConfigured && (
@@ -105,6 +111,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, alignItems: 'center' },
   safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.three },
+  banner: { width: '100%', height: 160, borderRadius: Spacing.three },
+  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
+  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
   notice: { padding: Spacing.three, borderRadius: 14 },
   error: { color: '#ff5c72' },
   list: { gap: Spacing.two + 2 },

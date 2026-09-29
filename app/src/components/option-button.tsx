@@ -27,14 +27,18 @@ export function OptionButton({
       disabled={disabled}
       onPress={onPress}
       style={[
-        styles.option,
-        pill && styles.pill,
+        pill ? styles.pill : styles.tile,
         { backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement },
         selected && !pill && styles.optionSelected,
         disabled && styles.disabled,
       ]}>
-      {emoji ? <ThemedText style={styles.emoji}>{emoji}</ThemedText> : null}
-      <ThemedText type="smallBold" style={selected ? { color: theme.accentInk } : undefined}>{label}</ThemedText>
+      {emoji ? <ThemedText style={pill ? styles.emoji : styles.tileEmoji}>{emoji}</ThemedText> : null}
+      <ThemedText
+        type="smallBold"
+        numberOfLines={pill ? 1 : undefined}
+        style={[!pill && styles.tileLabel, selected ? { color: theme.accentInk } : undefined]}>
+        {label}
+      </ThemedText>
       {selected && !pill ? (
         <View style={[styles.check, { backgroundColor: theme.accent }]}>
           <ThemedText style={styles.checkMark}>✓</ThemedText>
@@ -50,13 +54,15 @@ export function OptionRow({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two + 4 },
-  option: {
-    flexDirection: 'row',
+  tile: {
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: Spacing.two,
+    justifyContent: 'center',
+    gap: Spacing.one,
     borderRadius: 20,
-    padding: Spacing.three,
-    minWidth: 150,
+    padding: Spacing.two,
+    width: 116,
+    minHeight: 116,
   },
   optionSelected: {
     shadowColor: '#caa15a',
@@ -65,9 +71,18 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  pill: { borderRadius: 999, paddingVertical: Spacing.two + 1, paddingHorizontal: Spacing.three, minWidth: 0 },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    paddingVertical: Spacing.two + 1,
+    paddingHorizontal: Spacing.three,
+    gap: Spacing.two,
+  },
   disabled: { opacity: 0.4 },
   emoji: { fontSize: 22 },
+  tileEmoji: { fontSize: 30 },
+  tileLabel: { textAlign: 'center', fontSize: 13, lineHeight: 16 },
   check: { position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   checkMark: { fontSize: 11, color: '#ffffff' },
 });

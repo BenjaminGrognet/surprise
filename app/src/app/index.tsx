@@ -11,11 +11,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { getProfile, type SavedProfile } from '@/lib/api';
 import { rememberedProfile } from '@/lib/local-store';
 
-const BANNER = 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=1600&q=60';
+const BANNER = 'https://images.unsplash.com/photo-1504730513966-dfcd6e53fdc8?auto=format&fit=crop&w=1600&q=60';
 
 const STEPS = [
   { emoji: '💬', title: 'Votre profil, une fois', text: "Quelques questions sur vous deux : ce qui vous plaît, ce que vous ne voulez jamais, votre budget." },
-  { emoji: '✨', title: 'Une envie par soirée', text: "Faire la fête, se poser, pimenter, une occasion à fêter : jusqu'à trois envies, un jour, si vous dînez, l'heure et le budget de cette soirée-là." },
+  { emoji: '✨', title: 'Une envie par soirée', text: 'Ambiance, date, heure, budget : configurez votre soirée idéale en quelques clics.' },
   { emoji: '🌙', title: 'Trois parcours au choix', text: "Horaires, trajets, prix et liens de réservation ; une étape ne vous plaît pas, on la retire au sort. Et si vous découchez, la nuit est prévue." },
 ];
 

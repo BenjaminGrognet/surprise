@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { type ReactNode, useEffect, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountNav } from '@/components/account-nav';
@@ -12,6 +12,8 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { API_URL, getProfile, getSoiree, composeSoiree, type Night, type SavedProfile, type SoireeData } from '@/lib/api';
 import { isoDay, longDay, nextFriday } from '@/lib/dates';
+
+const BANNER = 'https://images.unsplash.com/photo-1671691302268-e316f81c7b3e?auto=format&fit=crop&w=1600&q=60';
 
 const MEALS = [
   { value: true, label: 'Oui, on dîne pendant la soirée', emoji: '🍽️' },
@@ -99,6 +101,7 @@ export default function SoireeScreen() {
         </ThemedView>
       )}
 
+      <Image source={{ uri: BANNER }} style={styles.banner} />
       <View style={styles.badge}>
         <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
       </View>
@@ -197,6 +200,7 @@ const styles = StyleSheet.create({
   profileLine: { padding: Spacing.two + 2, borderRadius: 14, marginBottom: Spacing.two },
   badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
   badgeText: { color: '#ffffff', letterSpacing: 0.5 },
+  banner: { width: '100%', height: 160, borderRadius: Spacing.three },
   progressRow: { gap: Spacing.one },
   progressLabel: { color: '#a67c1e' },
   progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#efe0cf', overflow: 'hidden' },

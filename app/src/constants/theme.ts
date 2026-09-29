@@ -23,19 +23,6 @@ const brand = {
 
 export const Colors = { light: brand, dark: brand } as const;
 
-// The "night" accent variant (client.css .persona.night): reserved for the moments that
-// announce the evening itself — the profile reveal — never the everyday screens.
-export const Night = {
-  background: '#241a1f',
-  surface: '#2f2420',
-  text: '#fbf3e7',
-  muted: '#c9b89a',
-  line: '#3a2a1f',
-  gold: '#caa15a',
-  mint: '#35c2a0',
-  accent: brand.accent,
-} as const;
-
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 // Brand type: Space Grotesk for body text, Fredoka for headings (loaded in _layout.tsx).
