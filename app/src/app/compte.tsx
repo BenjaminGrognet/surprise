@@ -78,7 +78,7 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
             autoComplete="email"
             keyboardType="email-address"
             autoCapitalize="none"
-            style={[styles.input, { borderColor: theme.line, backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
           />
         </Field>
         <Field label="Mot de passe">
@@ -87,7 +87,7 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
             onChangeText={setPassword}
             secureTextEntry
             autoComplete={tab === 'in' ? 'current-password' : 'new-password'}
-            style={[styles.input, { borderColor: theme.line, backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
           />
         </Field>
         {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
@@ -181,10 +181,10 @@ const styles = StyleSheet.create({
   tab: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, borderRadius: 999 },
   form: { gap: Spacing.two + 2, maxWidth: 380 },
   field: { gap: Spacing.one },
-  input: { fontSize: 16, padding: 14, borderRadius: 12, borderWidth: 1.5 },
+  input: { fontSize: 16, padding: 14, borderRadius: 14 },
   error: { color: '#ff5c72' },
   notice: { padding: Spacing.three, borderRadius: 14 },
   persona: { padding: Spacing.four, borderRadius: 18, gap: Spacing.one },
-  eyebrow: { textTransform: 'uppercase', letterSpacing: 1, color: '#d6314c' },
+  eyebrow: { textTransform: 'uppercase', letterSpacing: 1, color: '#a67c1e' },
   actions: { gap: Spacing.two, alignItems: 'flex-start' },
 });

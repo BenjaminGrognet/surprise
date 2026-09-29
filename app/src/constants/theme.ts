@@ -7,18 +7,18 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
-// The "carnet insolite doré" brand (see src/surprise/client.css): warm paper background,
-// coral accent, no real dark mode yet, so dark == light for now.
+// The "carnet insolite doré" brand (see src/surprise/client.css): warm beige paper,
+// gold accent, no real dark mode yet, so dark == light for now.
 // ponytail: brand has no dark variant designed yet, upgrade when one is designed.
 const brand = {
-  text: '#211a2b',
-  background: '#fbf3e7',
-  backgroundElement: '#ffffff',
-  backgroundSelected: '#ffe1e6',
-  textSecondary: '#6f6579',
-  line: '#e8dcf3',
-  accent: '#ff5c72',
-  accentInk: '#d6314c',
+  text: '#2e241c',
+  background: '#faf8f5',
+  backgroundElement: '#f3ece0',
+  backgroundSelected: '#efe0cf',
+  textSecondary: '#8a7d6c',
+  line: '#e3d5c3',
+  accent: '#caa15a',
+  accentInk: '#a67c1e',
 } as const;
 
 export const Colors = { light: brand, dark: brand } as const;

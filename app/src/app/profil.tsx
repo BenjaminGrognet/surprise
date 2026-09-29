@@ -106,6 +106,9 @@ export default function ProfilScreen() {
   return (
     <Screen>
       <AccountNav />
+      <View style={styles.badge}>
+        <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
+      </View>
       <View style={styles.progressTrack}>
         <View style={[styles.progressBar, { width: `${(index / quiz.questions.length) * 100}%` }]} />
       </View>
@@ -196,7 +199,7 @@ function QuestionBody({
       onChangeText={onChange}
       placeholder="Léa & Sam"
       maxLength={80}
-      style={[styles.input, { borderColor: theme.line, backgroundColor: theme.backgroundElement, color: theme.text }]}
+      style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
     />
   );
 }
@@ -275,10 +278,12 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, alignItems: 'center' },
   safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.three },
-  progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#e8dcf3', overflow: 'hidden' },
-  progressBar: { height: '100%', backgroundColor: '#ff5c72' },
+  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
+  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
+  progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#efe0cf', overflow: 'hidden' },
+  progressBar: { height: '100%', backgroundColor: '#caa15a' },
   nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.three },
-  input: { fontSize: 16, padding: 14, borderRadius: 12, borderWidth: 1.5 },
+  input: { fontSize: 16, padding: 14, borderRadius: 14 },
   persona: { gap: Spacing.two, padding: Spacing.four, borderRadius: 18 },
   eyebrow: { textTransform: 'uppercase', letterSpacing: 1, fontSize: 12 },
   tag: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 12, fontSize: 14, overflow: 'hidden' },

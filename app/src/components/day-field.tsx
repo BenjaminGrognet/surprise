@@ -19,14 +19,14 @@ export function DayField({ value, onChange }: { value: string; onChange: (value:
           value={value}
           min={isoDay(new Date())}
           onChange={(e: { target: { value: string } }) => onChange(e.target.value)}
-          style={{ font: 'inherit', padding: 14, borderRadius: 12, border: `1.5px solid ${theme.line}`, background: theme.backgroundElement, color: theme.text, width: '100%' }}
+          style={{ font: 'inherit', padding: 14, borderRadius: 14, border: 'none', background: theme.backgroundElement, color: theme.text, width: '100%' }}
         />
       ) : (
         <TextInput
           value={value}
           onChangeText={onChange}
           placeholder="AAAA-MM-JJ"
-          style={[styles.input, { borderColor: theme.line, backgroundColor: theme.backgroundElement, color: theme.text }]}
+          style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
         />
       )}
     </View>
@@ -35,5 +35,5 @@ export function DayField({ value, onChange }: { value: string; onChange: (value:
 
 const styles = StyleSheet.create({
   field: { gap: Spacing.one },
-  input: { fontSize: 16, padding: 14, borderRadius: 12, borderWidth: 1.5 },
+  input: { fontSize: 16, padding: 14, borderRadius: 14 },
 });

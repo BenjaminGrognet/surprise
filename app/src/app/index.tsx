@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet } from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountNav } from '@/components/account-nav';
@@ -43,6 +43,9 @@ export default function AccueilScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <SafeAreaView style={styles.safeArea}>
           <AccountNav />
+          <View style={styles.badge}>
+            <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
+          </View>
           <Image source={{ uri: BANNER }} style={styles.banner} />
           <ThemedText style={[styles.brand, { color: theme.accentInk }]}>Surprise</ThemedText>
           <ThemedText type="title">Des soirées uniques à deux dans Paris.</ThemedText>
@@ -51,6 +54,11 @@ export default function AccueilScreen() {
           </ThemedText>
 
           {loaded && <Start profile={profile} />}
+
+          <View style={styles.progressTrack}>
+            <View style={styles.progressBar} />
+          </View>
+          <ThemedText type="small" themeColor="textSecondary">3 étapes, à votre rythme</ThemedText>
 
           <ThemedView style={styles.steps}>
             {STEPS.map((s) => (
@@ -99,11 +107,15 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, alignItems: 'center' },
   safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
+  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
+  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
   banner: { width: '100%', height: 200, borderRadius: Spacing.three },
   brand: { fontFamily: Fonts.headingBold, fontSize: 18, marginTop: Spacing.three },
   lead: { fontSize: 17, lineHeight: 24 },
   actions: { gap: Spacing.two, alignItems: 'flex-start' },
   persona: { gap: Spacing.two, padding: Spacing.three, borderRadius: Spacing.three },
+  progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#efe0cf', overflow: 'hidden' },
+  progressBar: { height: '100%', width: '33%', borderRadius: 999, backgroundColor: '#caa15a' },
   steps: { gap: Spacing.two, marginTop: Spacing.three },
   step: { flexDirection: 'row', gap: Spacing.two, padding: Spacing.three, borderRadius: Spacing.three },
   stepEmoji: { fontSize: 24 },

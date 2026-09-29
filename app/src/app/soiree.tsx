@@ -99,9 +99,18 @@ export default function SoireeScreen() {
         </ThemedView>
       )}
 
+      <View style={styles.badge}>
+        <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
+      </View>
       <ThemedText type="title">Ce soir, envie de quoi ?</ThemedText>
       <ThemedText themeColor="textSecondary">Jusqu&apos;à {data.max} envies, on les mêle dans la soirée.</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">{night.envies.length} sur {data.max}</ThemedText>
+
+      <View style={styles.progressRow}>
+        <ThemedText type="smallBold" style={styles.progressLabel}>{night.envies.length} sur {data.max} choisies</ThemedText>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressBar, { width: `${(night.envies.length / data.max) * 100}%` }]} />
+        </View>
+      </View>
       <OptionRow>
         {data.envies.map((o) => (
           <OptionButton key={o.value} label={o.label} emoji={o.emoji} selected={night.envies.includes(o.value)}
@@ -186,6 +195,12 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, alignItems: 'center' },
   safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.two },
   profileLine: { padding: Spacing.two + 2, borderRadius: 14, marginBottom: Spacing.two },
+  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
+  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
+  progressRow: { gap: Spacing.one },
+  progressLabel: { color: '#a67c1e' },
+  progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#efe0cf', overflow: 'hidden' },
+  progressBar: { height: '100%', borderRadius: 999, backgroundColor: '#caa15a' },
   sub: { marginTop: Spacing.three },
   nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.three, marginBottom: Spacing.four },
   error: { color: '#ff5c72' },

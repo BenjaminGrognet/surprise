@@ -78,7 +78,7 @@ function HistoryCard({ row }: { row: EveningHistoryRow }) {
   return (
     <Pressable
       onPress={() => Linking.openURL(`${API_URL}/parcours/${row.page_name}.html#parcours-${row.route_index + 1}`)}
-      style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
+      style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
       <ThemedText type="small" themeColor="textSecondary">{row.day ? frDay(row.day) : 'Date libre'}</ThemedText>
       <ThemedText type="subtitle" style={styles.cardTitle}>{row.title}</ThemedText>
       <ThemedText themeColor="textSecondary">{row.pitch}</ThemedText>
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   notice: { padding: Spacing.three, borderRadius: 14 },
   error: { color: '#ff5c72' },
   list: { gap: Spacing.two + 2 },
-  card: { padding: Spacing.three + 2, borderRadius: 16, borderWidth: 1, gap: 4 },
+  card: { padding: Spacing.three + 2, borderRadius: 20, gap: 4 },
   cardTitle: { fontSize: 19 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   tag: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 12, overflow: 'hidden' },

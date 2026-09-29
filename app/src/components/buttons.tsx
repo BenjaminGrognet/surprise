@@ -52,6 +52,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two + 2,
     paddingHorizontal: Spacing.four,
     alignSelf: 'flex-start',
+    shadowColor: '#caa15a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 6,
   },
   disabled: { opacity: 0.45 },
 });
