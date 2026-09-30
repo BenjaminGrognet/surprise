@@ -25,42 +25,41 @@ function place(step: SoireeStep) {
 
 export function RouteResult({
   route,
-  vibes,
   chosen,
   onRedo,
   onChoose,
   busyRedo,
 }: {
   route: SoireeRoute;
-  vibes: Record<string, string>;
   chosen: boolean;
   onRedo: (redo: string) => void;
   onChoose: () => void;
   busyRedo: string | null;
 }) {
+  // A route keeps one step at least: the last one cannot be taken out.
+  const removable = route.steps.length > 1;
   return (
     <ThemedView type="backgroundElement" style={styles.route}>
       <View style={styles.header}>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.eyebrow}>Parcours {route.index + 1}</ThemedText>
-        <TextButton onPress={() => onRedo(route.redo)}>{busyRedo === route.redo ? '↻ Recherche…' : '↻ Tout le parcours'}</TextButton>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.eyebrow}>
+          Parcours {route.index + 1} · {formatTime(route.start)} → {formatTime(route.end)} · {route.price_estimated ? '≈ ' : ''}{route.price.toFixed(0)} €
+        </ThemedText>
+        <TextButton onPress={() => onRedo(route.redo)}>{busyRedo === route.redo ? '↻…' : '↻ Tout'}</TextButton>
       </View>
-      <ThemedText type="subtitle">{route.title}</ThemedText>
-      <ThemedText themeColor="textSecondary">{route.pitch}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.meta}>
-        {formatTime(route.start)} → {formatTime(route.end)} · {route.price_estimated ? '≈ ' : ''}{route.price.toFixed(0)} € pour deux · {route.steps.length} étapes
-      </ThemedText>
+      <ThemedText type="smallBold">{route.title}</ThemedText>
+      {route.pitch ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>{route.pitch}</ThemedText> : null}
 
       <View style={styles.steps}>
         {route.steps.map((step, i) => (
-          <View key={i} style={styles.stepRow}>
+          <View key={i}>
             {i > 0 ? <Hop previous={route.steps[i - 1]} step={step} /> : null}
-            <StepCard step={step} vibes={vibes} askedVibes={route.steps.flatMap((s) => s.vibes)} busy={busyRedo === step.redo} onRedo={onRedo} />
+            <StepRow step={step} busyRedo={busyRedo} onRedo={onRedo} removable={removable} />
           </View>
         ))}
         {route.night ? (
-          <View style={styles.stepRow}>
+          <View>
             <Hop previous={route.steps[route.steps.length - 1]} step={route.night} />
-            <StepCard step={route.night} vibes={vibes} askedVibes={[]} busy={false} onRedo={onRedo} />
+            <StepRow step={route.night} busyRedo={busyRedo} onRedo={onRedo} removable={false} />
           </View>
         ) : null}
       </View>
@@ -75,73 +74,63 @@ function Hop({ previous, step }: { previous: SoireeStep; step: SoireeStep }) {
   const label = `${step.travel_minutes} min` + (step.distance_km < 1 ? ` · ${(step.distance_km * 1000).toFixed(0)} m` : ` · ${step.distance_km.toFixed(1)} km`);
   const maps = `https://www.google.com/maps/dir/?api=1&origin=${previous.lat},${previous.lon}&destination=${step.lat},${step.lon}&travelmode=${walking ? 'walking' : 'transit'}`;
   return (
-    <TextButton onPress={() => Linking.openURL(maps)}>{`${walking ? '🚶' : '🚇'} ${label}`}</TextButton>
+    <View style={styles.hop}>
+      <TextButton onPress={() => Linking.openURL(maps)}>{`${walking ? '🚶' : '🚇'} ${label}`}</TextButton>
+    </View>
   );
 }
 
-function StepCard({
+function StepRow({
   step,
-  vibes,
-  askedVibes,
-  busy,
+  busyRedo,
   onRedo,
+  removable,
 }: {
   step: SoireeStep;
-  vibes: Record<string, string>;
-  askedVibes: string[];
-  busy: boolean;
+  busyRedo: string | null;
   onRedo: (redo: string) => void;
+  removable: boolean;
 }) {
   const theme = useTheme();
-  const shown = [...new Set([...step.vibes.filter((v) => askedVibes.includes(v)), ...step.vibes])].slice(0, 3);
   const badge = BADGE_KIND[step.kind];
   const badgeColor = badge === 'ok' ? '#1e7a4c' : badge === 'free' ? '#1f5fa8' : '#8a5a00';
+  const remove = step.redo ? `${step.redo}/remove` : null;
   return (
     <ThemedView style={[styles.card, { borderColor: theme.line }]}>
-      <View style={styles.timeRow}>
-        <View style={styles.time}>
-          <ThemedText type="smallBold">{formatTime(step.start)}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary"> → {formatTime(step.end)}</ThemedText>
+      <View style={styles.side}>
+        <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
+          {step.image_url ? <Image source={{ uri: step.image_url }} style={styles.thumbImg} /> : null}
         </View>
-        {step.redo ? <TextButton onPress={() => onRedo(step.redo!)}>{busy ? '↻…' : '↻ Changer'}</TextButton> : null}
+        {step.redo ? <TextButton onPress={() => onRedo(step.redo!)}>{busyRedo === step.redo ? '↻…' : '↻ Changer'}</TextButton> : null}
+        {removable && remove ? <TextButton onPress={() => onRedo(remove)}>{busyRedo === remove ? '✕…' : '✕ Retirer'}</TextButton> : null}
       </View>
-      <View style={[styles.photo, { backgroundColor: theme.backgroundSelected }]}>
-        {step.image_url ? <Image source={{ uri: step.image_url }} style={styles.photoImg} /> : null}
-        <View style={styles.roleBadge}><ThemedText style={styles.roleBadgeText}>{ROLE_LABELS[step.role]}</ThemedText></View>
-      </View>
-      <ThemedText type="smallBold">{step.title}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">{place(step)}</ThemedText>
-      {step.text ? <ThemedText type="small" numberOfLines={4}>{step.text}</ThemedText> : null}
-      {shown.length > 0 ? (
-        <View style={styles.tags}>
-          {shown.map((v) => <ThemedText key={v} type="small" style={styles.tag}>{vibes[v] || v}</ThemedText>)}
+      <View style={styles.body}>
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+          <ThemedText type="smallBold">{formatTime(step.start)}</ThemedText> → {formatTime(step.end)} · {ROLE_LABELS[step.role]}
+        </ThemedText>
+        <ThemedText type="smallBold" numberOfLines={2}>{step.title}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>{place(step)}</ThemedText>
+        {step.text ? <ThemedText type="small" numberOfLines={2}>{step.text}</ThemedText> : null}
+        <ThemedText type="small" style={{ color: badgeColor }} numberOfLines={1}>{step.basis}</ThemedText>
+        <View style={styles.line}>
+          <ThemedText type="smallBold">{formatPrice(step)}</ThemedText>
+          {step.booking_url ? <TextButton onPress={() => Linking.openURL(step.booking_url!)}>{BOOKING_LABELS[step.booking_action]}</TextButton> : null}
         </View>
-      ) : null}
-      <ThemedText type="small" style={{ color: badgeColor }}>{step.basis}</ThemedText>
-      <View style={styles.foot}>
-        <ThemedText type="smallBold">{formatPrice(step)}</ThemedText>
-        {step.booking_url ? <TextButton onPress={() => Linking.openURL(step.booking_url!)}>{BOOKING_LABELS[step.booking_action]}</TextButton> : null}
       </View>
-      <ThemedText type="small" themeColor="textSecondary">via {step.source_name}</ThemedText>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  route: { gap: Spacing.two, padding: Spacing.three, borderRadius: 18, marginTop: Spacing.three },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  eyebrow: { textTransform: 'uppercase', letterSpacing: 1 },
-  meta: { marginTop: Spacing.one },
-  steps: { gap: Spacing.two, marginTop: Spacing.two },
-  stepRow: { gap: Spacing.one },
-  card: { gap: Spacing.one, borderWidth: 1, borderRadius: 14, padding: Spacing.two + 2 },
-  timeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  time: { flexDirection: 'row', alignItems: 'baseline' },
-  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 10, overflow: 'hidden', position: 'relative' },
-  photoImg: { width: '100%', height: '100%' },
-  roleBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 10 },
-  roleBadgeText: { color: '#fff', fontSize: 12 },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
-  tag: { borderWidth: 1, borderRadius: 999, paddingVertical: 1, paddingHorizontal: 8 },
-  foot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.one },
+  route: { gap: Spacing.one, padding: Spacing.two + 4, borderRadius: 16, marginTop: Spacing.two },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
+  eyebrow: { flexShrink: 1, textTransform: 'uppercase', letterSpacing: 0.5 },
+  steps: { gap: Spacing.one, marginVertical: Spacing.one },
+  hop: { paddingLeft: Spacing.two, paddingVertical: Spacing.half },
+  card: { flexDirection: 'row', gap: Spacing.two, borderWidth: 1, borderRadius: 12, padding: Spacing.two },
+  thumb: { width: 116, height: 116, borderRadius: 10, overflow: 'hidden' },
+  thumbImg: { width: '100%', height: '100%' },
+  body: { flex: 1, gap: Spacing.half },
+  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
+  side: { width: 116, gap: Spacing.one },
 });

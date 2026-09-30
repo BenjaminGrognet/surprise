@@ -30,7 +30,7 @@ import httpx
 
 from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url
 from surprise.collectors.facts import BROWSER_HEADERS, ld_node, normalize_facts, sitemap, text, utc_now
-from surprise.collectors.paris_zigzag import PARIS, _clean_url, is_evening
+from surprise.collectors.paris_zigzag import PARIS, _clean_url, is_evening, parse_dates
 from surprise.models import RawRecord
 
 SOURCE_ID = "sortir_a_paris"
@@ -121,7 +121,13 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
-    return normalize_facts(to_raw_record(payload), payload, "Sortir à Paris", now)
+    facts = payload
+    if not payload.get("starts_on") and not payload.get("ends_on"):
+        # No dates marked up: those of the hours ("Chaque jeudi et vendredi jusqu'au 25 septembre"), so a run
+        # that ended is not taken for a permanent place.
+        starts_on, ends_on = parse_dates(payload.get("hours"), now.astimezone(PARIS).date())
+        facts = payload | {"starts_on": starts_on and starts_on.isoformat(), "ends_on": ends_on and ends_on.isoformat()}
+    return normalize_facts(to_raw_record(payload), facts, "Sortir à Paris", now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

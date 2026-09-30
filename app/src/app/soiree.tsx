@@ -104,7 +104,7 @@ export default function SoireeScreen() {
     try {
       setComposed(await redoPart(composed.name, redoPath));
     } catch {
-      setNotice('Pas de nouvelle proposition : réessayez dans un instant.');
+      setNotice(redoPath.endsWith('/remove') ? 'Étape non retirée : réessayez dans un instant.' : 'Pas de nouvelle proposition : réessayez dans un instant.');
     } finally {
       setBusyRedo(null);
     }
@@ -151,7 +151,6 @@ export default function SoireeScreen() {
           <RouteResult
             key={route.index}
             route={route}
-            vibes={vibes}
             chosen={chosen.has(route.index)}
             busyRedo={busyRedo}
             onRedo={redo}

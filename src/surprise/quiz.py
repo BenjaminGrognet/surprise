@@ -359,6 +359,8 @@ def new_id() -> str:
 
 # /api/parcours/<page>/routes/<index>[/steps/<position>]: draw a route, or one of its steps, again.
 _REDO = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)(?:/steps/(?P<step>\d+))?$")
+# /api/parcours/<page>/routes/<index>/steps/<position>/remove: the couple takes a step out.
+_REMOVE = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)/steps/(?P<step>\d+)/remove$")
 BASE_MINUTES = 15
 
 
@@ -430,7 +432,11 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
         def do_POST(self) -> None:
             path = urlsplit(self.path).path
             if path.startswith("/api/activities/"):
-                return super().do_POST()
+                super().do_POST()
+                # A fiche rejected in moderation is never proposed again: the next evening reloads the activities.
+                with loading:
+                    loaded.pop("base", None)
+                return
             # Requiring JSON forces a CORS preflight, so other sites cannot post here.
             if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
                 return self._send_json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"error": "JSON attendu"})
@@ -448,6 +454,10 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                 return self._send_json(HTTPStatus.OK, {"profile": profile})
             if path == "/api/soirees":
                 return self._compose(body)
+            if remove := _REMOVE.match(path):
+                if error := parcours.remove(remove["name"], int(remove["route"]), int(remove["step"])):
+                    return self._send_json(HTTPStatus.CONFLICT, {"error": error})
+                return self._send_json(HTTPStatus.OK, parcours.soiree_json(remove["name"], parcours.load(remove["name"])))
             if redo := _REDO.match(path):
                 return self._redo(redo["name"], int(redo["route"]), None if redo["step"] is None else int(redo["step"]))
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})

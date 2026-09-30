@@ -24,6 +24,7 @@ booking links), written to data/parcours/.
 """
 
 import argparse
+import contextlib
 import html
 import json
 import math
@@ -49,6 +50,7 @@ import httpx
 from surprise import availability, images
 from surprise.collectors import come_to_paris, funbooker, wecandoo
 from surprise.collectors.common import GROUP_PARTY
+from surprise.collectors.facts import BROWSER_HEADERS
 from surprise.local_store import LocalStore, open_store
 from surprise.originality import Scorer
 from surprise.sources import source_name
@@ -771,6 +773,49 @@ def pick(routes: list[Route], count: int = 3, taken: list[Route] | None = None) 
     return chosen[len(taken or []):]
 
 
+# Images checked by this process: an evening never shows a step without its photo.
+_IMAGES: dict[str, bool] = {}
+
+
+def unshown(steps: list[Step]) -> set:
+    """The activities of these steps whose image a page cannot show: dead, refused, or not answering now.
+
+    A dead image is first replaced by the official site's when that one shows (kept in the enrichment, and in the
+    activity already loaded); else it is recorded dead, which leaves the activity out of the next evenings (Base).
+    Each image is checked once per process.
+    """
+    todo = list({images.of(s.candidate.item) for s in steps} - _IMAGES.keys() - {None})
+    if todo:
+        with httpx.Client(timeout=8, follow_redirects=True, headers=BROWSER_HEADERS) as client, ThreadPoolExecutor(8) as pool:
+            verdicts = dict(zip(todo, pool.map(lambda url: images.loads(client, url), todo)))
+            _IMAGES.update({url: ok for url, ok in verdicts.items() if ok is not None})
+            dead = [url for url, ok in verdicts.items() if ok is False]
+            items = {images.of(s.candidate.item): s.candidate.item for s in steps}
+            found = dict(zip(dead, pool.map(lambda url: images.replacement(client, items[url], url), dead)))
+        with open_store(DB) if dead else contextlib.nullcontext() as store:
+            if dead:
+                store.save_page_checks({url: (images.CHECK, True) for url in dead})
+            for url, image in found.items():
+                if image:
+                    item = items[url]
+                    item["enrichment"] |= {"image_url": image, "image_origin": "site officiel"}
+                    store.save_enrichment(item["source_id"], item["external_id"], {"image_url": image, "image_origin": "site officiel"})
+                    _IMAGES[image] = True
+    return {s.candidate.key for s in steps if _IMAGES.get(images.of(s.candidate.item)) is not True}
+
+
+def pick_shown(routes: list[Route], count: int = 3, taken: list[Route] | None = None) -> list[Route]:
+    """`pick`, without the routes of a step whose image does not show (only the routes picked are checked)."""
+    left_out: set = set()
+    for _ in range(5):
+        chosen = pick([r for r in routes if not left_out & {s.candidate.key for s in r.steps}], count, taken)
+        found = unshown([s for r in chosen for s in r.steps])
+        if not found:
+            return chosen
+        left_out |= found
+    return [r for r in chosen if not left_out & {s.candidate.key for s in r.steps}]
+
+
 def _similarity(a: Route, b: Route) -> float:
     tags_a = {_main_tag(s.candidate) for s in a.steps} - {None}
     tags_b = {_main_tag(s.candidate) for s in b.steps} - {None}
@@ -790,6 +835,9 @@ def _centre(route: Route) -> tuple[float, float]:
 def _same(title: str) -> str:
     """A title as compared between listings: "Rex Club presents: X" and "REX CLUB PRESENTS – X" are one."""
     return " ".join(re.findall(r"\w+", title.lower()))
+
+
+KM_WEIGHT = 1.5  # score lost per km from the step before, on top of the travel time
 
 
 def replace_step(route: Route, position: int, candidates: list[Candidate], request: Request, excluded: set) -> list[Step] | None:
@@ -861,11 +909,28 @@ def replace_step(route: Route, position: int, candidates: list[Candidate], reque
             if step.end - step.start < timedelta(minutes=40):
                 continue
             chain = steps[: max(0, position - 1)] + ([new_previous] if previous else []) + [step] + ([new_following] if following else []) + steps[position + 2 :]
-            value = _route_score(chain, request)
+            # Close to the step before first: a redrawn activity should not send the couple across Paris.
+            value = _route_score(chain, request) - KM_WEIGHT * km_in
             if value > best_value:
                 best, best_value = chain, value
             break  # the earliest session that fits: later ones only add waiting
     return best
+
+
+def remove_step(route: Route, position: int) -> None:
+    """The route without its step `position`: the next step (or the night) is reached from the one before."""
+    route.steps.pop(position)
+    following = route.steps[position] if position < len(route.steps) else route.night
+    if following is None:
+        return
+    if not position:
+        following.travel, following.distance = 0, 0.0  # now the first step
+        return
+    previous = route.steps[position - 1]
+    following.distance = distance_km((previous.candidate.lat, previous.candidate.lon), (following.candidate.lat, following.candidate.lon))
+    following.travel = travel_minutes(following.distance)
+    if following is route.night:
+        following.start = previous.end + timedelta(minutes=following.travel)
 
 
 # The night ------------------------------------------------------------------
@@ -930,12 +995,19 @@ def night_for(route: Route, rooms: list[Candidate], request: Request, taken: set
     return Step(best, start, datetime.combine(morning, CHECK_OUT, tzinfo=start.tzinfo), travel_minutes(best_km), best_km)
 
 
+def night_shown(route: Route, rooms: list[Candidate], request: Request, taken: set) -> Step | None:
+    """`night_for`, a room whose image does not show passed over."""
+    while (night := night_for(route, rooms, request, taken)) and unshown([night]):
+        taken = taken | {night.candidate.key}
+    return night
+
+
 def add_nights(routes: list[Route], rooms: list[Candidate]) -> None:
     """A room for each route whose evening sleeps out, not the same one twice."""
     taken: set = set()
     for route in routes:
         if route.request and route.request.overnight:
-            route.night = night_for(route, rooms, route.request, taken)
+            route.night = night_shown(route, rooms, route.request, taken)
             if route.night:
                 taken.add(route.night.candidate.key)
 
@@ -1499,6 +1571,11 @@ _SCRIPT = """<script>
 # Command line ---------------------------------------------------------------
 
 
+def shown(item: dict[str, Any]) -> bool:
+    """An evening's step is shown with a photo and a text: an activity lacking either is never proposed."""
+    return bool(images.of(item)) and bool(item["enrichment"].get("description") or (item.get("lead_text") or "").strip())
+
+
 @dataclass
 class Base:
     """The activities that can be steps, with their originality: loaded once for several evenings."""
@@ -1508,7 +1585,12 @@ class Base:
 
     @classmethod
     def load(cls, store: LocalStore) -> "Base":
-        items = [item for item in store.list_for_moderation() if item["status"] not in ("rejected", "filtered")]
+        # Nor an image recorded dead (python -m surprise.images).
+        dead = {url for url, (engine, closed) in store.page_checks().items() if engine == images.CHECK and closed}
+        items = [
+            item for item in store.list_for_moderation()
+            if item["status"] not in ("rejected", "filtered") and shown(item) and images.of(item) not in dead
+        ]
         scorer = Scorer(items)
         return cls(items, {(i["source_id"], i["external_id"]): scorer.score(i).score for i in items})
 
@@ -1621,7 +1703,7 @@ def generate(
             print(f"\n— {_weekday(request.day)} {request.day:%d/%m}")
         routes += evening_routes(store, base, request, checks)
     # The best routes of all evenings together, without a step in common.
-    routes = pick(sorted(routes, key=lambda route: -route.score), count)
+    routes = pick_shown(sorted(routes, key=lambda route: -route.score), count)
     if len(requests) > 1:
         routes.sort(key=lambda route: (route.steps[0].start, -route.score))
     if any(request.overnight for request in requests):
@@ -1782,6 +1864,22 @@ def regenerate(
         return _regenerate(store, base, name, index, position, checks, claude)
 
 
+def remove(name: str, index: int, position: int) -> str | None:
+    """Takes step `position` out of route `index`, the couple's choice; the error, if any."""
+    with _SAVING:
+        state = load(name)
+        if state is None:
+            return "parcours introuvable : relancez la composition"
+        routes = state["routes"]
+        if not 0 <= index < len(routes) or not 0 <= position < len(routes[index].steps):
+            return "étape inconnue"
+        if len(routes[index].steps) < 2:
+            return "une soirée garde au moins une étape"
+        remove_step(routes[index], position)
+        save(name, state)
+    return None
+
+
 def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: int | None, checks: int, claude: bool) -> str | None:
     state = load(name)
     if state is None:
@@ -1800,14 +1898,20 @@ def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: 
         found = compose([c for c in candidates if c.key not in keys and _same(c.title) not in titles and c.venue.lower() not in venues], request)
         others = [r for r in routes if r is not route]
         fresh = [r for r in found if not {s.candidate.key for s in r.steps} & state["seen"]]
-        chosen = pick(fresh, 1, others) or pick(found, 1, others)
+        chosen = pick_shown(fresh, 1, others) or pick_shown(found, 1, others)
         if not chosen:
             return "aucun autre parcours complet ce soir-là"
         new = chosen[0]
     else:
-        steps = replace_step(route, position, candidates, request, state["seen"] | on_page) or replace_step(
-            route, position, candidates, request, on_page
-        )
+        unshown_keys: set = set()
+        for _ in range(5):
+            steps = replace_step(route, position, candidates, request, state["seen"] | on_page | unshown_keys) or replace_step(
+                route, position, candidates, request, on_page | unshown_keys
+            )
+            if not steps or not (found := unshown([steps[position]])):
+                break
+            unshown_keys |= found
+            steps = None
         if not steps:
             return "aucune autre activité ne s'enchaîne à cette étape"
         new = Route(steps, _route_score(steps, request))
@@ -1815,7 +1919,7 @@ def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: 
     if request.overnight:
         # Its room again if it still fits, else another one than the other routes'.
         others = {r.night.candidate.key for r in routes if r is not route and getattr(r, "night", None)}
-        new.night = night_for(new, hotels(base), request, others)
+        new.night = night_shown(new, hotels(base), request, others)
     name_by_rules(new, request)
     later = claude and bool(os.environ.get("ANTHROPIC_API_KEY"))
     routes[index] = new

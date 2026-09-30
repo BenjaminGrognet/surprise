@@ -56,6 +56,15 @@ def test_sortir_a_paris_duration_is_no_opening_hour():
     assert payload["evening"] is None
 
 
+def test_sortir_a_paris_run_ended_by_its_hours():
+    # No dates marked up, "until" in the hours: a run that ended, not a permanent place.
+    payload = sortir_a_paris.parse_article("https://www.sortiraparis.com/soiree/articles/1-x", SORTIR_A_PARIS_PAGE)
+    payload |= {"starts_on": None, "ends_on": None, "hours": "Chaque jeudi et vendredi jusqu'au 25 septembre"}
+    assert "passé" in sortir_a_paris.normalize(payload, NOW).rejection
+    later = sortir_a_paris.normalize(payload | {"hours": "Chaque jeudi jusqu'au 30 octobre"}, NOW).activity
+    assert later.kind == "temporary" and str(later.ends_on) == "2026-10-30"
+
+
 DICE_PAGE = """
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"MusicEvent","name":"Less Drama More Techno",
 "startDate":"2026-10-03T23:00:00+02:00","endDate":"2026-10-04T06:00:00+02:00",

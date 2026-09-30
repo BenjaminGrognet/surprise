@@ -157,6 +157,19 @@ uv run python -m surprise.enrich
 `--refresh` retraite aussi les activités déjà enrichies, `--source` limite à une source, `--no-descriptions`
 se passe des descriptions.
 
+Images qui ne s'affichent pas (lien mort, refus d'être montrées sur un autre site) :
+
+```bash
+uv run --env-file .env python -m surprise.images
+```
+
+Chaque image est demandée comme le ferait un navigateur depuis l'app, une à la fois par site. Une image morte est
+remplacée par l'`og:image` du site officiel si celle-ci s'affiche, sinon notée morte (`pipeline.page_checks`,
+moteur `image`, revue après un mois) : l'activité n'est plus proposée dans les parcours. Les images vérifiées il y a
+moins d'un mois sont passées (`--refresh` pour tout revoir). Les parcours vérifient en plus les images de leurs étapes
+avant de les proposer, de la même façon : une image morte y est d'abord remplacée par celle du site officiel ;
+sans elle, ou si l'image ne répond pas, l'étape est remplacée.
+
 ## Tags et vibes
 
 `surprise/tags.py` décrit chaque activité par des **tags** précis (mini-golf, céramique, rooftop, aux chandelles…),

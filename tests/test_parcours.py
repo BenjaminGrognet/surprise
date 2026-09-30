@@ -323,3 +323,70 @@ def test_an_ordinary_play_comes_after_the_unusual_the_more_so_for_a_daring_coupl
     ordinary = parcours.build_candidate(item("club2", "Comedy club", ["theatre"], occurrences=[at(20)]), req, None)
     ordinary.vibes = ["rire"]
     assert parcours.score(candidate, req) > parcours.score(ordinary, req)
+
+
+def test_never_a_step_without_photo_or_text():
+    fiche = item("f", "Le Festin Nu", ["bar"])
+    assert not parcours.shown(fiche)  # no text
+    fiche["enrichment"]["description"] = "Grignote d'insectes dans un bar psyché."
+    assert parcours.shown(fiche)
+    fiche["activity"]["image"] = None
+    assert not parcours.shown(fiche)
+
+
+def test_a_redrawn_step_is_close_to_the_one_before():
+    req = request(vibes=["insolite"])
+    entries = [
+        item("bar", "Bar à cocktails", ["bar"], kind="permanent", hours="Mo-Su 18:00-02:00", venue="Bar"),
+        item("immersif", "Expérience immersive", ["lieu_insolite"], occurrences=[at(20, 15)], lat=48.861, venue="Salle"),
+        item("pres", "Parcours sensoriel dans le noir", ["lieu_insolite"], occurrences=[at(21)], lat=48.8615, venue="Noir"),
+        item("loin", "Musée des illusions", ["lieu_insolite"], occurrences=[at(21)], lat=48.878, venue="Loin"),
+    ]
+    bar, immersif, pres, loin = candidates = _scored(entries, req)
+    route = parcours.Route([parcours._step(bar, at(19), req), parcours._step(immersif, at(20, 15), req, 5, 0.2)])
+    # The far one scores a little better on its own; the one next to the bar is drawn.
+    loin.score = pres.score + 1
+    steps = parcours.replace_step(route, 1, candidates, req, {immersif.key})
+    assert steps[1].candidate is pres
+
+
+def test_a_step_taken_out_and_the_next_reached_from_the_one_before(tmp_path, monkeypatch):
+    req, candidates, route = _night()
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
+    route.request = req
+    parcours.save("essai", {"routes": [route], "requests": [req], "seen": set()})
+    assert parcours.remove("essai", 0, 1) is None
+    bar, club = parcours.load("essai")["routes"][0].steps
+    assert (bar.candidate.key[1], club.candidate.key[1]) == ("bar", "club")
+    assert club.distance == parcours.distance_km((bar.candidate.lat, bar.candidate.lon), (club.candidate.lat, club.candidate.lon))
+    assert parcours.remove("essai", 0, 0) is None
+    [club] = parcours.load("essai")["routes"][0].steps
+    assert club.travel == 0
+    assert parcours.remove("essai", 0, 0) == "une soirée garde au moins une étape"
+
+
+def test_never_a_route_whose_image_does_not_show(monkeypatch):
+    req, candidates, route = _night()
+    routes = sorted(parcours.compose(candidates, req), key=lambda r: -r.score)
+    dead = parcours.pick(routes, 1)[0].steps[1].candidate.key
+    # The best route's show has a dead image: a route without it instead.
+    monkeypatch.setattr(parcours, "unshown", lambda steps: {s.candidate.key for s in steps} & {dead})
+    [shown] = parcours.pick_shown(routes, 1)
+    assert dead not in {s.candidate.key for s in shown.steps}
+
+
+def test_a_dead_image_is_replaced_by_the_official_sites_before_leaving_the_step_out(tmp_path, monkeypatch):
+    monkeypatch.undo()  # the real check (conftest leaves images out of the other tests)
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
+    monkeypatch.setattr(parcours, "_IMAGES", {})
+    req, candidates, route = _night()
+    bar, show, club = route.steps
+    alive = {"https://example.org/bar.jpg", "https://example.org/club.jpg", "https://site.example/new.jpg"}
+    monkeypatch.setattr(parcours.images, "loads", lambda client, url: url in alive)
+    monkeypatch.setattr(parcours.images, "replacement", lambda client, item, url: "https://site.example/new.jpg" if item is bar.candidate.item else None)
+    bar.candidate.item["activity"]["image"]["url"] = "https://example.org/dead-bar.jpg"
+    # The bar gets its site's image; the show, with nothing else, is left out and recorded dead.
+    assert parcours.unshown(route.steps) == {show.candidate.key}
+    assert parcours.images.of(bar.candidate.item) == "https://site.example/new.jpg"
+    with open_store(tmp_path / "s.db") as store:
+        assert store.page_checks()["https://example.org/immersif.jpg"] == ("image", True)
