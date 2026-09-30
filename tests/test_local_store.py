@@ -51,6 +51,24 @@ def test_fresh_pages_are_not_read_again(tmp_path):
     common._fresh.clear()
 
 
+def test_limit_counts_only_pages_read():
+    from surprise.collectors.common import up_to_new
+
+    raw = qfap.to_raw_record(FIXTURE[0])
+    cached = qfap.normalize(raw.payload | {"_cached": True}, NOW)
+    fresh = qfap.normalize(raw.payload, NOW)
+    pulled = []
+
+    def results():
+        for result in [cached, cached, fresh, cached, fresh, fresh]:
+            pulled.append(result)
+            yield result
+
+    assert len(list(up_to_new(results(), 2))) == 5
+    assert len(pulled) == 5  # the page after the last one is never asked for
+    assert list(up_to_new(results(), 0)) == [] and len(list(up_to_new(results(), None))) == 6
+
+
 def test_page_checks_are_kept(tmp_path):
     with LocalStore(tmp_path / "s.db") as store:
         store.save_page_checks({"https://club.example/": ("billetterie du lieu", False), "https://ferme.example/": (None, True)})

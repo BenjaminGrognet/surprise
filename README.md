@@ -1,4 +1,8 @@
 # surprise
+
+Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo) ou `collecte.cmd` (collecte, 200 fiches par source) ; détail dans
+[docs/lancer-en-local.md](docs/lancer-en-local.md).
+
 ## Collecteurs
 
 ```bash
@@ -28,7 +32,8 @@ uv run --env-file .env python -m surprise.local_store --db data/surprise.db
 ### Collecte complète
 
 `surprise.collect` lance les 30 sources, 4 à la fois (`--jobs`). Chaque source enregistre par lots de 50 fiches au
-fil de l'eau, et une source en échec n'arrête pas les autres. Une page de détail encore fraîche n'est pas relue.
+fil de l'eau, et une source en échec n'arrête pas les autres. Une page de détail encore fraîche n'est pas relue
+et ne compte pas dans `--limit` : un nouveau passage à `--limit 50` lit 50 fiches de plus.
 Le délai est donné par `FRESH_DAYS` dans chaque collecteur : 2 jours pour les événements (Shotgun, Dice, BilletRéduc,
 Eventbrite, Fever), 14 pour les catalogues d'activités, 30 pour les lieux (OSM, hôtels, escape games, Time Out),
 7 par défaut (médias). Ses payloads stockés (`_page`) sont renormalisés à la date du jour, sauf si le sitemap la dit

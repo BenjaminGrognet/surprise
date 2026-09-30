@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from dataclasses import dataclass
 from decimal import Decimal
-from itertools import batched, islice
+from itertools import batched
 from typing import Any
 
 import httpx
@@ -127,6 +127,18 @@ def page(
     return remembered(url, read, modified)
 
 
+def up_to_new(results: Iterable[Normalized], limit: int | None) -> Iterable[Normalized]:
+    """The results until `limit` read now: those of a still fresh page cost no request, they don't count."""
+    if limit == 0:
+        return
+    new = 0
+    for result in results:
+        yield result
+        new += not result.raw.payload.get("_cached")
+        if limit is not None and new >= limit:
+            return  # before asking for the next one, which would load its page
+
+
 def collect_source(
     source_id: str,
     collect: Callable[[], Iterable[Normalized]],
@@ -151,7 +163,7 @@ def collect_source(
         httpx.Client(timeout=15, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client,
         ThreadPoolExecutor(CHECK_WORKERS) as pool,
     ):
-        for batch in batched(islice(collect(), limit), BATCH):
+        for batch in batched(up_to_new(collect(), limit), BATCH):
             results = list(pool.map(lambda result: require_booking(client, result, checks), batch))
             if store:
                 store.save_raw_records([r.raw for r in results if not r.raw.payload.get("_cached")])
@@ -177,7 +189,7 @@ def run(description: str, collect: Callable[[], Iterable[Normalized]]) -> None:
         choices=["local", "supabase"],
         help="local : data/surprise.db (SQLite) ; supabase : les mêmes tables dans Supabase (SUPABASE_DB_URL)",
     )
-    parser.add_argument("--limit", type=int, help="nombre maximum de fiches lues (les pages suivantes ne sont pas chargées)")
+    parser.add_argument("--limit", type=int, help="nombre maximum de fiches lues (les pages encore fraîches ne comptent pas, les suivantes ne sont pas chargées)")
     parser.add_argument("--refresh", action="store_true", help="relire aussi les pages lues il y a moins d'une semaine")
     parser.add_argument("--minutes", type=float, help="s'arrêter après ce temps (ce qui est lu est enregistré)")
     args = parser.parse_args()

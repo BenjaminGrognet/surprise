@@ -44,7 +44,7 @@ def collect_one(source_id: str, args: argparse.Namespace) -> tuple[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", action="append", choices=SOURCES, help="ne collecter que cette source (répétable)")
-    parser.add_argument("--limit", type=int, help="nombre maximum de fiches par source")
+    parser.add_argument("--limit", type=int, help="nombre maximum de fiches lues par source (les pages encore fraîches ne comptent pas)")
     parser.add_argument("--refresh", action="store_true", help="relire aussi les pages lues il y a moins d'une semaine")
     parser.add_argument("--minutes", type=float, help="temps maximum par source (ce qui est lu est enregistré)")
     parser.add_argument("--jobs", type=int, default=4, help="sources collectées en même temps (défaut : 4)")

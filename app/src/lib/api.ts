@@ -1,6 +1,6 @@
 // The Python quiz/soiree server (src/surprise/quiz.py) — profile and evening composition,
 // unrelated to Supabase (accounts, history), which the app talks to directly.
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8001';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`${API_URL}${path}`, {
