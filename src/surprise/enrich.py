@@ -55,7 +55,8 @@ _ANCHOR = re.compile(r"<a\s[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", re.IGNORECASE
 # Links that look like booking but lead elsewhere.
 _WORDPRESS_PAGE = re.compile(r"^(?:p|page_id|event)=\d+$")
 # Any URL in the page source, including JSON of JavaScript-built sites.
-_URL = re.compile(r"https?://[^\s\"'<>\\]+")
+# No brackets: "https://[domain]/…" in a page's script is no link, and urlsplit refuses it.
+_URL = re.compile(r"https?://[^\s\"'<>\\\[\]]+")
 _WORD = re.compile(r"[a-z0-9]{4,}")
 # A site's home page, possibly in a language ("/", "/en", "/fr-fr/").
 _HOME_PAGE = re.compile(r"(?:[a-z]{2}(?:[-_][a-z]{2})?)?", re.IGNORECASE)

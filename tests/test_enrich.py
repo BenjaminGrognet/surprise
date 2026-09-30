@@ -241,3 +241,9 @@ def test_describe_sends_facts_and_source_and_cleans_the_answer():
 def test_describe_ignores_refusals():
     client, _ = fake_client(stop_reason="refusal")
     assert enrich.describe(client, "claude-opus-5-5", activity(), "texte") is None
+
+
+def test_a_bracketed_template_in_a_page_is_no_link():
+    # Accor Arena's script: "https://[domain]/…" made urlsplit raise "Invalid IPv6 URL".
+    page = '<script>var u = "https://[domain]/tickets";</script><a href="https://www.ticketmaster.fr/fr/manifestation/x">Réserver</a>'
+    assert enrich.booking_link("https://www.accorarena.com/fr/programmation/x", page) == "https://www.ticketmaster.fr/fr/manifestation/x"
