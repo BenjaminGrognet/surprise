@@ -130,8 +130,11 @@ uv run python -m surprise.enrich
 
 - Image : photo de la source, sinon `og:image` du site officiel, sinon Google Places si `GOOGLE_PLACES_API_KEY`
   est définie (seul l'identifiant du lieu est stocké, la photo est chargée à l'affichage avec son crédit).
-- Lieu : coordonnées, horaires et, s'il manque, adresse depuis OpenStreetMap (Nominatim, 1 requête/s),
-  cherchés par nom et code postal.
+- Lieu : coordonnées, horaires et, s'il manque, adresse depuis OpenStreetMap, cherchés par nom puis par distance
+  ou code postal : d'abord dans les lieux nommés de Paris téléchargés une fois par semaine depuis Overpass
+  (`data/osm_paris.json`), sinon par Nominatim (1 requête/s). La réponse de chaque lieu est gardée 3 mois
+  (`pipeline.osm_places`, migration `20260930000001_osm_places.sql`). Un événement qui a déjà ses coordonnées
+  s'en passe : les horaires du lieu ne disent rien de ses dates.
 - Réservation : lien « Réserver » du site officiel si la fiche n'en a pas ; si le lien de la fiche mène à la page
   du spectacle sur le site du lieu, son bouton « Acheter » vers la billetterie.
 - Description : rédigée par Claude si `ANTHROPIC_API_KEY` est définie (modèle : `SURPRISE_LLM_MODEL`,

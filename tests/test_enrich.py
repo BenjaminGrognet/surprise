@@ -247,3 +247,33 @@ def test_a_bracketed_template_in_a_page_is_no_link():
     # Accor Arena's script: "https://[domain]/…" made urlsplit raise "Invalid IPv6 URL".
     page = '<script>var u = "https://[domain]/tickets";</script><a href="https://www.ticketmaster.fr/fr/manifestation/x">Réserver</a>'
     assert enrich.booking_link("https://www.accorarena.com/fr/programmation/x", page) == "https://www.ticketmaster.fr/fr/manifestation/x"
+
+
+def test_match_place_by_distance_then_postcode_then_unique_name():
+    def place(lat, postcode=None, url="n/1"):
+        return {"latitude": lat, "longitude": 2.35, "opening_hours": None, "osm_address": None, "osm_postal_code": postcode, "osm_url": url}
+
+    index = {
+        "dipsy": [place(48.85, url="n/1"), place(48.86, url="n/2")],
+        "chez nous": [place(48.87, "75011", "n/3"), place(48.87, "75006", "n/4")],
+        "unique": [place(48.88, url="n/5")],
+    }
+    near = {"name": "Le Dipsy", "postal_code": "75006", "latitude": 48.8601, "longitude": 2.35}
+    assert enrich.match_place(index, near)["osm_url"] == "n/2"
+    # Coordinates given, but no place of that name close by.
+    assert enrich.match_place(index, near | {"latitude": 48.80}) is None
+    assert enrich.match_place(index, {"name": "Chez Nous !", "postal_code": "75006"})["osm_url"] == "n/4"
+    assert enrich.match_place(index, {"name": "Unique", "postal_code": "75018"})["osm_postal_code"] == "75018"
+    # Two untagged places of that name: which one is unknown.
+    assert enrich.match_place(index, {"name": "Dipsy", "postal_code": "75006"}) is None
+
+
+def test_an_event_with_coordinates_skips_openstreetmap(monkeypatch):
+    asked = []
+    monkeypatch.setattr(enrich, "venue_place", lambda client, venue: asked.append(venue))
+    venue = activity()["venue"] | {"latitude": 48.85, "longitude": 2.34}
+    item = {"activity": activity(website=None, image={"url": "x"}, kind="temporary", venue=venue), "source_text": None}
+    enrich.enrich_one(item, httpx.Client())
+    assert not asked
+    enrich.enrich_one(item | {"activity": item["activity"] | {"kind": "permanent"}}, httpx.Client())
+    assert asked

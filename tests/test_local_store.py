@@ -58,6 +58,13 @@ def test_page_checks_are_kept(tmp_path):
         assert store.page_checks(days=-1) == {}
 
 
+def test_osm_places_are_kept_found_or_not(tmp_path):
+    with LocalStore(tmp_path / "s.db") as store:
+        store.save_osm_places({("Dipsy", "75006"): {"latitude": 48.85}, ("Nulle part", "75001"): None})
+        assert store.osm_places() == {("Dipsy", "75006"): {"latitude": 48.85}, ("Nulle part", "75001"): None}
+        assert store.osm_places(days=-1) == {}
+
+
 def test_latest_normalization_is_kept(tmp_path):
     path = tmp_path / "surprise.db"
     results = [qfap.normalize(p, NOW) for p in FIXTURE]
@@ -163,6 +170,6 @@ def test_copy_adds_only_missing_rows(tmp_path, monkeypatch):
         source.set_status("que_faire_a_paris", "12345", "approved")
         source.save_enrichment("que_faire_a_paris", "12345", {"image_url": "https://example.com/a.jpg"})
         assert isinstance(target, LocalStore)
-        assert copy(source, target) == {"raw_records": 4, "normalized": 4, "moderation": 1, "enrichment": 1, "keywords": 0}
+        assert copy(source, target) == {"raw_records": 4, "normalized": 4, "moderation": 1, "enrichment": 1, "keywords": 0, "osm_places": 0}
         assert set(copy(source, target).values()) == {0}
         assert target.list_for_moderation() == source.list_for_moderation()

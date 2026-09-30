@@ -94,10 +94,19 @@ create table if not exists page_checks (
   closed boolean not null,
   checked_at text not null default (datetime('now'))
 );
+-- OpenStreetMap place of each venue (surprise.enrich), place null when none was found; asked again after 3 months.
+create table if not exists osm_places (
+  name text not null,
+  postal_code text not null,
+  place text,
+  checked_at text not null default (datetime('now')),
+  primary key (name, postal_code)
+);
 """
 # A page read less than this long ago is not read again: its stored payloads are normalized anew.
 FRESH_DAYS = 7
 PAGE_CHECK_DAYS = 30
+OSM_PLACE_DAYS = 90
 
 
 _LATER_COLUMNS = {
@@ -216,6 +225,19 @@ class LocalStore:
                 " on conflict (url) do update set engine = excluded.engine, closed = excluded.closed,"
                 " checked_at = current_timestamp",
                 [(url, engine, closed) for url, (engine, closed) in verdicts.items()],
+            )
+
+    def osm_places(self, days: float = OSM_PLACE_DAYS) -> dict[tuple[str, str], dict[str, Any] | None]:
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        rows = self._run("select name, postal_code, place from osm_places where checked_at >= ?", (since,))
+        return {(name, postal_code): json.loads(place) if place else None for name, postal_code, place in rows}
+
+    def save_osm_places(self, places: dict[tuple[str, str], dict[str, Any] | None]) -> None:
+        with self._transaction():
+            self._run_many(
+                "insert into osm_places (name, postal_code, place) values (?, ?, ?)"
+                " on conflict (name, postal_code) do update set place = excluded.place, checked_at = current_timestamp",
+                [(name, postal_code, place and json.dumps(place)) for (name, postal_code), place in places.items()],
             )
 
     def list_for_moderation(self) -> list[dict[str, Any]]:
@@ -426,6 +448,7 @@ _COPIED = {
     "moderation": ("source_id", "external_id", "status", "content_hash", "decided_at"),
     "enrichment": ("source_id", "external_id", *_ENRICHMENT_COLUMNS, "enriched_at"),
     "keywords": ("source_id", "external_id", "keywords", "computed_at"),
+    "osm_places": ("name", "postal_code", "place", "checked_at"),
 }
 
 

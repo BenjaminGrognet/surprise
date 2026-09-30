@@ -9,6 +9,7 @@ verdict (reviewBody) is kept as lead_text. List articles have no Review and
 are skipped.
 """
 
+import re
 from datetime import datetime, timedelta
 from typing import Any, Iterator
 
@@ -76,7 +77,8 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     # Time Out names the place in its headline ("Le Royaume de Saba, jardin d'Aden…"): the name comes first.
-    name = (payload.get("name") or "").split(",")[0].strip()
+    # Its page title may follow: "Volver | Restaurants à Roquette".
+    name = re.split(r",| \| ", payload.get("name") or "")[0].strip()
     facts = payload | {"name": name, "venue_name": name if payload.get("venue_name") else None}
     return normalize_facts(to_raw_record(payload), facts, "Time Out", now)
 

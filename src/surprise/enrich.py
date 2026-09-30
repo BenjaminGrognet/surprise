@@ -7,7 +7,10 @@
 - Booking link: when the activity has none, the official site's "Réserver"
   link (e.g. a theatre page pointing to its ticketing).
 - Place: coordinates, opening hours and, when missing, the address from
-  OpenStreetMap (Nominatim, open data under ODbL), matched by name and postcode.
+  OpenStreetMap (open data under ODbL): the named places of Paris downloaded once
+  from Overpass, matched by name and postcode or distance, else Nominatim. Each
+  venue's answer is stored, so it is asked once. An event with coordinates skips
+  it: a venue's opening hours say nothing of an event's dates.
 - Description: one or two sentences written by Claude when ANTHROPIC_API_KEY is
   set, from the facts and a licensed text: the source's own (Que Faire à Paris,
   ODbL; Paris ZigZag's article text for this personal prototype) or the official
@@ -19,6 +22,8 @@ Only activities not enriched yet are processed, so the nightly run stays cheap.
 import argparse
 import functools
 import html
+import json
+import math
 import os
 import re
 import threading
@@ -28,6 +33,7 @@ from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
@@ -42,6 +48,16 @@ PLACES_URL = "https://places.googleapis.com/v1"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 # Nominatim's usage policy: at most one request per second.
 NOMINATIM_DELAY = 1.0
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Every named place of Paris and its inner suburbs (90 000, 34 MB, about 10 s), downloaded again after a week.
+OVERPASS_QUERY = (
+    '[out:json][timeout:180];nwr["name"][~"^(amenity|leisure|tourism|shop|club|craft|sport|historic)$"~"."]'
+    "(48.80,2.20,48.93,2.48);out center tags;"
+)
+OVERPASS_FILE = Path("data/osm_paris.json")
+OVERPASS_DAYS = 7
+# A venue given with coordinates is the OSM place of its name this close.
+NEAR_METRES = 300
 # Around Notre-Dame, covering Paris intra-muros.
 PARIS_CENTER = {"latitude": 48.8566, "longitude": 2.3522}
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -188,9 +204,24 @@ def place_photo(client: httpx.Client, api_key: str, place_id: str, max_width: in
 
 
 _nominatim_lock = threading.Lock()
+_nominatim_next = 0.0
 # OSM results that are areas or roads, not the place itself.
 _PARIS_POSTCODE = re.compile(r"75\d{3}")
 _NOT_A_PLACE = {"highway", "place", "boundary", "landuse", "railway"}
+
+
+def _nominatim(client: httpx.Client, url: str, params: dict[str, Any]) -> Any:
+    """Nominatim's JSON answer, None when it fails; one request per second across workers (its usage policy)."""
+    global _nominatim_next
+    # The lock only books the next slot: the request runs outside it, so its own duration adds no wait.
+    with _nominatim_lock:
+        time.sleep(max(0.0, _nominatim_next - time.monotonic()))
+        _nominatim_next = time.monotonic() + NOMINATIM_DELAY
+    try:
+        response = client.get(url, params=params)
+    except httpx.HTTPError:
+        return None
+    return response.json() if response.status_code == 200 else None
 
 
 # Once per venue and client: the 46 concerts of a club, at 1 request/s, asked it 46 times.
@@ -199,20 +230,13 @@ def osm_place(client: httpx.Client, name: str, address: str | None, postal_code:
     """The OpenStreetMap place of this name in this postcode (else anywhere in Paris): coordinates, hours, address, OSM link."""
     queries = [f"{name}, {postal_code} Paris", f"{name}, {address or ''}, {postal_code} Paris"] if postal_code else [f"{name}, Paris"]
     for query in dict.fromkeys(queries):
-        # ponytail: one global lock across workers, Nominatim allows 1 req/s anyway.
-        with _nominatim_lock:
-            try:
-                response = client.get(
-                    NOMINATIM_URL,
-                    params={"q": query, "format": "jsonv2", "addressdetails": 1, "extratags": 1, "limit": 5, "countrycodes": "fr"},
-                )
-            except httpx.HTTPError:
-                return None
-            finally:
-                time.sleep(NOMINATIM_DELAY)
-        if response.status_code != 200:
+        results = _nominatim(
+            client, NOMINATIM_URL,
+            {"q": query, "format": "jsonv2", "addressdetails": 1, "extratags": 1, "limit": 5, "countrycodes": "fr"},
+        )
+        if results is None:
             return None
-        for result in response.json():
+        for result in results:
             details = result.get("address") or {}
             in_place = details.get("postcode") == postal_code if postal_code else _PARIS_POSTCODE.fullmatch(details.get("postcode") or "")
             if result.get("category") in _NOT_A_PLACE or not in_place or not result.get("name"):
@@ -231,18 +255,10 @@ def osm_place(client: httpx.Client, name: str, address: str | None, postal_code:
 
 def osm_area(client: httpx.Client, query: str) -> dict[str, Any] | None:
     """Where a named spot of Paris is (a métro station, a square): its postcode and coordinates."""
-    with _nominatim_lock:
-        try:
-            response = client.get(
-                NOMINATIM_URL, params={"q": f"{query}, Paris", "format": "jsonv2", "addressdetails": 1, "limit": 5, "countrycodes": "fr"}
-            )
-        except httpx.HTTPError:
-            return None
-        finally:
-            time.sleep(NOMINATIM_DELAY)
-    if response.status_code != 200:
-        return None
-    for result in response.json():
+    results = _nominatim(
+        client, NOMINATIM_URL, {"q": f"{query}, Paris", "format": "jsonv2", "addressdetails": 1, "limit": 5, "countrycodes": "fr"}
+    )
+    for result in results or []:
         postcode = (result.get("address") or {}).get("postcode") or ""
         if _PARIS_POSTCODE.fullmatch(postcode):
             return {
@@ -256,20 +272,11 @@ def osm_area(client: httpx.Client, query: str) -> dict[str, Any] | None:
 
 def osm_address(client: httpx.Client, latitude: float, longitude: float) -> dict[str, Any] | None:
     """The street address and postcode at these coordinates, on OpenStreetMap."""
-    with _nominatim_lock:
-        try:
-            response = client.get(
-                NOMINATIM_URL.replace("/search", "/reverse"),
-                params={"lat": latitude, "lon": longitude, "format": "jsonv2", "addressdetails": 1, "zoom": 18},
-            )
-        except httpx.HTTPError:
-            return None
-        finally:
-            time.sleep(NOMINATIM_DELAY)
-    if response.status_code != 200:
-        return None
-    result = response.json()
-    details = result.get("address") or {}
+    result = _nominatim(
+        client, NOMINATIM_URL.replace("/search", "/reverse"),
+        {"lat": latitude, "lon": longitude, "format": "jsonv2", "addressdetails": 1, "zoom": 18},
+    )
+    details = (result or {}).get("address") or {}
     if not details.get("postcode"):
         return None
     street = " ".join(filter(None, [details.get("house_number"), details.get("road") or details.get("pedestrian")]))
@@ -278,6 +285,80 @@ def osm_address(client: httpx.Client, latitude: float, longitude: float) -> dict
         "osm_postal_code": details["postcode"],
         "osm_url": f"https://www.openstreetmap.org/{result['osm_type']}/{result['osm_id']}" if result.get("osm_type") else None,
     }
+
+
+def paris_places(client: httpx.Client) -> dict[str, list[dict[str, Any]]]:
+    """The named OSM places of Paris by name (see _name_key); empty when Overpass fails and no copy was kept."""
+    fresh = OVERPASS_FILE.exists() and time.time() - OVERPASS_FILE.stat().st_mtime < OVERPASS_DAYS * 86400
+    if not fresh:
+        try:
+            response = client.post(OVERPASS_URL, data={"data": OVERPASS_QUERY}, timeout=300)
+            response.raise_for_status()
+            OVERPASS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            OVERPASS_FILE.write_bytes(response.content)
+        except httpx.HTTPError as error:
+            print(f"Overpass indisponible ({error!r}) : copie précédente ou Nominatim seul")
+    if not OVERPASS_FILE.exists():
+        return {}
+    index: dict[str, list[dict[str, Any]]] = {}
+    for element in json.loads(OVERPASS_FILE.read_bytes())["elements"]:
+        tags, point = element["tags"], element.get("center") or element
+        if "lat" not in point:
+            continue
+        street = " ".join(filter(None, [tags.get("addr:housenumber"), tags.get("addr:street")]))
+        index.setdefault(_name_key(tags["name"]), []).append({
+            "latitude": point["lat"],
+            "longitude": point["lon"],
+            "opening_hours": tags.get("opening_hours"),
+            "osm_address": street or None,
+            "osm_postal_code": tags.get("addr:postcode"),
+            "osm_url": f"https://www.openstreetmap.org/{element['type']}/{element['id']}",
+        })
+    return index
+
+
+def _name_key(name: str) -> str:
+    """ "Le Dipsy" and "Dipsy !" alike: no accent, case, punctuation or leading article."""
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"^(?:le|la|les|l) ", "", " ".join(re.findall(r"[a-z0-9]+", ascii_name)))
+
+
+def match_place(index: dict[str, list[dict[str, Any]]], venue: dict[str, Any]) -> dict[str, Any] | None:
+    """The OSM place of the venue's name: nearest to its coordinates, else in its postcode, else the only one of that name.
+
+    Most OSM places carry no postcode: an untagged one is taken only when nothing contradicts it.
+    """
+    postcode = venue["postal_code"]
+    same_name = index.get(_name_key(venue["name"]), [])
+    candidates = [c for c in same_name if c["osm_postal_code"] in (None, postcode)]
+    if venue.get("latitude") and venue.get("longitude"):
+        near = [(_metres(c, venue), c) for c in candidates]
+        place = min((pair for pair in near if pair[0] < NEAR_METRES), key=lambda pair: pair[0], default=(0, None))[1]
+    else:
+        tagged = [c for c in candidates if c["osm_postal_code"] == postcode]
+        # ponytail: a unique untagged name may sit in a suburb of the box, not in the venue's postcode; rare enough.
+        place = tagged[0] if tagged else candidates[0] if len(same_name) == 1 and candidates else None
+    return place and place | {"osm_postal_code": place["osm_postal_code"] or postcode}
+
+
+def _metres(place: dict[str, Any], venue: dict[str, Any]) -> float:
+    dy = (place["latitude"] - venue["latitude"]) * 111_000
+    dx = (place["longitude"] - venue["longitude"]) * 111_000 * math.cos(math.radians(venue["latitude"]))
+    return math.hypot(dx, dy)
+
+
+# Filled by main: the Overpass index, and every venue's answer (None: not found) from the store and this run.
+_paris: dict[str, list[dict[str, Any]]] = {}
+_places: dict[tuple[str, str], dict[str, Any] | None] = {}
+_new_places: dict[tuple[str, str], dict[str, Any] | None] = {}
+
+
+def venue_place(client: httpx.Client, venue: dict[str, Any]) -> dict[str, Any] | None:
+    key = (venue["name"], venue["postal_code"])
+    if key not in _places:
+        place = match_place(_paris, venue) or osm_place(client, venue["name"], venue.get("address"), venue["postal_code"])
+        _places[key] = _new_places[key] = place
+    return _places[key]
 
 
 def describe(anthropic_client: Any, model: str, activity: dict[str, Any], source_text: str | None) -> str | None:
@@ -334,8 +415,9 @@ def enrich_one(
         except httpx.HTTPError:
             pass
     venue = activity.get("venue") or {}
-    if venue and not (venue.get("latitude") and venue.get("opening_hours")):
-        place = osm_place(http, venue["name"], venue.get("address"), venue["postal_code"])
+    # Coordinates when missing, and a permanent place's opening hours: an event keeps its own dates.
+    if venue and (not venue.get("latitude") or (activity.get("kind") == "permanent" and not venue.get("opening_hours"))):
+        place = venue_place(http, venue)
         if place:
             fields.update(place)
     # Only what was looked up: a refresh must not erase a value found before.
@@ -377,6 +459,11 @@ def _prompt(activity: dict[str, Any], source_text: str | None) -> str:
     return "\n".join(filter(None, facts)) + f"\n\nTexte source (à reformuler, ne pas recopier) :\n{text}"
 
 
+def _drain(places: dict[tuple[str, str], Any]) -> dict[tuple[str, str], Any]:
+    # pop, not copy then clear: workers keep adding while the main thread saves.
+    return {key: places.pop(key) for key in list(places)}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--limit", type=int, help="nombre maximum d'activités à traiter")
@@ -401,12 +488,14 @@ def main() -> None:
         print("Photos Google Places désactivées (GOOGLE_PLACES_API_KEY absente)")
 
     with open_store() as store:
+        _places.update(store.osm_places())
         items = store.pending_enrichment(args.refresh, missing_description=describer is not None)
         items = [item for item in items if not args.source or item["source_id"] in args.source][: args.limit]
         print(f"{len(items)} activités à enrichir")
         counts: Counter[str] = Counter()
         headers = {"User-Agent": USER_AGENT}
         with httpx.Client(timeout=15, follow_redirects=True, headers=headers) as http, ThreadPoolExecutor(args.workers) as pool:
+            _paris.update(paris_places(http))
             futures = {pool.submit(enrich_one, item, http, places_key, describer): item for item in items}
             for done, future in enumerate(as_completed(futures), 1):
                 item = futures[future]
@@ -422,7 +511,9 @@ def main() -> None:
                 store.save_enrichment(item["source_id"], item["external_id"], fields)
                 counts.update(key for key, value in fields.items() if value)
                 if done % 100 == 0:
+                    store.save_osm_places(_drain(_new_places))
                     print(f"  {done}/{len(items)}", flush=True)
+        store.save_osm_places(_drain(_new_places))
     print(
         f"images du site officiel : {counts['image_url']}, liens de réservation : {counts['booking_url']}, lieux Google : {counts['place_id']}, "
         f"extraits : {counts['site_excerpt']}, lieux OpenStreetMap : {counts['osm_url']}, horaires : {counts['opening_hours']}, "
