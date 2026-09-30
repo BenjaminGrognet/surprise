@@ -29,7 +29,7 @@ _url = TypeAdapter(HttpUrl)
 # A booking or ticketing link, by its text ("Réservez") or its domain.
 BOOKING = re.compile(
     r"r[ée]serv|billet|ticket|booking|\bbook\b|tickeasy|fnacspectacles|eventbrite|shotgun|dice\.fm|weezevent|"
-    r"themisweb|seetickets|feverup|placeminute|billetreduc|mapado|billetweb|helloasso",
+    r"themisweb|seetickets|feverup|placeminute|billetreduc|mapado|billetweb|helloasso|wecandoo|funbooker",
     re.IGNORECASE,
 )
 # Not an outing: shops, beauty treatments, wellness products.

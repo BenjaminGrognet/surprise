@@ -277,3 +277,12 @@ def test_an_event_with_coordinates_skips_openstreetmap(monkeypatch):
     assert not asked
     enrich.enrich_one(item | {"activity": item["activity"] | {"kind": "permanent"}}, httpx.Client())
     assert asked
+
+
+@respx.mock
+def test_a_booking_platform_page_is_not_read_for_its_ticketing():
+    page = respx.get(url__startswith="https://wecandoo.fr/")
+    item = {"activity": activity(website=None, image={"url": "x"}, offers=[{"booking_url": "https://wecandoo.fr/atelier/paris-x"}]), "source_text": "T."}
+    with httpx.Client() as client:
+        enrich.enrich_one(item, client)
+    assert not page.called

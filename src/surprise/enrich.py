@@ -470,7 +470,7 @@ def main() -> None:
     parser.add_argument("--refresh", action="store_true", help="retraiter aussi les activités déjà enrichies")
     parser.add_argument("--no-descriptions", action="store_true", help="images et extraits seulement, sans appel à Claude")
     parser.add_argument("--source", action="append", help="ne traiter que cette source (répétable)")
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=16)
     args = parser.parse_args()
 
     places_key = os.environ.get("GOOGLE_PLACES_API_KEY")
