@@ -10,7 +10,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from itertools import batched
 from typing import Any
@@ -54,6 +54,24 @@ class Normalized:
     raw: RawRecord
     activity: Activity | None = None
     rejection: str | None = None
+
+
+# Every reason to reject a record, in its one rejection text: "jeune public · hors fenêtre" (admin.html splits it too).
+REASONS = " · "
+
+
+def join_reasons(*reasons: str | None) -> str | None:
+    """The reasons found, in one text; None when there are none."""
+    return REASONS.join(dict.fromkeys(reason for reason in reasons if reason)) or None
+
+
+def split_reasons(rejection: str | None) -> list[str]:
+    return rejection.split(REASONS) if rejection else []
+
+
+def with_reason(reason: str | None, result: Normalized) -> Normalized:
+    """The result, with a reason to reject it found before (the fiche is still built, to be seen in moderation)."""
+    return replace(result, rejection=join_reasons(reason, result.rejection))
 
 
 def safe_url(value: str | None) -> HttpUrl | None:
@@ -173,7 +191,8 @@ def collect_source(
             for r in results:
                 counts["fiches"] += 1
                 counts["pages déjà fraîches"] += bool(r.raw.payload.get("_cached"))
-                counts["retenues" if r.activity and not r.rejection else f"rejet — {r.rejection}"] += 1
+                counts["retenues"] += bool(r.activity and not r.rejection)
+                counts.update(f"rejet — {reason}" for reason in split_reasons(r.rejection))
             log(f"{counts['fiches']} fiches ({counts['retenues']} retenues), {clock.monotonic() - started:.0f} s")
             if minutes and clock.monotonic() - started > minutes * 60:
                 log(f"arrêt : plus de {minutes} min")

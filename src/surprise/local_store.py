@@ -159,6 +159,11 @@ _ENRICHMENT_COLUMNS = (
 )
 
 
+def _partial(title: str) -> dict[str, Any]:
+    """What moderation shows of a record rejected before its fiche was built: its title."""
+    return {"title": title, "venue": {}, "categories": [], "occurrences": [], "offers": []}
+
+
 def _no_nul(text: str | None) -> str | None:
     # Postgres jsonb refuses the NUL character, which a few scraped pages carry.
     return text.replace("\\u0000", "") if text else text
@@ -350,30 +355,34 @@ class LocalStore:
     def list_for_moderation(self) -> list[dict[str, Any]]:
         """Normalized activities with their moderation status and a little source context.
 
-        Activities rejected at collection are "filtered", with their reason, until a moderator decides.
+        Activities rejected at collection are "filtered", with their reasons, until a moderator decides. Those rejected
+        before their fiche could be built (no place, out of the area…) are listed too, "partial": their title and page only.
         """
         rows = self._run(
             """
             select n.source_id, n.external_id, n.activity,
-                   coalesce(m.status, case when n.rejection is null then 'proposed' else 'filtered' end), n.rejection,
+                   case when n.activity is null then 'filtered'
+                        else coalesce(m.status, case when n.rejection is null then 'proposed' else 'filtered' end) end,
+                   n.rejection,
                    m.content_hash is not null and m.content_hash != n.content_hash, cast(m.decided_at as text),
                    r.url, r.payload ->> 'lead_text', r.payload ->> 'cover_url',
                    e.image_url, e.image_origin, e.place_id, e.site_excerpt, e.description, e.booking_url,
-                   e.opening_hours, e.osm_address, e.osm_url, e.latitude, e.longitude, k.keywords
+                   e.opening_hours, e.osm_address, e.osm_url, e.latitude, e.longitude, k.keywords,
+                   coalesce(r.payload ->> 'title', r.payload ->> 'name')
             from normalized n
             left join moderation m using (source_id, external_id)
             left join enrichment e using (source_id, external_id)
             left join keywords k using (source_id, external_id)
             left join raw_records r
               on r.source_id = n.source_id and r.external_id = n.external_id and r.content_hash = n.content_hash
-            where n.activity is not null
             """
         )
         return [
             {
                 "source_id": source_id,
                 "external_id": external_id,
-                "activity": json.loads(activity),
+                "activity": json.loads(activity) if activity else _partial(title or source_url or external_id),
+                "partial": activity is None,
                 "status": status,
                 "rejection": rejection,
                 "changed_since_decision": bool(changed),
@@ -399,7 +408,7 @@ class LocalStore:
             for (
                 source_id, external_id, activity, status, rejection, changed, decided_at, source_url, lead_text, cover_url,
                 image_url, image_origin, place_id, site_excerpt, description, booking_url,
-                opening_hours, osm_address, osm_url, latitude, longitude, keywords,
+                opening_hours, osm_address, osm_url, latitude, longitude, keywords, title,
             ) in rows
         ]
 

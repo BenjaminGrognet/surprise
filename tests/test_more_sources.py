@@ -26,8 +26,11 @@ def raw(payload):
 
 
 def test_normalize_facts_rejections():
-    assert normalize_facts(raw({}), {"name": "Soirée célibataires"}, "x", NOW).rejection == "pas pour un couple"
-    assert normalize_facts(raw({}), {"name": "Atelier parent-enfant"}, "x", NOW).rejection == "jeune public"
+    # Every reason is kept; a blocking one (no place) ends the fiche, the others let it be built for moderation.
+    assert normalize_facts(raw({}), {"name": "Soirée célibataires"}, "x", NOW).rejection == "pas pour un couple · sans lieu"
+    workshop = {"name": "Atelier parent-enfant", "address": "1 rue X, 75011 Paris", "ends_on": "2026-09-01"}
+    result = normalize_facts(raw({}), workshop, "x", NOW)
+    assert result.rejection == "jeune public · passé" and result.activity.title == "Atelier parent-enfant"
     assert normalize_facts(raw({}), {"name": "Visite"}, "x", NOW).rejection == "sans lieu"
     assert normalize_facts(raw({}), {"name": "Visite", "address": "1 rue X, 91300 Massy"}, "x", NOW).rejection == "hors Paris et proche banlieue"
     past = {"name": "Expo", "address": "1 rue X, 75011 Paris", "ends_on": "2026-09-01"}

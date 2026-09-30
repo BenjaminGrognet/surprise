@@ -15,7 +15,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, page, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url, with_reason
 from surprise.collectors.facts import BROWSER_HEADERS, USER_AGENT, lines, normalize_facts, text, utc_now
 from surprise.collectors.funbooker import duration_minutes
 from surprise.collectors.paris_zigzag import _MONTHS, postal_code
@@ -114,9 +114,8 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
     if not re.match(r"^Paris\b", payload.get("city") or "") and (payload.get("city") or "").strip() not in METRO_TOWNS.values():
         return Normalized(raw, rejection=OUT_OF_AREA)
-    if payload.get("sessions") and not any(session[:10] >= now.date().isoformat() for session in payload["sessions"]):
-        return Normalized(raw, rejection="passé")
-    return normalize_facts(raw, payload, "Explore Paris", now)
+    past = payload.get("sessions") and not any(session[:10] >= now.date().isoformat() for session in payload["sessions"])
+    return with_reason("passé" if past else None, normalize_facts(raw, payload, "Explore Paris", now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

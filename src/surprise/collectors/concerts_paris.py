@@ -13,7 +13,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, run, safe_url
+from surprise.collectors.common import Normalized, run, safe_url, with_reason
 from surprise.collectors.facts import normalize_facts, utc_now
 from surprise.models import RawRecord
 
@@ -93,9 +93,8 @@ def facts(event: dict[str, Any]) -> dict[str, Any]:
 
 def normalize(event: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(event)
-    if event.get("eventStatus") == "EventCancelled":
-        return Normalized(raw, rejection="annulé")
-    return normalize_facts(raw, facts(event), "concerts.paris", now)
+    cancelled = "annulé" if event.get("eventStatus") == "EventCancelled" else None
+    return with_reason(cancelled, normalize_facts(raw, facts(event), "concerts.paris", now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Normalized]:

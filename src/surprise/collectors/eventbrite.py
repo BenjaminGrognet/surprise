@@ -13,7 +13,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, page, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url, with_reason
 from surprise.collectors.facts import BROWSER_HEADERS, ld_address, ld_node, normalize_facts, utc_now
 from surprise.models import RawRecord
 
@@ -71,12 +71,10 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
-    if payload.get("online"):
-        return Normalized(raw, rejection="en ligne")
     # A single-day event starts on its start time; the dates of a run give its period.
     single = payload.get("starts_on") == payload.get("ends_on") or not payload.get("ends_on")
     facts = payload | ({"starts_on": None, "ends_on": None} if single and payload.get("starts_at") else {})
-    return normalize_facts(raw, facts, "Eventbrite", now)
+    return with_reason("en ligne" if payload.get("online") else None, normalize_facts(raw, facts, "Eventbrite", now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

@@ -16,7 +16,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, Normalized, page, run, safe_url
+from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, Normalized, join_reasons, page, run, safe_url
 from surprise.collectors.paris_zigzag import postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -81,15 +81,16 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any]) -> Normalized:
     raw = to_raw_record(payload)
+    reasons: list[str] = []
     title = _IN_PARIS.sub("", payload["name"]) or payload["name"]
     if not payload["name"]:
-        return Normalized(raw, rejection="sans nom")
+        return Normalized(raw, rejection=join_reasons(*reasons, "sans nom"))
     if _CHILD_AUDIENCE.search(payload["name"]):
-        return Normalized(raw, rejection="jeune public")
+        reasons.append("jeune public")
     if OFF_TOPIC.search(payload["name"]):
-        return Normalized(raw, rejection="hors sujet")
+        reasons.append("hors sujet")
     if GROUP_PARTY.search(payload["name"]):
-        return Normalized(raw, rejection="pas pour un couple")
+        reasons.append("pas pour un couple")
     # "49 Rue du Faubourg du Temple, 75010 Paris, FR"
     address = re.sub(r",\s*FR$", "", " ".join(payload["address"].split()))
     _, street = split_venue(address, default_name=payload["name"])
@@ -103,7 +104,7 @@ def normalize(payload: dict[str, Any]) -> Normalized:
             longitude=float(payload["longitude"]) if payload["longitude"] else None,
         )
     except ValidationError:
-        return Normalized(raw, rejection=OUT_OF_AREA)
+        return Normalized(raw, rejection=join_reasons(*reasons, OUT_OF_AREA))
     try:
         activity = Activity(
             title=title,
@@ -125,8 +126,8 @@ def normalize(payload: dict[str, Any]) -> Normalized:
             ],
         )
     except ValidationError as error:
-        return Normalized(raw, rejection=f"invalide : {error}")
-    return Normalized(raw, activity=activity)
+        return Normalized(raw, rejection=join_reasons(*reasons, f"invalide : {error}"))
+    return Normalized(raw, activity=activity, rejection=join_reasons(*reasons))
 
 
 def duration_minutes(text: str | None) -> int | None:

@@ -18,14 +18,14 @@ from collections import Counter
 import httpx
 
 from surprise.booking import PageChecks
-from surprise.collectors.common import USER_AGENT, require_booking
+from surprise.collectors.common import USER_AGENT, require_booking, split_reasons
 from surprise.collectors.facts import utc_now
 from surprise.local_store import LocalStore, open_store
 
 
 def renormalize(store: LocalStore, sources: list[str] | None = None, rejections: list[str] | None = None) -> Counter:
     """Normalizes the chosen records again and saves them; the count of changes ("rejet → retenue")."""
-    rows = [row for row in store.raw_with_rejection() if (not sources or row[0] in sources) and (not rejections or row[2] in rejections)]
+    rows = [row for row in store.raw_with_rejection() if (not sources or row[0] in sources) and (not rejections or set(split_reasons(row[2])) & set(rejections))]
     print(f"{len(rows)} fiches à normaliser de nouveau")
     now, changes, results, checks = utc_now(), Counter(), [], PageChecks(store.page_checks())
     with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:

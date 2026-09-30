@@ -17,7 +17,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, page, run
+from surprise.collectors.common import Normalized, page, run, with_reason
 from surprise.collectors.facts import BROWSER_HEADERS, normalize_facts, sitemap, utc_now
 from surprise.collectors.time_out import BASE_URL, DELAY_SECONDS, SITEMAP_INDEX, parse_review
 from surprise.collectors.time_out import to_raw_record as _to_raw_record
@@ -76,8 +76,6 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     name = payload.get("title") or _HEADLINE.sub("", payload.get("name") or "").strip()
-    if _CLOSED.search(name):
-        return Normalized(to_raw_record(payload), rejection="fermé définitivement")
     facts = payload | {
         "name": name,
         "venue_name": name,
@@ -85,7 +83,8 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
         "evening": True,
         "per_couple": True,  # a room, for the two of them
     }
-    return normalize_facts(to_raw_record(payload), facts, "Time Out", now)
+    closed = "fermé définitivement" if _CLOSED.search(name) else None
+    return with_reason(closed, normalize_facts(to_raw_record(payload), facts, "Time Out", now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

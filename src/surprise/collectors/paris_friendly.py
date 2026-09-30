@@ -17,7 +17,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, page, run, safe_url
+from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, join_reasons, page, run, safe_url
 from surprise.collectors.paris_zigzag import PARIS, WINDOW, is_evening, parse_dates, postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -84,16 +84,17 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW) -> Normalized:
     raw = to_raw_record(payload)
+    reasons: list[str] = []
     title = payload["title"]
     if not title:
-        return Normalized(raw, rejection="sans nom")
+        return Normalized(raw, rejection=join_reasons(*reasons, "sans nom"))
     if _CHILD_AUDIENCE.search(title):
-        return Normalized(raw, rejection="jeune public")
+        reasons.append("jeune public")
     if OFF_TOPIC.search(f"{title} {payload['url']}"):
-        return Normalized(raw, rejection="hors sujet")
+        reasons.append("hors sujet")
     address = payload.get("address") or ""
     if not address:
-        return Normalized(raw, rejection="sans lieu")
+        return Normalized(raw, rejection=join_reasons(*reasons, "sans lieu"))
     # "28 Rue de Monceau, 75008 Paris 75008 Paris"
     _, street = split_venue(re.sub(r"(\s*75\d{3}\s*Paris)+\s*$", "", address), default_name=title)
     venue_name = payload.get("venue_name") or title
@@ -101,21 +102,21 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
     # at the Odéon): kept only when the article itself names the street (Les Éditeurs, "4, carrefour de l'Odéon").
     if venue_name.strip().lower() == "paris":
         if not _street_in_article(street, f"{title} {payload.get('lead_text') or ''}"):
-            return Normalized(raw, rejection="lieu imprécis")
+            return Normalized(raw, rejection=join_reasons(*reasons, "lieu imprécis"))
         venue_name = title.split(" : ")[0].strip()
     try:
         venue = Venue(name=venue_name, address=street, postal_code=postal_code(address) or "")
     except ValidationError:
-        return Normalized(raw, rejection=OUT_OF_AREA)
+        return Normalized(raw, rejection=join_reasons(*reasons, OUT_OF_AREA))
 
     today = now.astimezone(PARIS).date()
     # "Les 16, 17 et 18 octobre 2026 - à réserver le 24 septembre à 14h": the booking date is not the event's.
     dates = re.split(r"\s+-\s+", payload.get("dates") or "")[0]
     starts_on, ends_on = parse_dates(dates, today)
     if ends_on and ends_on < today:
-        return Normalized(raw, rejection="passé")
+        reasons.append("passé")
     if starts_on and starts_on > today + window:
-        return Normalized(raw, rejection="hors fenêtre")
+        reasons.append("hors fenêtre")
 
     price_text = payload.get("price") or ""
     amounts = euro_amounts(price_text)
@@ -143,8 +144,8 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             ],
         )
     except ValidationError as error:
-        return Normalized(raw, rejection=f"invalide : {error}")
-    return Normalized(raw, activity=activity)
+        return Normalized(raw, rejection=join_reasons(*reasons, f"invalide : {error}"))
+    return Normalized(raw, activity=activity, rejection=join_reasons(*reasons))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

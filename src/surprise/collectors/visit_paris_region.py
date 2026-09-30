@@ -13,7 +13,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url
+from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url, with_reason
 from surprise.collectors.facts import BROWSER_HEADERS, normalize_facts, sitemap, text, utc_now
 from surprise.collectors.paris_zigzag import is_evening
 from surprise.models import RawRecord
@@ -81,9 +81,8 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
-    if _SKIPPED_BREADCRUMB.search(" ".join(payload.get("breadcrumb") or [])):
-        return Normalized(raw, rejection="hors sujet")
-    return normalize_facts(raw, payload, "VisitParisRegion", now)
+    off_topic = "hors sujet" if _SKIPPED_BREADCRUMB.search(" ".join(payload.get("breadcrumb") or [])) else None
+    return with_reason(off_topic, normalize_facts(raw, payload, "VisitParisRegion", now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

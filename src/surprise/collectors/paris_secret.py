@@ -28,7 +28,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, page, run, safe_url
+from surprise.collectors.common import OFF_TOPIC, Normalized, euro_amounts, join_reasons, page, run, safe_url
 from surprise.collectors.paris_zigzag import (
     PARIS,
     WINDOW,
@@ -150,9 +150,10 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW) -> Normalized:
     raw = to_raw_record(payload)
+    reasons: list[str] = []
     name = payload["name"]
     if not name:
-        return Normalized(raw, rejection="sans nom")
+        return Normalized(raw, rejection=join_reasons(*reasons, "sans nom"))
     today = now.astimezone(PARIS).date()
     if payload["kind"] == "fever_plan":
         address, venue_name, dates_text, price_text = payload.get("address") or "", payload.get("venue_name"), None, None
@@ -171,20 +172,20 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
         amounts = euro_amounts(price_text)
         booking_url = None
     if _CHILD_AUDIENCE.search(f"{name} {payload.get('article_title')}"):
-        return Normalized(raw, rejection="jeune public")
+        reasons.append("jeune public")
     if OFF_TOPIC.search(name):
-        return Normalized(raw, rejection="hors sujet")
+        reasons.append("hors sujet")
     if not address:
-        return Normalized(raw, rejection="sans lieu")
+        return Normalized(raw, rejection=join_reasons(*reasons, "sans lieu"))
     parsed_name, street = split_venue(address, default_name=venue_name or name)
     try:
         venue = Venue(name=venue_name or parsed_name, address=street, postal_code=postal_code(address) or "")
     except ValidationError:
-        return Normalized(raw, rejection=OUT_OF_AREA)
+        return Normalized(raw, rejection=join_reasons(*reasons, OUT_OF_AREA))
     if (ends_on or starts_on) and (ends_on or starts_on) < today:
-        return Normalized(raw, rejection="passé")
+        reasons.append("passé")
     if starts_on and starts_on > today + window:
-        return Normalized(raw, rejection="hors fenêtre")
+        reasons.append("hors fenêtre")
     is_free = bool(price_text and _FREE.search(price_text)) and not any(amounts)
     try:
         activity = Activity(
@@ -209,8 +210,8 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             ],
         )
     except ValidationError as error:
-        return Normalized(raw, rejection=f"invalide : {error}")
-    return Normalized(raw, activity=activity)
+        return Normalized(raw, rejection=join_reasons(*reasons, f"invalide : {error}"))
+    return Normalized(raw, activity=activity, rejection=join_reasons(*reasons))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

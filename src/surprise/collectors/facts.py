@@ -23,7 +23,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, USER_AGENT, Normalized, safe_url
+from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, USER_AGENT, Normalized, join_reasons, safe_url
 from surprise.collectors.paris_zigzag import PARIS, WINDOW, postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Occurrence, Offer, PriceUnit, RawRecord, Venue
 
@@ -190,17 +190,19 @@ def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: da
     name = " ".join((facts.get("name") or "").split())
     if not name:
         return Normalized(raw, rejection="sans nom")
+    # Every reason is noted, the fiche still built while it can be: all of them are seen in moderation.
+    reasons = []
     context = " ".join(filter(None, [name, facts.get("audience"), " ".join(facts.get("tags") or [])]))
     if _CHILD_AUDIENCE.search(context):
-        return Normalized(raw, rejection="jeune public")
+        reasons.append("jeune public")
     if _NOT_FOR_COUPLES.search(context) or GROUP_PARTY.search(name):
-        return Normalized(raw, rejection="pas pour un couple")
+        reasons.append("pas pour un couple")
     if OFF_TOPIC.search(name):
-        return Normalized(raw, rejection="hors sujet")
+        reasons.append("hors sujet")
     address = re.sub(r"[,\s]*\b(?:France|FR)$", "", " ".join((facts.get("address") or "").split()))
     code = facts.get("postal_code") or postal_code(address) or ""
     if not address and not code:
-        return Normalized(raw, rejection="sans lieu")
+        return Normalized(raw, rejection=join_reasons(*reasons, "sans lieu"))
     venue_name, street = split_venue(address, default_name=facts.get("venue_name") or name) if address else (None, None)
     try:
         venue = Venue(
@@ -211,16 +213,16 @@ def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: da
             longitude=_float(facts.get("longitude")),
         )
     except ValidationError:
-        return Normalized(raw, rejection=OUT_OF_AREA)
+        return Normalized(raw, rejection=join_reasons(*reasons, OUT_OF_AREA))
 
     today = now.astimezone(PARIS).date()
     starts_at, ends_at = parse_datetime(facts.get("starts_at")), parse_datetime(facts.get("ends_at"))
     starts_on = _date(facts.get("starts_on")) or (starts_at.astimezone(PARIS).date() if starts_at else None)
     ends_on = _date(facts.get("ends_on")) or (ends_at.astimezone(PARIS).date() if ends_at else None)
     if (ends_on or starts_on) and (ends_on or starts_on) < today:
-        return Normalized(raw, rejection="passé")
+        reasons.append("passé")
     if starts_on and starts_on > today + window:
-        return Normalized(raw, rejection="hors fenêtre")
+        reasons.append("hors fenêtre")
     if ends_on and starts_on and ends_on < starts_on:
         ends_on = None
     evening = starts_at.astimezone(PARIS).hour >= 19 if starts_at and starts_at.time() != datetime.min.time() else facts.get("evening")
@@ -265,8 +267,8 @@ def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: da
             ],
         )
     except ValidationError as error:
-        return Normalized(raw, rejection=f"invalide : {error}")
-    return Normalized(raw, activity=activity)
+        return Normalized(raw, rejection=join_reasons(*reasons, f"invalide : {error}"))
+    return Normalized(raw, activity=activity, rejection=join_reasons(*reasons))
 
 
 def _float(value: Any) -> float | None:

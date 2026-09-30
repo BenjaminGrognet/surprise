@@ -19,7 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
 
 from surprise.booking import CLOSED
-from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url
+from surprise.collectors.common import Normalized, euro_amounts, join_reasons, page, run, safe_url, with_reason
 from surprise.collectors.facts import BROWSER_HEADERS, complete_place, normalize_facts, sitemap, text, utc_now
 from surprise.collectors.paris_zigzag import postal_code
 from surprise.models import RawRecord
@@ -99,10 +99,10 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
-    if payload.get("closed"):
-        return Normalized(raw, rejection="fermé définitivement")
-    if (payload.get("players_min") or 2) > 2:
-        return Normalized(raw, rejection="pas pour un couple")
+    reason = join_reasons(
+        "fermé définitivement" if payload.get("closed") else None,
+        "pas pour un couple" if (payload.get("players_min") or 2) > 2 else None,
+    )
     kind, name = payload.get("kind"), payload["room_name"]
     facts = payload | {
         "name": name if not kind or _KIND_IN_NAME.search(name) else f"{kind} : {name}",
@@ -111,7 +111,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
         # "dès 12 ans" is no children's show: the age is not the audience.
         "audience": None,
     }
-    return normalize_facts(raw, facts, "EscapeGame.fr", now)
+    return with_reason(reason, normalize_facts(raw, facts, "EscapeGame.fr", now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

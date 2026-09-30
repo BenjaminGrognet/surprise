@@ -263,7 +263,8 @@ function card(it, index) {
   const badges = [
     h("span", { class: `badge ${{ approved: "ok", rejected: "ko" }[it.status] || ""}` }, STATUS_LABEL[it.status]),
     h("span", { class: "badge source" }, it.source_name),
-    it.rejection && h("span", { class: "badge warn", title: "Motif du rejet à la collecte" }, it.rejection),
+    // Every reason found at collection, as collectors/common.py REASONS joins them.
+    ...(it.rejection ? it.rejection.split(" · ") : []).map((reason) => h("span", { class: "badge warn", title: "Motif du rejet à la collecte" }, reason)),
     it.changed_since_decision && h("span", { class: "badge warn", title: "La source a modifié la fiche depuis la décision" }, "Modifiée"),
     isEvening(it) && h("span", { class: "badge" }, "Soirée"),
     price(offer) && h("span", { class: "badge", title: offer.label || "" }, truncate(price(offer), 40)),
@@ -275,7 +276,7 @@ function card(it, index) {
   if (a.occurrences.length > 4) occ.push(h("li", {}, `+ ${a.occurrences.length - 4} autres créneaux`));
   const link = (href, label) => href && h("a", { href, target: "_blank", rel: "noopener noreferrer" }, label);
   const act = (status, label, cls) => h("button", {
-    class: cls, disabled: it.status === status,
+    class: cls, disabled: it.status === status || it.partial,
     onclick: (e) => { e.stopPropagation(); decide(it, status); },
   }, label);
   const text = description(it);
@@ -304,9 +305,10 @@ function card(it, index) {
           `Originalité ${it.originality.score}`),
         ...(e.keywords || []).map((word) => h("span", { class: "badge keyword" }, word))),
       text && h("p", { class: "lead" }, h("span", { class: "origin" }, text.origin), " ", text.value),
+      it.partial && h("p", { class: "meta" }, "Écartée avant d'être construite : seuls son titre et sa page sont connus. Voir la fiche source."),
       h("div", { class: "meta" }, dates(a)),
       e.opening_hours && h("div", { class: "meta" }, `Horaires (OpenStreetMap) : ${e.opening_hours}`),
-      occ.length ? h("ul", { class: "occ" }, occ)
+      it.partial ? null : occ.length ? h("ul", { class: "occ" }, occ)
         : h("p", { class: "occ" }, a.kind === "permanent" ? (booking ? "Sur réservation" : "Lieu permanent") : "Aucun créneau dans les 6 semaines"),
       h("div", { class: "links" },
         booking && h("a", { class: "book", href: booking, target: "_blank", rel: "noopener noreferrer" }, "Réserver"),
@@ -392,7 +394,7 @@ async function save(it, status) {
 
 // The decided activity leaves the list and the focus moves to the one that followed it.
 async function decide(it, status) {
-  if (it.status === status) return;
+  if (it.status === status || it.partial) return;  // nothing to publish: no fiche was built
   const previous = { status: it.status, changed: it.changed_since_decision, index: visible.indexOf(it) };
   it.status = status; it.changed_since_decision = false;
   dismissed.add(key(it));

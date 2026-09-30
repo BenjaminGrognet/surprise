@@ -12,7 +12,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from surprise.collectors.common import Normalized, page, run, safe_url
+from surprise.collectors.common import Normalized, page, run, safe_url, with_reason
 from surprise.collectors.facts import address_in_text, complete_place, lines, normalize_facts, nuxt_data, sitemap, utc_now
 from surprise.models import RawRecord
 
@@ -70,9 +70,8 @@ def url_id(url: str) -> str:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
-    if _SKIPPED.search(payload.get("name") or ""):
-        return Normalized(raw, rejection="hors sujet")
-    return normalize_facts(raw, payload, "Paris je t'aime", now)
+    off_topic = "hors sujet" if _SKIPPED.search(payload.get("name") or "") else None
+    return with_reason(off_topic, normalize_facts(raw, payload, "Paris je t'aime", now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

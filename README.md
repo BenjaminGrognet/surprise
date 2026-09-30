@@ -1,6 +1,6 @@
 # surprise
 
-Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo) ou `collecte.cmd` (collecte, 200 fiches par source) ; détail dans
+Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo), `collecte.cmd` (collecte, 200 fiches par source) ou `admin.cmd` (modération) ; détail dans
 [docs/lancer-en-local.md](docs/lancer-en-local.md).
 
 ## Collecteurs
@@ -118,12 +118,18 @@ du lieu (« …/fr/tickets/… »), et le formulaire d'un organisateur (Google F
 réserver ou de s'inscrire. Sur Paris ZigZag, la page officielle d'un bloc pratique est le lien qui nomme le lieu ou le
 spectacle ; sa billetterie est suivie de là.
 
+Tous les motifs de rejet d'une fiche sont gardés (« jeune public · passé »), un badge chacun dans la modération : la
+fiche est construite quand même, sauf si un motif l'en empêche (sans nom, sans lieu, hors zone, invalide, page
+illisible). Celles-là apparaissent aussi dans « Écartées à la collecte », avec leur titre et le lien de la source,
+sans pouvoir être validées. La réservation n'est vérifiée que pour une fiche sans autre motif (pas de requête perdue).
+
 Zone : Paris et la proche banlieue qu'atteint le métro (`METRO_TOWNS` dans `surprise/models.py` : Boulogne, Montreuil,
 Saint-Denis, Vincennes, Ivry…) ; ailleurs, rejet « hors Paris et proche banlieue ». Les parcours gardent au plus 35 min
 de trajet entre deux étapes.
 
 Règles changées : `uv run python -m surprise.renormalize --rejet "<motif>"` (ou `--source <id>`) normalise de nouveau
-les pages déjà collectées, puis revérifie la réservation, sans rien recollecter.
+les pages déjà collectées, puis revérifie la réservation, sans rien recollecter. `--rejet` prend les fiches qui ont ce
+motif parmi les autres.
 
 ## Enrichissement
 

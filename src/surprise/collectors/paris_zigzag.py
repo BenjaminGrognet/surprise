@@ -29,7 +29,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import BOOKING, Normalized, euro_amounts, page, run, safe_url
+from surprise.collectors.common import BOOKING, Normalized, euro_amounts, join_reasons, page, run, safe_url
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
 SOURCE_ID = "paris_zigzag"
@@ -186,27 +186,28 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW) -> Normalized:
     raw = to_raw_record(payload)
+    reasons: list[str] = []
     fields = _fields(payload["lines"])
     today = now.astimezone(PARIS).date()
 
     if _CHILD_AUDIENCE.search(" ".join([payload["name"], *fields.values()])):
-        return Normalized(raw, rejection="jeune public")
+        reasons.append("jeune public")
 
     address_line = fields.get("address") or ""
     venue_name, street = split_venue(address_line, default_name=payload["name"])
     title = venue_name if _GENERIC_NAME.match(payload["name"]) else payload["name"]
     if _GENERIC_NAME.match(title):
-        return Normalized(raw, rejection="sans nom")
+        return Normalized(raw, rejection=join_reasons(*reasons, "sans nom"))
     try:
         venue = Venue(name=venue_name, address=street, postal_code=postal_code(address_line) or "")
     except ValidationError:
-        return Normalized(raw, rejection=OUT_OF_AREA)
+        return Normalized(raw, rejection=join_reasons(*reasons, OUT_OF_AREA))
 
     starts_on, ends_on = parse_dates(fields.get("dates"), today)
     if ends_on and ends_on < today:
-        return Normalized(raw, rejection="passé")
+        reasons.append("passé")
     if starts_on and starts_on > today + window:
-        return Normalized(raw, rejection="hors fenêtre")
+        reasons.append("hors fenêtre")
 
     price_text = fields.get("price")
     amounts = euro_amounts(price_text)
@@ -237,8 +238,8 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             ],
         )
     except ValidationError as error:
-        return Normalized(raw, rejection=f"invalide : {error}")
-    return Normalized(raw, activity=activity)
+        return Normalized(raw, rejection=join_reasons(*reasons, f"invalide : {error}"))
+    return Normalized(raw, activity=activity, rejection=join_reasons(*reasons))
 
 
 def booking_link(payload: dict[str, Any]) -> str | None:

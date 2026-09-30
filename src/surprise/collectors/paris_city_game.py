@@ -14,7 +14,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import BOOKING, OFF_TOPIC, Normalized, euro_amounts, page, run, safe_url
+from surprise.collectors.common import BOOKING, OFF_TOPIC, Normalized, euro_amounts, join_reasons, page, run, safe_url
 from surprise.collectors.paris_zigzag import postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -92,19 +92,20 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any]) -> Normalized:
     raw = to_raw_record(payload)
+    reasons: list[str] = []
     name = payload["name"]
     if _CHILD_AUDIENCE.search(name):
-        return Normalized(raw, rejection="jeune public")
+        reasons.append("jeune public")
     if OFF_TOPIC.search(name):
-        return Normalized(raw, rejection="hors sujet")
+        reasons.append("hors sujet")
     address = payload.get("address")
     if not address:
-        return Normalized(raw, rejection="sans lieu")
+        return Normalized(raw, rejection=join_reasons(*reasons, "sans lieu"))
     _, street = split_venue(address, default_name=name)
     try:
         venue = Venue(name=name, address=street, postal_code=postal_code(address) or "")
     except ValidationError:
-        return Normalized(raw, rejection=OUT_OF_AREA)
+        return Normalized(raw, rejection=join_reasons(*reasons, OUT_OF_AREA))
     price_text = payload.get("price") or ""
     amounts = euro_amounts(price_text)
     is_free = bool(_FREE.search(price_text)) and not any(amounts)
@@ -128,8 +129,8 @@ def normalize(payload: dict[str, Any]) -> Normalized:
             ],
         )
     except ValidationError as error:
-        return Normalized(raw, rejection=f"invalide : {error}")
-    return Normalized(raw, activity=activity)
+        return Normalized(raw, rejection=join_reasons(*reasons, f"invalide : {error}"))
+    return Normalized(raw, activity=activity, rejection=join_reasons(*reasons))
 
 
 def collect(client: httpx.Client, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

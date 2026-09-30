@@ -107,8 +107,12 @@ def test_moderation_lists_kept_activities_as_proposed(tmp_path):
     store, _ = _store_with_fixture(tmp_path / "surprise.db")
     with store:
         items = {i["external_id"]: i for i in store.list_for_moderation()}
-    assert set(items) == {"12345", "4"}
+    assert set(items) == {"12345", "2", "3", "4"}
     assert items["12345"]["status"] == "proposed"
+    # Rejected at collection, apart: with its fiche, or only its title when rejected before it was built.
+    assert (items["2"]["status"], items["2"]["rejection"], items["2"]["partial"]) == ("filtered", "jeune public", False)
+    assert (items["3"]["status"], items["3"]["partial"]) == ("filtered", True)
+    assert items["3"]["rejection"] == "hors Paris et proche banlieue" and items["3"]["activity"]["title"] == FIXTURE[2]["title"]
     assert items["12345"]["activity"]["venue"]["arrondissement"] == 5
     assert items["12345"]["source_url"] == str(qfap.to_raw_record(FIXTURE[0]).url)
 
@@ -135,7 +139,7 @@ def test_moderation_rejects_unknown_or_filtered_activities(tmp_path):
     store, _ = _store_with_fixture(tmp_path / "surprise.db")
     with store:
         assert not store.set_status("que_faire_a_paris", "inconnu", "approved")
-        assert not store.set_status("que_faire_a_paris", "2", "approved")  # rejected by the hard filters
+        assert not store.set_status("que_faire_a_paris", "3", "approved")  # rejected before its fiche was built
         with pytest.raises(ValueError):
             store.set_status("que_faire_a_paris", "12345", "published")
 

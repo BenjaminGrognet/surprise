@@ -22,7 +22,7 @@ from urllib.parse import urljoin
 import httpx
 
 from surprise.booking import engine_in, own_ticketing
-from surprise.collectors.common import Normalized, remembered, run, safe_url
+from surprise.collectors.common import Normalized, remembered, run, safe_url, with_reason
 from surprise.collectors.facts import BROWSER_HEADERS, complete_place, normalize_facts, utc_now
 from surprise.models import RawRecord
 
@@ -179,11 +179,12 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
+    reason = None
     if payload.get("site_error"):
-        return Normalized(raw, rejection=f"site {payload['site_error']}")
-    if not payload.get("engine"):
-        return Normalized(raw, rejection="sans réservation en ligne")
-    return normalize_facts(raw, complete_place(payload), "OpenStreetMap (ODbL)", now)
+        reason = f"site {payload['site_error']}"
+    elif not payload.get("engine"):
+        reason = "sans réservation en ligne"
+    return with_reason(reason, normalize_facts(raw, complete_place(payload), "OpenStreetMap (ODbL)", now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Normalized]:

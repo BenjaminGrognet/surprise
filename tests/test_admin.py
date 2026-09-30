@@ -51,7 +51,7 @@ def test_status_is_updated_through_the_api(base_url):
     assert status == 200
     _, body = request(f"{base_url}/api/activities")
     statuses = {i["external_id"]: i["status"] for i in json.loads(body)}
-    assert statuses == {"12345": "rejected", "4": "proposed"}
+    assert statuses == {"12345": "rejected", "2": "filtered", "3": "filtered", "4": "proposed"}
 
 
 @pytest.mark.parametrize(

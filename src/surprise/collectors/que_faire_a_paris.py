@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from pydantic import ValidationError
 
-from surprise.collectors.common import Normalized, euro_amounts, run, safe_url
+from surprise.collectors.common import Normalized, euro_amounts, join_reasons, run, safe_url
 from surprise.categories import categorize
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Occurrence, Offer, RawRecord, Venue
 
@@ -63,9 +63,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW) -> Normalized:
     raw = to_raw_record(payload)
-
-    if reason := _youth_audience(payload) or _off_target(payload):
-        return Normalized(raw, rejection=reason)
+    reasons = [reason for reason in (_youth_audience(payload), _off_target(payload)) if reason]
 
     try:
         venue = Venue(
@@ -77,7 +75,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             website=safe_url(payload.get("address_url")),
         )
     except ValidationError:
-        return Normalized(raw, rejection=OUT_OF_AREA)
+        return Normalized(raw, rejection=join_reasons(*reasons, OUT_OF_AREA))
 
     all_occurrences = parse_occurrences(payload.get("occurrences"))
     occurrences = [o for o in all_occurrences if _in_window(o, now, window)]
@@ -103,9 +101,9 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             offers=[parse_offer(payload)],
         )
     except (KeyError, ValidationError) as error:
-        return Normalized(raw, rejection=f"invalide : {error}")
+        return Normalized(raw, rejection=join_reasons(*reasons, f"invalide : {error}"))
 
-    return Normalized(raw, activity=activity)
+    return Normalized(raw, activity=activity, rejection=join_reasons(*reasons))
 
 
 def parse_occurrences(value: str | None) -> list[Occurrence]:

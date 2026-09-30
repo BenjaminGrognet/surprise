@@ -2,17 +2,19 @@
 
 ## Le plus simple : double-cliquer
 
-Deux fichiers à la racine du projet (double-clic, ou depuis un terminal) :
+Trois fichiers à la racine du projet (double-clic, ou depuis un terminal) :
 
 - **`lancer.cmd`** : le serveur (http://127.0.0.1:8001, modération sur `/admin`) et l'app Expo dans le navigateur,
   chacun dans sa fenêtre ; fermer la fenêtre l'arrête. Répondre `o` à « Aussi sur le téléphone ? » pour l'ouvrir
   aussi dans Expo Go (même Wi-Fi) : l'IP du PC est trouvée toute seule, scanner le QR code.
 - **`collecte.cmd`** : collecte de toutes les sources, 200 fiches au plus chacune (ou d'une seule : taper son nom,
   ex. `fever`), puis enrichissement et mots-clés.
+- **`admin.cmd`** : la modération seule, ouverte dans le navigateur (http://127.0.0.1:8000/admin) ; fermer la
+  fenêtre l'arrête.
 
 Seul prérequis : le fichier `.env` (étape 0 ci-dessous). Les dépendances de l'app s'installent au premier lancement.
 
-La suite détaille ce que fait le script, pour lancer les commandes à la main.
+La suite détaille ce que font les scripts, pour lancer les commandes à la main.
 
 Tout se lance depuis un terminal (PowerShell ou Git Bash), à la racine du projet `C:\data\claude\surprise`, sauf
 l'app Expo qui se lance depuis `app\`. Le détail de chaque commande et de ses options est dans le [README](../README.md).
