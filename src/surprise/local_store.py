@@ -321,11 +321,14 @@ class LocalStore:
             return True
 
     def pending_enrichment(self, refresh: bool = False, missing_description: bool = False) -> list[dict[str, Any]]:
-        """Kept activities without enrichment (or without description, or all with refresh), with the source's text."""
+        """Kept activities without enrichment (or without description, or all with refresh), with the source's text.
+
+        "enriched": already enriched once, with the official site's excerpt found then.
+        """
         rows = self._run(
             """
             select n.source_id, n.external_id, n.activity,
-                   r.payload ->> 'lead_text', r.payload ->> 'description'
+                   r.payload ->> 'lead_text', r.payload ->> 'description', e.source_id is not null, e.site_excerpt
             from normalized n
             left join enrichment e using (source_id, external_id)
             left join moderation m using (source_id, external_id)
@@ -342,8 +345,10 @@ class LocalStore:
                 "external_id": external_id,
                 "activity": json.loads(activity),
                 "source_text": "\n".join(filter(None, [lead_text, description])) or None,
+                "enriched": bool(enriched),
+                "site_excerpt": site_excerpt,
             }
-            for source_id, external_id, activity, lead_text, description in rows
+            for source_id, external_id, activity, lead_text, description, enriched, site_excerpt in rows
         ]
 
     def save_keywords(self, keywords: dict[tuple[str, str], str]) -> None:

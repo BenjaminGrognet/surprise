@@ -11,10 +11,12 @@
   from Overpass, matched by name and postcode or distance, else Nominatim. Each
   venue's answer is stored, so it is asked once. An event with coordinates skips
   it: a venue's opening hours say nothing of an event's dates.
-- Description: one or two sentences written by Claude when ANTHROPIC_API_KEY is
-  set, from the facts and a licensed text: the source's own (Que Faire à Paris,
-  ODbL; Paris ZigZag's article text for this personal prototype) or the official
-  site's excerpt.
+- Description: the first sentences, up to 280 characters, of the source's own
+  text (Que Faire à Paris, ODbL; a media's article text for this personal
+  prototype) or else of the official site's excerpt, cleaned of markup, page
+  titles and lists; no outside call. With --claude, written by Claude instead
+  (ANTHROPIC_API_KEY) from the facts and that text.
+  An activity already enriched only gets its description: nothing is fetched.
 
 Only activities not enriched yet are processed, so the nightly run stays cheap.
 """
@@ -361,6 +363,52 @@ def venue_place(client: httpx.Client, venue: dict[str, Any]) -> dict[str, Any] |
     return _places[key]
 
 
+# A sentence ends before a capital, a quote or a digit ("Quand … 80. Plusieurs"); a line break starting with a capital too.
+_SENTENCE_END = re.compile(r"(?<=[.!?…])\s+(?=[A-ZÀ-ÝŒ«\"0-9])|(?<=[!?])(?=[A-ZÀ-Ý])|\s*\n\s*(?=[A-ZÀ-ÝŒ«\"0-9*-])")
+# Time Out's first line is its page title: "La Terra Madre | Restaurants à Ménilmontant, Paris".
+_PAGE_TITLE = re.compile(r"^[^\n]* \| [^\n]*(?:\n|$)")
+# Paragraphs, line breaks, headings and list items end a line; other tags sit inside a sentence.
+_BLOCK_END = re.compile(r"<br\s*/?>|</(?:p|div|h\d|li)>", re.IGNORECASE)
+# Facts laid out as "Artiste: … Auteurs: … Durée: 60 mn", a rating, a price tag: no sentence to read.
+_NOT_PROSE = re.compile(r"(?:\w\s?:.*){2}|\d(?:[,.]\d)?\s*-\s*\d+\s*avis|\bdès \d+\s*€", re.IGNORECASE)
+_CUT = "…"
+
+
+def summarize(text: str | None) -> str | None:
+    """The text's first sentences, at most MAX_DESCRIPTION_CHARS; a single longer one cut at a word, with an ellipsis."""
+    text = _BLOCK_END.sub("\n", _PAGE_TITLE.sub("", (text or "").replace("\r", "")))
+    text = html.unescape(_TAG.sub(" ", text)).strip()
+    # Emojis and decorations ("⭐", "***Les dimanches***") are no words.
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "So" and ch != "️").replace("*", "")
+    sentences = []
+    for sentence in _SENTENCE_END.split(text):
+        sentence = re.sub(r"\s+", " ", sentence).strip(" -•")
+        # A list follows ("Les bienfaits :"), or the source cut its own text ("un no..."): stop there.
+        if sentence.endswith((":", "...", "…")):
+            if not sentences and not sentence.endswith(":"):
+                sentences.append(sentence.rstrip(".… ") + _CUT)
+            break
+        # A headline said again in the text ("Apprenez à réussir vos semis avec Marguerite !"): its words are mostly known.
+        seen = set().union(*map(_words, sentences))
+        if len(sentence) >= 15 and not _NOT_PROSE.search(sentence) and len(_words(sentence) - seen) > len(_words(sentence)) / 2:
+            # A heading or a line without its full stop: "Les dimanches du Supersonic. Tous les dimanches…".
+            sentences.append(sentence if sentence[-1] in ".!?…»\")" else f"{sentence}.")
+    summary = ""
+    for sentence in sentences:
+        if summary and len(summary) + 1 + len(sentence) > MAX_DESCRIPTION_CHARS:
+            break
+        summary = f"{summary} {sentence}".strip()
+    if len(summary) > MAX_DESCRIPTION_CHARS:
+        summary = summary[: MAX_DESCRIPTION_CHARS - 1].rsplit(" ", 1)[0].rstrip(",;:.- ") + _CUT
+    return summary or None
+
+
+def describe_only(item: dict[str, Any], describer: Callable[[dict[str, Any], str | None], str | None]) -> dict[str, str | None]:
+    """The description of an activity already enriched, from its source text or the official site's excerpt kept then."""
+    text = item.get("source_text") or item.get("site_excerpt")
+    return {"description": describer(item["activity"], text) if text else None}
+
+
 def describe(anthropic_client: Any, model: str, activity: dict[str, Any], source_text: str | None) -> str | None:
     """Short description written by Claude from the facts and a licensed source text."""
     import anthropic
@@ -468,22 +516,24 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--limit", type=int, help="nombre maximum d'activités à traiter")
     parser.add_argument("--refresh", action="store_true", help="retraiter aussi les activités déjà enrichies")
-    parser.add_argument("--no-descriptions", action="store_true", help="images et extraits seulement, sans appel à Claude")
+    parser.add_argument("--no-descriptions", action="store_true", help="images et extraits seulement, sans description")
+    parser.add_argument("--claude", action="store_true", help="descriptions rédigées par Claude (ANTHROPIC_API_KEY) au lieu d'extraites")
     parser.add_argument("--source", action="append", help="ne traiter que cette source (répétable)")
     parser.add_argument("--workers", type=int, default=16)
     args = parser.parse_args()
 
     places_key = os.environ.get("GOOGLE_PLACES_API_KEY")
-    describer, model = None, None
+    # By default the description is taken from the texts: no outside call. "extrait" marks it, to write it again later.
+    describer, model = (lambda activity, text: summarize(text)), "extrait"
+    if args.no_descriptions:
+        describer, model = None, None
     # Only an explicit project key: never fall back on other credentials found in the environment.
-    if not args.no_descriptions and os.environ.get("ANTHROPIC_API_KEY"):
+    elif args.claude:
         import anthropic
 
         model = os.environ.get("SURPRISE_LLM_MODEL", DEFAULT_MODEL)
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         describer = lambda activity, text: describe(client, model, activity, text)  # noqa: E731
-    else:
-        print("Descriptions désactivées (ANTHROPIC_API_KEY absente ou --no-descriptions)")
     if not places_key:
         print("Photos Google Places désactivées (GOOGLE_PLACES_API_KEY absente)")
 
@@ -496,7 +546,12 @@ def main() -> None:
         headers = {"User-Agent": USER_AGENT}
         with httpx.Client(timeout=15, follow_redirects=True, headers=headers) as http, ThreadPoolExecutor(args.workers) as pool:
             _paris.update(paris_places(http))
-            futures = {pool.submit(enrich_one, item, http, places_key, describer): item for item in items}
+            futures = {
+                pool.submit(describe_only, item, describer)
+                if item["enriched"] and not args.refresh
+                else pool.submit(enrich_one, item, http, places_key, describer): item
+                for item in items
+            }
             for done, future in enumerate(as_completed(futures), 1):
                 item = futures[future]
                 # One activity failing must not stop the saves of the others (the pool would still run them all).

@@ -137,12 +137,14 @@ uv run python -m surprise.enrich
   s'en passe : les horaires du lieu ne disent rien de ses dates.
 - Réservation : lien « Réserver » du site officiel si la fiche n'en a pas ; si le lien de la fiche mène à la page
   du spectacle sur le site du lieu, son bouton « Acheter » vers la billetterie.
-- Description : rédigée par Claude si `ANTHROPIC_API_KEY` est définie (modèle : `SURPRISE_LLM_MODEL`,
-  `claude-opus-5-5` par défaut), à partir du texte de la source (`lead_text` : texte de la fiche ou de l'article,
-  gardé pour ce prototype perso) ou de l'extrait du site officiel.
+- Description : par défaut, sans appel extérieur, les premières phrases (280 caractères au plus) du texte de la
+  source (`lead_text` : texte de la fiche ou de l'article, gardé pour ce prototype perso), sinon de l'extrait du
+  site officiel, nettoyées (balises, titre de page, listes, emojis) ; `description_model` vaut alors `extrait`.
+  Avec `--claude`, rédigée par Claude (`ANTHROPIC_API_KEY`, modèle `SURPRISE_LLM_MODEL`, `claude-opus-5-5` par
+  défaut). Une activité déjà enrichie ne reçoit que sa description, sans rien télécharger.
 
 `--refresh` retraite aussi les activités déjà enrichies, `--source` limite à une source, `--no-descriptions`
-se passe de Claude.
+se passe des descriptions.
 
 ## Tags et vibes
 

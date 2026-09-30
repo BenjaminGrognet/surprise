@@ -286,3 +286,28 @@ def test_a_booking_platform_page_is_not_read_for_its_ticketing():
     with httpx.Client() as client:
         enrich.enrich_one(item, client)
     assert not page.called
+
+
+def test_summarize_keeps_the_first_sentences_of_the_prose():
+    assert enrich.summarize("La Terra Madre | Restaurants à Ménilmontant, Paris\nPetite pépite du 20e ! Cuisine italienne.") == (
+        "Petite pépite du 20e ! Cuisine italienne."
+    )
+    assert enrich.summarize("La Rotonde | Restaurants à 10e arrondissement, Paris") is None
+    # Paragraphs and headings end their line; a list stops the description.
+    assert enrich.summarize("<p>***Les dimanches du Supersonic***</p><p>Des groupes rejouent les tubes du rock ⭐</p>Les bienfaits :\nDétente") == (
+        "Les dimanches du Supersonic. Des groupes rejouent les tubes du rock."
+    )
+    # Facts laid out in a row are no sentence.
+    assert enrich.summarize("Artiste: María Moreno Auteurs: María Durée: 60 mn\nSalut, moi c'est María, humoriste.") == "Salut, moi c'est María, humoriste."
+    long = "Une phrase " + "très " * 80 + "longue."
+    assert enrich.summarize(long).endswith("très…") and len(enrich.summarize(long)) <= enrich.MAX_DESCRIPTION_CHARS
+
+
+def test_an_enriched_activity_only_gets_its_description_from_the_kept_excerpt():
+    item = {"activity": activity(), "source_text": None, "site_excerpt": "Un cabaret intimiste depuis 1950."}
+    assert enrich.describe_only(item, lambda act, text: enrich.summarize(text)) == {"description": "Un cabaret intimiste depuis 1950."}
+
+
+def test_summarize_skips_a_headline_said_again():
+    text = "Apprenez à réussir vos semis avec Marguerite, maraîchère. Apprenez à réussir vos semis avec Marguerite ! Visite de la serre."
+    assert enrich.summarize(text) == "Apprenez à réussir vos semis avec Marguerite, maraîchère. Visite de la serre."
