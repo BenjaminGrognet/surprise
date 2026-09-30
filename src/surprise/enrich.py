@@ -17,6 +17,7 @@ Only activities not enriched yet are processed, so the nightly run stays cheap.
 """
 
 import argparse
+import functools
 import html
 import os
 import re
@@ -191,6 +192,8 @@ _PARIS_POSTCODE = re.compile(r"75\d{3}")
 _NOT_A_PLACE = {"highway", "place", "boundary", "landuse", "railway"}
 
 
+# Once per venue and client: the 46 concerts of a club, at 1 request/s, asked it 46 times.
+@functools.lru_cache(maxsize=None)
 def osm_place(client: httpx.Client, name: str, address: str | None, postal_code: str | None) -> dict[str, Any] | None:
     """The OpenStreetMap place of this name in this postcode (else anywhere in Paris): coordinates, hours, address, OSM link."""
     queries = [f"{name}, {postal_code} Paris", f"{name}, {address or ''}, {postal_code} Paris"] if postal_code else [f"{name}, Paris"]
@@ -406,16 +409,23 @@ def main() -> None:
             futures = {pool.submit(enrich_one, item, http, places_key, describer): item for item in items}
             for done, future in enumerate(as_completed(futures), 1):
                 item = futures[future]
-                fields = future.result()
+                # One activity failing must not stop the saves of the others (the pool would still run them all).
+                try:
+                    fields = future.result()
+                except Exception as error:  # noqa: BLE001
+                    counts["erreurs"] += 1
+                    print(f"  échec {item['source_id']}/{item['external_id']} : {error!r}", flush=True)
+                    continue
                 if fields.get("description"):
                     fields["description_model"] = model
                 store.save_enrichment(item["source_id"], item["external_id"], fields)
                 counts.update(key for key, value in fields.items() if value)
                 if done % 100 == 0:
-                    print(f"  {done}/{len(items)}")
+                    print(f"  {done}/{len(items)}", flush=True)
     print(
         f"images du site officiel : {counts['image_url']}, liens de réservation : {counts['booking_url']}, lieux Google : {counts['place_id']}, "
-        f"extraits : {counts['site_excerpt']}, lieux OpenStreetMap : {counts['osm_url']}, horaires : {counts['opening_hours']}, descriptions : {counts['description']}"
+        f"extraits : {counts['site_excerpt']}, lieux OpenStreetMap : {counts['osm_url']}, horaires : {counts['opening_hours']}, "
+        f"descriptions : {counts['description']}, erreurs : {counts['erreurs']}"
     )
 
 
