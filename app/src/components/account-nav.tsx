@@ -5,7 +5,7 @@ import { OptionRow } from '@/components/option-button';
 import { currentUser } from '@/lib/account';
 import { supabaseConfigured } from '@/lib/supabase';
 
-// Mirrors renderAccountNav() in src/surprise/account.js: invisible while accounts aren't configured.
+// Invisible while accounts aren't configured.
 export function AccountNav() {
   const [signedIn, setSignedIn] = useState(false);
 

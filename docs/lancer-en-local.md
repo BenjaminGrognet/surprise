@@ -5,7 +5,8 @@
 Trois fichiers à la racine du projet (double-clic, ou depuis un terminal) :
 
 - **`lancer.cmd`** : le serveur (http://127.0.0.1:8001, modération sur `/admin`) et l'app Expo dans le navigateur,
-  chacun dans sa fenêtre ; fermer la fenêtre l'arrête. Répondre `o` à « Aussi sur le téléphone ? » pour l'ouvrir
+  chacun dans sa fenêtre ; fermer la fenêtre l'arrête. Il reconstruit aussi le site (le build web de l'app, servi
+  sur 8001) dans une fenêtre réduite qui se ferme seule : le site est toujours l'app du moment. Répondre `o` à « Aussi sur le téléphone ? » pour l'ouvrir
   aussi dans Expo Go (même Wi-Fi) : l'IP du PC est trouvée toute seule, scanner le QR code.
 - **`collecte.cmd`** : collecte de toutes les sources, 200 fiches au plus chacune (ou d'une seule : taper son nom,
   ex. `fever`), puis enrichissement et mots-clés.
@@ -26,8 +27,7 @@ l'app Expo qui se lance depuis `app\`. Le détail de chaque commande et de ses o
 - **Dépendances Python** : `uv sync` (crée `.venv`, refait automatiquement par `uv run` si besoin).
 - **Dépendances de l'app** : `cd app` puis `npm install`.
 - **Fichiers de configuration** (jamais commités) :
-  - `.env` à la racine : `SUPABASE_DB_URL` (URL du *session pooler*, voir README § Base), `SUPABASE_URL`,
-    `SUPABASE_ANON_KEY` pour les comptes ; facultatifs : `ANTHROPIC_API_KEY` (titres des parcours et
+  - `.env` à la racine : `SUPABASE_DB_URL` (URL du *session pooler*, voir README § Base) ; facultatifs : `ANTHROPIC_API_KEY` (titres des parcours et
     `enrich --claude`), `GOOGLE_PLACES_API_KEY` (photos).
   - `app\.env` (modèle : `app\.env.example`) : `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` et
     `EXPO_PUBLIC_API_URL=http://localhost:8001` (le serveur du questionnaire, **8001**, pas 8000).
@@ -79,7 +79,8 @@ uv run --env-file .env python -m surprise.keywords
 uv run --env-file .env python -m surprise.quiz
 ```
 
-- Site : http://127.0.0.1:8001 (accueil, `/profil`, `/soiree`, `/admin` pour la modération).
+- Site : http://127.0.0.1:8001, le build web de l'app (`cd app` puis `npm run build:web` pour le refaire à la
+  main) ; `/admin` pour la modération.
 - `--no-open` pour ne pas ouvrir le navigateur, `--host 0.0.0.0` pour y accéder depuis un téléphone sur le même Wi-Fi.
 - C'est ce serveur que l'app Expo interroge : il doit tourner avant de lancer l'app.
 
@@ -131,7 +132,8 @@ uv run --env-file .env python -m surprise.local_store --db data/surprise.db   # 
 | Symptôme | Cause probable |
 |---|---|
 | L'app affiche une erreur `/api/quiz: …` ou reste vide | le serveur `surprise.quiz` ne tourne pas, ou `EXPO_PUBLIC_API_URL` ne pointe pas sur le port 8001 |
-| « comptes non configurés » | `SUPABASE_URL` / `SUPABASE_ANON_KEY` (serveur) ou `EXPO_PUBLIC_SUPABASE_*` (app) manquants |
+| « comptes non configurés » | `EXPO_PUBLIC_SUPABASE_*` manquants dans `app\.env` (puis refaire le build) |
+| Le site (8001) n'a pas la dernière version de l'app | build pas refait : `npm run build:web` dans `app\` (ou relancer `lancer.cmd`) |
 | La base est vide | commande lancée sans `--env-file .env` : elle a lu `data/surprise.db` au lieu de Supabase |
 | Connexion à Supabase impossible | `SUPABASE_DB_URL` doit être l'URL du *session pooler* (IPv4), pas `db.<projet>.supabase.co` |
 | `opendata.paris.fr` ne répond pas | préfixer par `OPENDATA_PARIS_URL=https://parisdata.opendatasoft.com` (Git Bash) |

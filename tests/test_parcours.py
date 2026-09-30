@@ -121,7 +121,7 @@ def test_budget_is_a_ceiling():
     assert parcours.compose(candidates, req) == []
 
 
-def test_page_has_a_booking_link_under_each_step():
+def test_each_step_has_its_booking_link():
     req = request()
     candidates = [
         parcours.build_candidate(item("a", "Comedy club", ["humour"], occurrences=[at(19, 30)], venue="Club"), req, None),
@@ -129,9 +129,9 @@ def test_page_has_a_booking_link_under_each_step():
     ]
     route = parcours.Route([parcours.Step(candidates[0], at(19, 30), at(21)), parcours.Step(candidates[1], at(21, 30), at(23), travel=5, distance=0.3)])
     parcours.name_by_rules(route, req)
-    page = parcours.render([route], req)
-    assert page.count(">Réserver</a>") == 2 and "https://www.billetweb.fr/a" in page
-    assert "Séance de 21:30" in page and "travelmode=walking" in page
+    steps = parcours.route_json(0, route)["steps"]
+    assert [s["booking_action"] for s in steps] == ["reserver", "reserver"] and steps[0]["booking_url"] == "https://www.billetweb.fr/a"
+    assert "Séance de 21:30" in steps[1]["basis"] and steps[1]["redo"] == "routes/0/steps/1"
 
 
 def test_trame_orders_the_steps_and_lets_the_bar_end_early():

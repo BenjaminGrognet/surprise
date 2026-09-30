@@ -5,7 +5,6 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-// Mirrors .option / .chips .option in src/surprise/client.css.
 export function OptionButton({
   label,
   emoji,

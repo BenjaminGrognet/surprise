@@ -12,8 +12,8 @@ export default function RootLayout() {
     Fredoka_600SemiBold,
     Fredoka_700Bold,
   });
-  // null while the stored session is read. Without accounts configured, nothing is locked.
-  const [signedIn, setSignedIn] = useState<boolean | null>(supabaseConfigured ? null : true);
+  // null while the stored session is read. Without accounts configured, everything stays locked.
+  const [signedIn, setSignedIn] = useState<boolean | null>(supabaseConfigured ? null : false);
 
   useEffect(() => {
     if (!supabaseConfigured) return;

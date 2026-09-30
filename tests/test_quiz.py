@@ -5,6 +5,8 @@ from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import pytest
+
 from surprise import quiz
 from surprise.categories import CATEGORIES
 from surprise.local_store import open_store
@@ -116,7 +118,15 @@ def test_valid_profile_rejects_the_wrong_shape():
     assert clamped["vibes"] == ["romantique"] and clamped["audace"] == 1.0 and clamped["avoid"] == [] and clamped["budget"] == 1000.0
 
 
-def test_profile_is_computed_through_the_api(tmp_path):
+def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
+    # The site is the app's web build: a stand-in for app/dist.
+    web = tmp_path / "dist"
+    (web / "_expo").mkdir(parents=True)
+    (web / "index.html").write_text("accueil de l'app", encoding="utf-8")
+    (web / "soiree.html").write_text("soirée de l'app", encoding="utf-8")
+    (web / "_expo" / "entry.js").write_text("app()", encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("hors du site", encoding="utf-8")
+    monkeypatch.setattr(quiz, "WEB", web)
     server = ThreadingHTTPServer(("127.0.0.1", 0), quiz.make_handler(tmp_path / "s.db", checks=0))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -129,10 +139,12 @@ def test_profile_is_computed_through_the_api(tmp_path):
         evening = json.load(urlopen(f"{url}/api/soiree"))
         assert evening["max"] == 3 and evening["envies"] and evening["occasions"]
         assert evening["starts"] and evening["ends"] and evening["budgets"]
-        assert b"Ce soir" in urlopen(f"{url}/soiree").read() and urlopen(f"{url}/client.js").status == 200
-        # One site: the client's home, the quiz, and the moderation page with its API.
-        assert b"Faire notre profil" in urlopen(f"{url}/").read()
-        assert b"profil de couple" in urlopen(f"{url}/profil").read()
+        # One site: the app's pages and scripts, and the moderation page with its API.
+        assert urlopen(f"{url}/").read() == "accueil de l'app".encode() and urlopen(f"{url}/soiree").read() == "soirée de l'app".encode()
+        script = urlopen(f"{url}/_expo/entry.js")
+        assert script.headers["Content-Type"] == "text/javascript; charset=utf-8"
+        with pytest.raises(HTTPError):
+            urlopen(f"{url}/..%2Fsecret.txt")
         assert b"<title>Surprise" in urlopen(f"{url}/admin").read() and json.load(urlopen(f"{url}/api/meta"))["vibes"]
         for body, code in [({"envies": [], "diner": True}, 400), ({"envies": ["fete"]}, 400), ({"envies": ["fete"], "diner": False, "profile": "inconnu"}, 400)]:
             request = Request(f"{url}/api/soirees", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})

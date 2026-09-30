@@ -5,7 +5,6 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-// Mirrors a.primary / a.link in src/surprise/client.css.
 export function PrimaryLink({ href, children }: { href: Href; children: string }) {
   const theme = useTheme();
   return (

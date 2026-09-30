@@ -24,5 +24,8 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   à part dans la modération (« Écartées à la collecte »), pour améliorer les règles.
 - Données manquantes d'une fiche (adresse, horaires, coordonnées) : scraping ciblé de sources publiques ;
   OpenStreetMap (Nominatim) d'abord, déjà branché dans l'enrichissement.
+- Site web = l'app Expo (`app/`) construite pour le web (`npm run build:web` → `app/dist`, servie par `surprise.quiz`).
+  Jamais de page client à part (HTML Python, `.web.tsx` d'écran) : tout se fait dans `app/` et vaut pour les deux.
+  Le Python ne fournit que l'API (données, pas de mise en page) et la modération.
 - Base : Supabase (`public.raw_records` + schéma `pipeline`), par `SUPABASE_DB_URL` (session pooler IPv4). Sans elle,
   les scripts retombent sur `data/surprise.db` (non versionnée) ; `python -m surprise.local_store` la copie dans Supabase.

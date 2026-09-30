@@ -7,7 +7,7 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
-// The "carnet insolite doré" brand (see src/surprise/client.css): warm beige paper,
+// The "carnet insolite doré" brand: warm beige paper,
 // gold accent, no real dark mode yet, so dark == light for now.
 // ponytail: brand has no dark variant designed yet, upgrade when one is designed.
 const brand = {

@@ -1,6 +1,11 @@
+import { Platform } from 'react-native';
+
 // The Python quiz/soiree server (src/surprise/quiz.py) — profile and evening composition,
 // unrelated to Supabase (accounts, history), which the app talks to directly.
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8001';
+// The web build (npm run build:web) is served by that same server: same origin, from any host.
+// ponytail: hosting the site apart from the API would mean building it with its URL instead.
+export const API_URL =
+  Platform.OS === 'web' && !__DEV__ ? '' : (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8001');
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`${API_URL}${path}`, {

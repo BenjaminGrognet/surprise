@@ -15,14 +15,15 @@ surprise.parcours composes the evening.
 
     uv run python -m surprise.quiz            # http://127.0.0.1:8001
 
-One site: the client's home (/), the quiz (/profil), an evening (/soiree), its
-routes (/parcours/<name>.html) and the moderation page (/admin, from
-surprise.admin). Served on 127.0.0.1 with the standard library.
+One site: the app's web build (app/dist, `npm run build:web` in app/: the home,
+/profil, /soiree, /compte, /historique), the API it calls (/api/…) and the
+moderation page (/admin, from surprise.admin). Served on 127.0.0.1 with the
+standard library.
 """
 
 import argparse
 import json
-import os
+import mimetypes
 import re
 import secrets
 import sys
@@ -32,27 +33,27 @@ import webbrowser
 from datetime import date, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from importlib.resources import files
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from surprise import admin, images, parcours
 from surprise.local_store import LocalStore, open_store
 from surprise.tags import VIBES
 
-RESOURCES = files("surprise")
-# Pages and the style and script they share.
-STATIC = {
-    "/": ("accueil.html", "text/html; charset=utf-8"),
-    "/profil": ("quiz.html", "text/html; charset=utf-8"),
-    "/soiree": ("soiree.html", "text/html; charset=utf-8"),
-    "/compte": ("compte.html", "text/html; charset=utf-8"),
-    "/historique": ("historique.html", "text/html; charset=utf-8"),
-    "/client.css": ("client.css", "text/css; charset=utf-8"),
-    "/client.js": ("client.js", "text/javascript; charset=utf-8"),
-    "/account.js": ("account.js", "text/javascript; charset=utf-8"),
-}
+# The site is the app itself, built for the web: one front for the phone and the browser.
+WEB = Path(__file__).resolve().parents[2] / "app" / "dist"
+# Not mimetypes.guess_type: on Windows it reads the registry, which may call a script text/plain.
+TYPES = mimetypes.MimeTypes()
+
+
+def web_file(path: str) -> Path | None:
+    """The app's web build file at this address: / is index.html, /soiree is soiree.html."""
+    name = unquote(path).strip("/") or "index"
+    for file in (WEB / name, WEB / f"{name}.html"):
+        if file.is_file() and file.resolve().is_relative_to(WEB):
+            return file
+    return None
 
 # A soirée-type budget (profile) that the couple can also adjust for one particular evening (/soiree).
 BUDGET_OPTIONS: list[dict[str, Any]] = [
@@ -400,23 +401,13 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
     class Handler(admin.make_handler(db)):
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
-            if path in STATIC:
-                name, content_type = STATIC[path]
-                self._send(HTTPStatus.OK, RESOURCES.joinpath(name).read_bytes(), content_type)
-            elif path == "/api/quiz":
+            if path == "/api/quiz":
                 vibes = {key: v["label"] for key, v in VIBES.items()}
                 self._send_json(HTTPStatus.OK, {"questions": QUESTIONS, "vibes": vibes})
             elif path == "/api/soiree":
                 self._send_json(HTTPStatus.OK, {
                     "envies": ENVIES, "occasions": OCCASIONS, "max": MAX_ENVIES,
                     "starts": START_OPTIONS, "ends": END_OPTIONS, "budgets": BUDGET_OPTIONS,
-                })
-            elif path == "/api/config":
-                # Public by design (the anon key is meant for the browser): accounts and history run
-                # straight against Supabase, row-level security is what scopes them to their owner.
-                self._send_json(HTTPStatus.OK, {
-                    "supabaseUrl": os.environ.get("SUPABASE_URL", ""),
-                    "supabaseAnonKey": os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_PUBLISHABLE_KEY", ""),
                 })
             elif re.match(r"^/api/parcours/[\w-]+$", path):
                 # Polled while `naming` (Claude's titles still coming), and to reload a redrawn evening.
@@ -426,6 +417,11 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                 self._send_json(HTTPStatus.OK, parcours.soiree_json(path.rsplit("/", 1)[1], state))
             elif re.match(r"^/images/\w+\.\w+$", path) and (image := images.DIRECTORY / path.removeprefix("/images/")).exists():
                 self._send(HTTPStatus.OK, image.read_bytes(), images.MEDIA_TYPES.get(image.suffix, "application/octet-stream"))
+            elif page := web_file(path):
+                kind = TYPES.guess_type(page.name)[0] or "application/octet-stream"
+                self._send(HTTPStatus.OK, page.read_bytes(), kind + ("; charset=utf-8" if kind.startswith("text/") else ""))
+            elif path == "/" and not WEB.exists():
+                self._send(HTTPStatus.SERVICE_UNAVAILABLE, "Site pas encore construit : npm run build:web dans app/".encode(), "text/plain; charset=utf-8")
             else:
                 super().do_GET()
 
@@ -531,7 +527,7 @@ def main() -> None:
     sys.stdout.reconfigure(errors="replace")
     server = ThreadingHTTPServer((args.host, args.port), make_handler(args.db, args.checks, warm=True))
     url = f"http://127.0.0.1:{args.port}"
-    print(f"Accueil : {url}  ·  modération : {url}/admin")
+    print(f"Site (l'app) : {url}  ·  modération : {url}/admin")
     if args.host == "0.0.0.0":
         import socket
 

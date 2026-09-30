@@ -12,6 +12,8 @@ if not exist app\node_modules (
   echo Installation des dependances de l'app...
   call npm install --prefix app
 )
+rem Le site (http://127.0.0.1:8001) est le build web de l'app : refait a chaque lancement, en arriere-plan.
+start "surprise - site" /min cmd /c npm --prefix app run build:web
 
 set TEL=
 set /p TEL=Aussi sur le telephone (Expo Go, meme Wi-Fi) ? o/N :

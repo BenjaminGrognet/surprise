@@ -249,9 +249,9 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
   Si `ANTHROPIC_API_KEY` est définie, Claude les réécrit en arrière-plan (`--no-claude` sinon) : la page s'affiche
   aussitôt et se recharge sur ses titres, après une composition comme après un redessin. Le questionnaire charge les activités à son démarrage et les recharge en arrière-plan toutes les
   15 minutes.
-- Page : `data/parcours/<date>.html`, ouverte à la fin — trois frises (photos, horaires, trajets vers Google Maps,
-  bouton « Réserver » sous chaque étape).
-- Régénérer : servie par le questionnaire (`http://127.0.0.1:8001/parcours/<nom>.html`), la page propose
+- Affichage : dans l'app (`/soiree?soiree=<nom>`, ouverte à la fin ; le serveur `surprise.quiz` doit tourner) —
+  trois frises (photos, horaires, trajets vers Google Maps, bouton « Réserver » sous chaque étape).
+- Régénérer : l'app propose
   « ↻ Tout le parcours » (une autre soirée, différente des deux autres) et « ↻ Changer » sur chaque étape (une autre
   activité du même rôle ou de la même étape de la trame, qui s'enchaîne avec ses voisines ; un bar voisin est écourté
   ou prolongé). Les activités déjà proposées ne reviennent pas tant que d'autres conviennent ; celle qu'on change ne revient jamais,
@@ -274,7 +274,7 @@ Douze questions ludiques sur ce qui dure (où en est le couple, énergie, ce qui
 assiette, musique, fin de soirée habituelle, ce qu'on ne veut jamais, budget, jour de la première sortie, prénoms)
 dessinent le profil du couple : vibes pondérées, persona (« Les Explorateurs », « Les Épicuriens »…), audace, refus,
 genres préférés, envie d'un dîner, budget. Aucune heure précise n'est demandée. Profil et réponses sont stockés
-(`pipeline.profiles`), compte ou pas.
+(`pipeline.profiles`).
 
 Chaque soirée se prépare à part, sur sa propre page (`/soiree`, avec `#p=<profil>` ou sans profil) : jusqu'à trois
 envies (« Faire la fête », « Cocooning », « Romantique », « Surprenez-nous »…), si l'on dîne ou pas (obligatoire :
@@ -292,26 +292,27 @@ uv run python -m surprise.quiz    # http://127.0.0.1:8001
 uv run python -m surprise.quiz --host 0.0.0.0    # + accessible depuis un téléphone sur le même Wi-Fi
 ```
 
-Un seul site : `/` accueil du client (il y retrouve son dernier profil, gardé dans le navigateur), `/profil` le quiz,
-`/soiree` une soirée, `/parcours/<nom>.html` ses parcours, `/compte` et `/historique` le compte du client, `/admin`
-la modération.
+Un seul site, qui est l'app : le serveur sert le build web de l'app Expo (`app/dist`, `npm run build:web` dans
+`app/`, refait par `lancer.cmd` à chaque lancement), l'API qu'elle appelle (`/api/…`) et la modération (`/admin`).
+Il n'y a pas d'autre page client : toute évolution se fait dans `app/` et vaut pour le téléphone comme pour le site.
+Le build web appelle l'API sur sa propre adresse ; en développement (`npm run web`, port 8081), sur
+`EXPO_PUBLIC_API_URL`.
 
 ## Compte client et historique
 
-Sans compte, le profil reste un id anonyme gardé dans le navigateur (comme aujourd'hui). Un compte (email + mot de
-passe, Supabase Auth) garde en plus le profil et l'historique des soirées vraiment réalisées (celle choisie parmi
+L'app demande un compte (email + mot de passe, Supabase Auth) avant tout le reste : sans être connecté, seul
+`/compte` s'affiche. Le compte garde le profil et l'historique des soirées vraiment réalisées (celle choisie parmi
 les trois parcours proposés) sur n'importe quel appareil. Le navigateur parle directement à Supabase avec la clé
 anon ; la sécurité (chacun ne voit que ses données) vient uniquement des policies RLS des migrations
 (`couple_profiles.user_id`, table `soirees_choisies`) — il n'y a pas de code serveur entre les deux.
 
 ```bash
-SUPABASE_URL=...            # ces deux-là sont publiques par nature (clé anon) : le serveur les sert telles
-SUPABASE_ANON_KEY=...        # quelles au navigateur via /api/config, sans jamais les combiner à la service role key
-uv run python -m surprise.quiz
+# app/.env, lu au build : publiques par nature (clé anon), jamais la service role key
+EXPO_PUBLIC_SUPABASE_URL=...
+EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 
-Sans ces variables, `/compte` et `/historique` s'affichent normalement mais annoncent que les comptes ne sont pas
-configurés ; le reste du site (profil anonyme, soirées, parcours) fonctionne à l'identique. Dans les réglages Auth
+Sans ces variables, l'app reste fermée : `/compte` annonce que les comptes ne sont pas configurés. Dans les réglages Auth
 de Supabase, désactiver la confirmation par email a du sens pour un usage personnel à deux.
 
 ## Modération

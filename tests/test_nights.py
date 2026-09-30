@@ -90,6 +90,5 @@ def test_the_evening_ends_in_a_room_near_its_last_step():
     assert other.night.candidate.key[1] == "palace"
 
     parcours.name_by_rules(route, req)
-    page = parcours.render([route], req)
-    assert "La nuit" in page and "dès 180 € la nuit" in page and "on découche" in route.pitch
-    assert "Budget 150 € + 220 € la nuit à deux" in page
+    night = parcours.route_json(0, route)["night"]
+    assert night["role"] == "nuit" and night["price"] == 180 and not night["price_estimated"] and "on découche" in route.pitch

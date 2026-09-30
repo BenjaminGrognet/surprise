@@ -19,13 +19,11 @@ the evening, keeps to the budget and walks rather than rides. Three routes are
 kept, with no activity nor venue in common. Claude names them and writes their
 pitch when ANTHROPIC_API_KEY is set; otherwise they are named by rules.
 
-The result is a page with the three routes as timelines (photos, times, walks,
-booking links), written to data/parcours/.
+The routes are saved (pipeline.soirees) and shown by the app (app/, /soiree?soiree=<name>).
 """
 
 import argparse
 import contextlib
-import html
 import json
 import math
 import os
@@ -43,7 +41,6 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -58,7 +55,6 @@ from surprise.sources import source_name
 from surprise.tags import TAGS, VIBES, describe
 
 PARIS = ZoneInfo("Europe/Paris")
-OUTPUT_DIR = Path("data/parcours")
 # Where composed evenings are kept (table soirees): SUPABASE_DB_URL, else data/surprise.db; surprise.quiz sets its --db.
 DB: Path | str | None = None
 CACHE_HOURS = 6
@@ -1233,7 +1229,7 @@ def route_json(index: int, route: Route) -> dict[str, Any]:
 def soiree_json(name: str, state: dict[str, Any]) -> dict[str, Any]:
     """A composed evening (or several), as data: what the client needs to draw it and to ask for a redraw.
 
-    Sent by surprise.quiz in place of a rendered page — see `render()` below, kept for the command line only.
+    Sent by surprise.quiz; the app (app/src/app/soiree.tsx) lays it out.
     """
     routes, requests = state["routes"], state["requests"]
     request = requests[0]
@@ -1248,327 +1244,8 @@ def soiree_json(name: str, state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def render(routes: list[Route], request: Request, days: list[date] | None = None, name: str = "", naming: bool = False) -> str:
-    """The routes as timelines; with several evenings, each route says its date.
-
-    Command-line only (see `write_page`) — surprise.quiz sends `soiree_json` instead. The page (its
-    `name`) offers to draw a route or a step again; while Claude writes the titles (`naming`), it
-    waits for them and reloads.
-    """
-    days = days or [request.day]
-    vibes = "".join(f'<span class="chip">{html.escape(VIBES[v]["label"])}</span>' for v in request.vibes)
-    vibes += "".join(f'<span class="chip plain">{i + 1}. {html.escape(_SLOT_LABELS.get(s, VIBES.get(s, {}).get("label", s)))}</span>' for i, s in enumerate(request.trame))
-    body = "".join(_render_route(index, route, request.vibes, dated=len(days) > 1) for index, route in enumerate(routes)) or (
-        '<p class="empty">Aucun parcours complet ce soir-là avec ces critères. Élargissez les horaires, le budget ou les envies.</p>'
-    )
-    return _PAGE.format(
-        title=f"Parcours du {days[0]:%d/%m/%Y}" + (f" au {days[-1]:%d/%m/%Y}" if len(days) > 1 else ""),
-        count=_COUNTS.get(len(routes), str(len(routes))),
-        day=" · ".join(f"{_weekday(d)} {d:%d/%m}" for d in days) if len(days) > 1 else f"{_weekday(request.day)} {request.day:%d/%m/%Y}",
-        hours=f"{request.start:%H:%M} – {request.end:%H:%M}",
-        budget=f"{request.budget:.0f} €" + (f" + {request.room_budget:.0f} € la nuit" if request.overnight else ""),
-        vibes=vibes,
-        body=body,
-        name=html.escape(name),
-        naming=' data-naming="1"' if naming else "",
-        script=_SCRIPT,
-    )
-
-
-def _render_route(index: int, route: Route, asked: list[str], dated: bool = False) -> str:
-    steps = []
-    for position, step in enumerate(route.steps):
-        if position:
-            steps.append(_render_hop(route.steps[position - 1].candidate, step))
-        steps.append(_render_step(step, asked, f"routes/{index}/steps/{position}"))
-    if night := route.night:
-        steps.append(_render_hop(route.steps[-1].candidate, night))
-        steps.append(_render_step(night, asked))
-    total = route.price
-    estimated = any(s.candidate.price_estimated for s in route.steps)
-    sleep = f'<span>+ {"≈ " if night.candidate.price_estimated else ""}{night.candidate.price:.0f} € la nuit</span>' if night else ""
-    day = route.steps[0].start.date().isoformat()
-    return f"""
-<section class="route" id="parcours-{index + 1}" data-day="{day}">
-  <header>
-    <p class="eyebrow">Parcours {index + 1}{f" · {_weekday(route.steps[0].start.date())} {route.steps[0].start:%d/%m}" if dated else ""}
-      <button type="button" class="redo" data-redo="routes/{index}" title="Composer une autre soirée à la place de celle-ci">↻ Tout le parcours</button></p>
-    <h2>{html.escape(route.title)}</h2>
-    <p class="pitch">{html.escape(route.pitch)}</p>
-    <p class="meta"><span>{route.steps[0].start:%H:%M} → {route.steps[-1].end:%H:%M}</span>
-      <span>{'≈ ' if estimated else ''}{total:.0f} € pour deux</span>{sleep}
-      <span>{len(route.steps)} étapes</span></p>
-  </header>
-  <ol class="timeline">{''.join(steps)}</ol>
-  <p class="choose-row"><button type="button" class="choose" data-choose="{index}">✓ On a choisi cette soirée</button></p>
-</section>"""
-
-
-def _render_hop(previous: Candidate, step: Step) -> str:
-    """The way from one step to the next, opened in Google Maps."""
-    mode = "walking" if step.distance <= WALK_KM else "transit"
-    maps = "https://www.google.com/maps/dir/?" + urlencode(
-        {"api": 1, "origin": f"{previous.lat},{previous.lon}", "destination": f"{step.candidate.lat},{step.candidate.lon}", "travelmode": mode}
-    )
-    icon = "🚶" if mode == "walking" else "🚇"
-    label = f"{step.travel} min" + (f" · {step.distance * 1000:.0f} m" if step.distance < 1 else f" · {step.distance:.1f} km")
-    return f'<a class="hop" href="{html.escape(maps)}" target="_blank" rel="noopener"><span>{icon}</span>{label}</a>'
-
-
-def _render_step(step: Step, asked: list[str], redo: str = "") -> str:
-    c = step.candidate
-    item = c.item
-    image = item["enrichment"].get("image_url") or ((item["activity"].get("image") or {}).get("url"))
-    if images.needs_copy(image):
-        copy = images.local_copy(image)
-        image = f"../{copy.parent.name}/{copy.name}" if copy else None
-    picture = f'<img src="{html.escape(image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' if image else ""
-    text = item["enrichment"].get("description") or " ".join((item.get("lead_text") or "").split())
-    if len(text) > 180:
-        text = text[:177].rsplit(" ", 1)[0] + "…"
-    price = "Gratuit" if c.price == 0 else f"{'≈ ' if c.price_estimated else ''}{c.price:.0f} € à deux"
-    if c.kind == "nuit":
-        price = f"{'≈ ' if c.price_estimated else 'dès '}{c.price:.0f} € la nuit"
-    badge = {"verifie": "ok", "seance": "ok", "gratuit": "free", "sans_resa": "walk", "nuit": "walk"}[c.kind]
-    if c.kind == "sans_resa":
-        link, label = str(item["activity"].get("website") or item.get("source_url") or ""), "Voir le lieu"
-    elif c.price == 0:
-        link, label = c.booking_url or item.get("source_url") or "", "Voir la fiche"
-    else:
-        link, label = c.booking_url or item.get("source_url") or "", "Réserver"
-    button = f'<a class="book {"primary" if label == "Réserver" else ""}" href="{html.escape(link)}" target="_blank" rel="noopener">{label}</a>' if link else ""
-    shown = [v for v in asked if v in c.vibes] + [v for v in c.vibes if v not in asked]
-    vibes = "".join(f'<span class="tag{" asked" if v in asked else ""}">{html.escape(VIBES[v]["label"])}</span>' for v in shown[:3])
-    vibes += "".join(f'<span class="tag word">{html.escape(word)}</span>' for word in c.keywords[:2])
-    if c.originality >= 55:
-        vibes += f'<span class="tag orig" title="originalité sur 100">✦ {c.originality}</span>'
-    town = (c.item["activity"].get("venue") or {}).get("town")
-    where = f"Paris {c.arrondissement}ᵉ" if c.arrondissement else town if town and town != "Paris" else None
-    place = " · ".join(filter(None, [c.venue, where]))
-    return f"""
-<li class="step">
-  <div class="time">{step.start:%H:%M}<small>→ {step.end:%H:%M}</small></div>
-  <article class="card">
-    <div class="photo">{picture}<span class="role">{_ROLE_LABELS[c.role]}</span>{f'<button type="button" class="redo on-photo" data-redo="{redo}" title="Proposer une autre activité à cette étape">↻ Changer</button>' if redo else ''}</div>
-    <div class="content">
-      <h3>{html.escape(c.title)}</h3>
-      <p class="place">{html.escape(place)}</p>
-      {f'<p class="text">{html.escape(text)}</p>' if text else ''}
-      <p class="tags">{vibes}</p>
-      <p class="basis {badge}">{html.escape(step.basis)}</p>
-      <div class="foot"><span class="price">{price}</span>{button}</div>
-      <p class="source">via {html.escape(source_name(item['source_id']))}</p>
-    </div>
-  </article>
-</li>"""
-
-
-_SLOT_LABELS = {"apero": "Apéro", "diner": "Dîner", "fete": "Danser"}
-_COUNTS = {1: "Une", 2: "Deux", 3: "Trois", 4: "Quatre", 5: "Cinq", 6: "Six", 7: "Sept", 8: "Huit", 9: "Neuf", 10: "Dix"}
-_ROLE_LABELS = {"repas": "Dîner", "verre": "Un verre", "sortie": "Sortie", "nuit": "La nuit"}
-
-
 def _weekday(day: date) -> str:
     return ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"][day.weekday()]
-
-
-_PAGE = """<!doctype html>
-<html lang="fr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="/account.js"></script>
-<style>
-:root {{
-  --bg: #fbf3e7; --surface: #ffffff; --text: #211a2b; --muted: #6f6579; --line: #e8dcf3;
-  --accent: #ff5c72; --accent-soft: #ffe1e6; --accent-text: #211a2b; --accent-ink: #d6314c;
-  --gold: #caa15a; --night-bg: #241a1f; --night-line: #3a2a1f;
-  --ok: #1e7a4c; --ok-soft: #e3f3ea; --walk: #8a5a00; --walk-soft: #fbf0d9;
-  --free: #1f5fa8; --free-soft: #e2edf9;
-}}
-@media (prefers-color-scheme: dark) {{
-  :root {{
-    --bg: #1c1620; --surface: #241c26; --text: #f3ecea; --muted: #b3a7a4; --line: #3a3033;
-    --accent: #ff5c72; --accent-soft: #4a2028; --accent-text: #211a2b; --accent-ink: #ff5c72;
-    --ok: #6fd3a0; --ok-soft: #1b3226; --walk: #f0c46b; --walk-soft: #372b14;
-    --free: #8fbef3; --free-soft: #1a2a3d;
-  }}
-}}
-* {{ box-sizing: border-box; }}
-body {{ margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Space Grotesk", system-ui, sans-serif; }}
-.page {{ max-width: 1280px; margin: 0 auto; padding: 32px 16px 64px; }}
-.banner {{ display: block; width: 100%; height: clamp(140px, 22vw, 240px); object-fit: cover; border-radius: 20px;
-  background: var(--line); margin: 0 0 24px; }}
-.hero h1 {{ font-family: "Fredoka", sans-serif; font-weight: 600; font-size: clamp(28px, 4vw, 42px); margin: 0 0 8px; }}
-.hero p {{ margin: 0; color: var(--muted); }}
-.request {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }}
-.chip {{ background: var(--accent-soft); color: var(--accent-ink); border-radius: 999px; padding: 4px 12px; font-size: 14px; font-weight: 600; }}
-.chip.plain {{ background: var(--surface); color: var(--text); border: 1px solid var(--line); font-weight: 500; }}
-.route {{ margin-top: 48px; }}
-.route header {{ max-width: 760px; }}
-.eyebrow {{ text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--accent-ink); font-weight: 700; margin: 0; }}
-.route h2 {{ font-family: "Fredoka", sans-serif; font-weight: 600; font-size: clamp(24px, 3vw, 32px); margin: 4px 0 8px; }}
-.pitch {{ margin: 0 0 8px; font-size: 17px; }}
-.meta {{ display: flex; flex-wrap: wrap; gap: 16px; color: var(--muted); font-size: 14px; margin: 0; }}
-.timeline {{ list-style: none; padding: 0; margin: 24px 0 0; display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 8px; }}
-.step {{ flex: 0 0 280px; display: flex; flex-direction: column; }}
-.time {{ font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; padding-bottom: 12px; position: relative; }}
-.time small {{ font-weight: 500; font-size: 13px; color: var(--muted); margin-left: 6px; }}
-.time::after {{ content: ""; position: absolute; left: 0; right: -64px; bottom: 0; height: 2px; background: var(--accent); opacity: .35; }}
-.step:last-child .time::after {{ right: 0; }}
-.time::before {{ content: ""; position: absolute; left: 0; bottom: -5px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }}
-.card {{ margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; flex: 1; }}
-.photo {{ position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: linear-gradient(135deg, var(--accent-soft), var(--line)); }}
-.photo img {{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }}
-.role {{ position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }}
-.content {{ padding: 14px 16px 16px; display: flex; flex-direction: column; flex: 1; }}
-.content h3 {{ margin: 0 0 4px; font-size: 17px; line-height: 1.3; }}
-.place {{ margin: 0 0 8px; color: var(--muted); font-size: 14px; }}
-.text {{ margin: 0 0 10px; font-size: 14px; }}
-.tags {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }}
-.tag {{ font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--muted); }}
-.tag.asked {{ border-color: var(--accent-ink); color: var(--accent-ink); }}
-.tag.word {{ font-style: italic; border-style: dashed; }}
-.tag.orig {{ background: var(--walk-soft); color: var(--walk); border-color: transparent; font-weight: 600; }}
-.basis {{ font-size: 13px; border-radius: 8px; padding: 6px 10px; margin: 0 0 12px; }}
-.basis.ok {{ background: var(--ok-soft); color: var(--ok); }}
-.basis.free {{ background: var(--free-soft); color: var(--free); }}
-.basis.walk {{ background: var(--walk-soft); color: var(--walk); }}
-.foot {{ margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }}
-.price {{ font-weight: 700; }}
-.book {{ display: inline-block; text-decoration: none; font-weight: 600; font-size: 14px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--accent-ink); color: var(--accent-ink); }}
-.book.primary {{ background: var(--accent); border-color: var(--accent); color: var(--accent-text); }}
-.book:hover {{ filter: brightness(1.08); }}
-.source {{ margin: 10px 0 0; font-size: 12px; color: var(--muted); }}
-.hop {{ flex: 0 0 64px; align-self: flex-start; margin-top: 44px; display: flex; flex-direction: column; align-items: center; text-align: center;
-  font-size: 12px; color: var(--muted); text-decoration: none; padding-top: 40px; line-height: 1.3; }}
-.hop span {{ font-size: 18px; }}
-.hop:hover {{ color: var(--accent-ink); }}
-.empty {{ margin-top: 48px; color: var(--muted); }}
-.redo {{ display: none; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 999px; padding: 4px 12px;
-  border: 1px solid var(--accent-ink); background: var(--surface); color: var(--accent-ink); text-transform: none; letter-spacing: 0; }}
-.live .redo {{ display: inline-block; }}
-.eyebrow .redo {{ margin-left: 12px; vertical-align: middle; }}
-.redo.on-photo {{ position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.6); color: #fff; border-color: transparent; }}
-.redo:hover:not(:disabled) {{ filter: brightness(1.1); }}
-.redo:disabled {{ opacity: .5; cursor: wait; }}
-.redo.busy {{ opacity: 1; }}
-.redo:focus-visible {{ outline: 2px solid var(--accent); outline-offset: 2px; }}
-.choose-row {{ margin: 18px 0 0; }}
-.choose {{ font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 999px; padding: 10px 20px;
-  border: 1px solid var(--accent); background: var(--surface); color: var(--accent-ink); }}
-.choose:hover:not(:disabled) {{ background: var(--accent-soft); }}
-.choose:disabled {{ cursor: default; opacity: .8; }}
-.choose.chosen {{ background: var(--accent); border-color: var(--accent); color: var(--accent-text); }}
-.flash {{ animation: flash 1.6s ease-out; }}
-@keyframes flash {{ from {{ box-shadow: 0 0 0 3px var(--accent); }} to {{ box-shadow: 0 0 0 3px transparent; }} }}
-@media (max-width: 720px) {{
-  .timeline {{ flex-direction: column; overflow: visible; border-left: 2px solid var(--accent-soft); margin-left: 6px; padding-left: 18px; }}
-  .step {{ flex: none; }}
-  .time::after {{ display: none; }}
-  .time::before {{ left: -25px; bottom: auto; top: 9px; }}
-  .hop {{ flex: none; flex-direction: row; gap: 8px; margin: 12px 0; padding: 0; align-self: flex-start; }}
-}}
-</style>
-</head>
-<body>
-<main class="page" data-page="{name}"{naming}>
-  <img class="banner" src="https://images.unsplash.com/photo-1759503166788-cbe7c2503e96?auto=format&fit=crop&w=1600&q=60" alt="" loading="lazy" decoding="async">
-  <section class="hero">
-    <h1>{count} soirées pour vous deux</h1>
-    <p>Chaque étape est gratuite ou réservable ce soir-là ; les trajets se font à pied quand c'est possible.</p>
-    <div class="request">
-      <span class="chip plain">{day}</span><span class="chip plain">{hours}</span><span class="chip plain">Budget {budget} à deux</span>{vibes}
-    </div>
-  </section>
-  {body}
-</main>
-{script}
-</body>
-</html>
-"""
-
-# Served by surprise.quiz, the page redraws a route or a step, then reloads on it.
-# Opened as a file, it has no server: the buttons stay hidden.
-_SCRIPT = """<script>
-(() => {
-  const main = document.querySelector("main");
-  const page = main.dataset.page;
-  if (!page || location.protocol === "file:") return;
-  document.body.classList.add("live");
-  // Claude's titles come a few seconds after the page: it reloads on them, a minute at most.
-  if (main.dataset.naming) {
-    const since = Date.now();
-    const wait = async () => {
-      const text = await fetch(location.href, { cache: "no-store" }).then((r) => r.text()).catch(() => "");
-      if (text && !/<main[^>]*data-naming/.test(text)) return location.reload();
-      if (Date.now() - since < 60000) setTimeout(wait, 2000);
-    };
-    setTimeout(wait, 2000);
-  }
-  const back = sessionStorage.getItem("redone");
-  if (back) {
-    sessionStorage.removeItem("redone");
-    const target = document.querySelector(back)?.closest(".card, .route");
-    if (target) { target.scrollIntoView({ block: "center" }); target.classList.add("flash"); }
-  }
-  document.addEventListener("click", async (event) => {
-    const redo = event.target.closest("[data-redo]");
-    if (redo) {
-      const buttons = document.querySelectorAll("[data-redo]");
-      const label = redo.textContent;
-      buttons.forEach((b) => { b.disabled = true; });
-      redo.classList.add("busy");
-      redo.textContent = "Recherche…";
-      try {
-        const response = await fetch(`/api/parcours/${page}/${redo.dataset.redo}`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
-        });
-        const answer = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(answer.error || "la recherche a échoué");
-        const card = redo.closest(".card");
-        sessionStorage.setItem("redone", card ? `[data-redo="${redo.dataset.redo}"]` : `#${redo.closest(".route").id}`);
-        location.reload();
-      } catch (error) {
-        alert(`Pas de nouvelle proposition : ${error.message}`);
-        buttons.forEach((b) => { b.disabled = false; });
-        redo.classList.remove("busy");
-        redo.textContent = label;
-      }
-      return;
-    }
-    const choose = event.target.closest("[data-choose]");
-    if (choose) {
-      if (!currentUser()) {
-        if (confirm("Connectez-vous pour garder cette soirée dans votre historique. Aller à votre compte ?")) location.href = "/compte";
-        return;
-      }
-      const route = choose.closest(".route");
-      const label = choose.textContent;
-      choose.disabled = true;
-      choose.textContent = "Ajout…";
-      try {
-        await chooseEvening({
-          pageName: page, routeIndex: Number(choose.dataset.choose),
-          title: route.querySelector("h2").textContent, pitch: route.querySelector(".pitch").textContent,
-          vibes: [...document.querySelectorAll(".request .chip:not(.plain)")].map((c) => c.textContent),
-          day: route.dataset.day || null,
-        });
-        choose.classList.add("chosen");
-        choose.textContent = "✓ Choisie, dans votre historique";
-      } catch (error) {
-        alert(`Impossible de la garder : ${error.message}`);
-        choose.disabled = false;
-        choose.textContent = label;
-      }
-    }
-  });
-})();
-</script>"""
 
 
 # Command line ---------------------------------------------------------------
@@ -1659,7 +1336,7 @@ def main() -> None:
     parser.add_argument("--strict", action="store_true", help="sans bars ni clubs non réservables")
     parser.add_argument("--db", help="base SQLite ou URL postgresql:// (défaut : SUPABASE_DB_URL, sinon data/surprise.db)")
     parser.add_argument("--no-claude", action="store_true", help="titres et pitchs par règles, sans Claude")
-    parser.add_argument("--no-open", action="store_true", help="ne pas ouvrir la page")
+    parser.add_argument("--no-open", action="store_true", help="ne pas ouvrir la soirée dans l'app")
     args = parser.parse_args()
     # A Windows console cannot show every character (✓, ✗): replace them rather than fail.
     sys.stdout.reconfigure(errors="replace")
@@ -1688,10 +1365,11 @@ def main() -> None:
         if night := route.night:
             price = f"{'≈ ' if night.candidate.price_estimated else 'dès '}{night.candidate.price:.0f} €"
             print(f"   {night.start:%H:%M}-{night.end:%H:%M}  nuit : {night.candidate.title[:60]}  [{price}, {night.travel} min]")
-    path = write_page(name)
-    print(f"\nPage : {path.resolve()}")
+    # Shown by the app, as served by surprise.quiz (which must be running).
+    url = f"http://127.0.0.1:8001/soiree?soiree={name}"
+    print(f"\nDans l'app : {url}")
     if not args.no_open:
-        webbrowser.open(path.resolve().as_uri())
+        webbrowser.open(url)
 
 
 def generate(
@@ -1830,16 +1508,6 @@ def save(name: str, state: dict[str, Any]) -> None:
     # ponytail: one connection per save and load (under a second through the pooler); pass the store along if it drags.
     with open_store(DB) as store:
         store.save_soiree(name, _json(requests), int(state.get("naming") or 0), routes, steps)
-
-
-def write_page(name: str) -> Path:
-    """The routes saved under `name`, as a page — command-line only, see `render`."""
-    state = load(name)
-    requests = state["requests"]
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    path = OUTPUT_DIR / f"{name}.html"
-    path.write_text(render(state["routes"], requests[0], [r.day for r in requests], name, bool(state.get("naming"))), encoding="utf-8")
-    return path
 
 
 def load(name: str) -> dict[str, Any] | None:

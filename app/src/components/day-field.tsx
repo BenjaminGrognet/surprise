@@ -5,8 +5,7 @@ import { Spacing } from '@/constants/theme';
 import { isoDay } from '@/lib/dates';
 import { useTheme } from '@/hooks/use-theme';
 
-// Mirrors dayField() in src/surprise/client.js. On web, a real <input type="date"> (native
-// platform feature, same UX as the original site); native gets a plain ISO text field —
+// On web, a real <input type="date"> (native platform feature); native gets a plain ISO text field —
 // ponytail: no native date picker yet, swap in @react-native-community/datetimepicker if wanted.
 export function DayField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const theme = useTheme();
