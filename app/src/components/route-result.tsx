@@ -1,11 +1,12 @@
-import { Image, Linking, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { SoireeRoute, SoireeStep } from '@/lib/api';
+import { API_URL, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { formatTime } from '@/lib/dates';
 
 const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre: 'Un verre', sortie: 'Sortie', nuit: 'La nuit' };
@@ -95,11 +96,14 @@ function StepRow({
   const badge = BADGE_KIND[step.kind];
   const badgeColor = badge === 'ok' ? '#1e7a4c' : badge === 'free' ? '#1f5fa8' : '#8a5a00';
   const remove = step.redo ? `${step.redo}/remove` : null;
+  const [open, setOpen] = useState(false);
+  // ponytail: length stands for "cut at two lines"; measure the text layout if it misfires.
+  const long = (step.text?.length ?? 0) > 110 || step.title.length > 70;
   return (
     <ThemedView style={[styles.card, { borderColor: theme.line }]}>
       <View style={styles.side}>
         <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
-          {step.image_url ? <Image source={{ uri: step.image_url }} style={styles.thumbImg} /> : null}
+          {step.image_url ? <Image source={{ uri: step.image_url.startsWith('/') ? API_URL + step.image_url : step.image_url }} style={styles.thumbImg} /> : null}
         </View>
         {step.redo ? <TextButton onPress={() => onRedo(step.redo!)}>{busyRedo === step.redo ? '↻…' : '↻ Changer'}</TextButton> : null}
         {removable && remove ? <TextButton onPress={() => onRedo(remove)}>{busyRedo === remove ? '✕…' : '✕ Retirer'}</TextButton> : null}
@@ -108,13 +112,20 @@ function StepRow({
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
           <ThemedText type="smallBold">{formatTime(step.start)}</ThemedText> → {formatTime(step.end)} · {ROLE_LABELS[step.role]}
         </ThemedText>
-        <ThemedText type="smallBold" numberOfLines={2}>{step.title}</ThemedText>
+        <ThemedText type="smallBold" numberOfLines={open ? undefined : 2}>{step.title}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>{place(step)}</ThemedText>
-        {step.text ? <ThemedText type="small" numberOfLines={2}>{step.text}</ThemedText> : null}
+        {step.text ? <ThemedText type="small" numberOfLines={open ? undefined : 2}>{step.text}</ThemedText> : null}
+        {long ? <TextButton onPress={() => setOpen(!open)}>{open ? '− Réduire' : '+ Lire la suite'}</TextButton> : null}
         <ThemedText type="small" style={{ color: badgeColor }} numberOfLines={1}>{step.basis}</ThemedText>
         <View style={styles.line}>
           <ThemedText type="smallBold">{formatPrice(step)}</ThemedText>
-          {step.booking_url ? <TextButton onPress={() => Linking.openURL(step.booking_url!)}>{BOOKING_LABELS[step.booking_action]}</TextButton> : null}
+          {step.booking_url ? (
+            <Pressable
+              onPress={() => Linking.openURL(step.booking_url!)}
+              style={[styles.book, step.booking_action === 'reserver' ? { backgroundColor: theme.accent } : { borderColor: theme.accent, borderWidth: 1 }]}>
+              <ThemedText type="smallBold" style={{ color: theme.text }}>{BOOKING_LABELS[step.booking_action]} ↗</ThemedText>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </ThemedView>
@@ -133,4 +144,5 @@ const styles = StyleSheet.create({
   body: { flex: 1, gap: Spacing.half },
   line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
   side: { width: 116, gap: Spacing.one },
+  book: { borderRadius: 999, paddingVertical: Spacing.one, paddingHorizontal: Spacing.three },
 });

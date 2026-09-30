@@ -21,6 +21,11 @@ export async function rememberProfile(answers: Record<string, unknown>, profile:
   await setItem(KEY, JSON.stringify({ answers, profile }));
 }
 
+export async function forgetProfile() {
+  if (Platform.OS === 'web') return localStorage.removeItem(KEY);
+  await AsyncStorage.removeItem(KEY);
+}
+
 export async function rememberedProfile(): Promise<RememberedProfile | null> {
   try {
     return JSON.parse((await getItem(KEY)) || 'null');

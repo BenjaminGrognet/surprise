@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
@@ -57,6 +58,7 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
       if (tab === 'in') await signIn(email, password);
       else await signUp(email, password);
       onSignedIn();
+      router.replace('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

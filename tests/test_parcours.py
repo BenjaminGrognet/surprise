@@ -365,6 +365,35 @@ def test_a_step_taken_out_and_the_next_reached_from_the_one_before(tmp_path, mon
     assert parcours.remove("essai", 0, 0) == "une soirée garde au moins une étape"
 
 
+def test_the_activities_of_a_chosen_evening_are_never_proposed_again(tmp_path, monkeypatch):
+    req, candidates, route = _night()
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
+    route.request = req
+    parcours.save("essai", {"routes": [route], "requests": [req], "seen": set()})
+    with open_store(tmp_path / "s.db") as store:
+        done = store.chosen_activities([("essai", 0), ("absente", 0)])
+    assert done == {s.candidate.key for s in route.steps}
+    base = parcours.Base([c.item for c in candidates], {c.key: 35 for c in candidates})
+    req.done = done
+    with open_store(tmp_path / "s.db") as store:
+        left = parcours.candidates_for(store, base, req, checks=0)
+    assert left and not {c.key for c in left} & done
+
+
+def test_a_route_drawn_again_has_its_steps_back_after_some_were_taken_out(tmp_path, monkeypatch):
+    req, candidates, route = _night()
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
+    monkeypatch.setattr(parcours, "candidates_for", lambda store, base, request, checks: candidates)
+    route.request = req
+    parcours.save("essai", {"routes": [route], "requests": [req], "seen": set()})
+    assert parcours.remove("essai", 0, 1) is None
+    # The best draw has two steps; the route was composed with three.
+    short, full = parcours.Route(route.steps[:2], 10.0), parcours.Route(route.steps, 1.0)
+    monkeypatch.setattr(parcours, "compose", lambda found, request: [short, full])
+    assert parcours.regenerate(None, None, "essai", 0, claude=False) is None
+    assert len(parcours.load("essai")["routes"][0].steps) == 3
+
+
 def test_never_a_route_whose_image_does_not_show(monkeypatch):
     req, candidates, route = _night()
     routes = sorted(parcours.compose(candidates, req), key=lambda r: -r.score)

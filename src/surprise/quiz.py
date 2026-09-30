@@ -482,13 +482,23 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                 profile = profile_from({})
             elif (profile := valid_profile(body.get("profile"))) is None:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "profil invalide"})
+            # The evenings the couple chose (its history): their activities are never proposed again.
+            chosen = body.get("done") if isinstance(body.get("done"), list) else []
+            chosen = [
+                (c["page_name"], c["route_index"]) for c in chosen[:200]
+                if isinstance(c, dict) and isinstance(c.get("page_name"), str) and type(c.get("route_index")) is int
+            ]
             with open_store(db) as store:
+                done = store.chosen_activities(chosen)
                 overnight = body.get("decoucher") is True
                 name = f"soiree-{new_id()}-{'-'.join(envies)}-{'diner' if body['diner'] else 'sans-diner'}"
                 name += "-nuit" if overnight else ""
                 with composing:
+                    requests = requests_for(profile, days, envies, occasion, body["diner"], overnight, start, end, budget)
+                    for request in requests:
+                        request.done = done
                     _, name = parcours.generate(
-                        store, requests_for(profile, days, envies, occasion, body["diner"], overnight, start, end, budget),
+                        store, requests,
                         count=3, checks=checks, name=name, base=base(store), name_later=True,
                     )
                     state = parcours.load(name)

@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { AccountNav } from '@/components/account-nav';
 import { PrimaryButton, TextButton, TextLink } from '@/components/buttons';
@@ -10,7 +11,7 @@ import { RouteResult } from '@/components/route-result';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { chooseEvening, currentUser } from '@/lib/account';
+import { chooseEvening, currentUser, eveningsHistory } from '@/lib/account';
 import {
   composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart,
   type ComposedSoiree, type Night, type Profile, type SoireeData,
@@ -33,6 +34,9 @@ const NAMING_TIMEOUT_MS = 60000;
 const NAMING_POLL_MS = 2000;
 
 export default function SoireeScreen() {
+  // ?soiree=<name>: the evening composed before, so a reload or a shared link shows it again;
+  // &route=<index>: the route the couple chose, then the only one shown.
+  const { soiree: saved, route: picked } = useLocalSearchParams<{ soiree?: string; route?: string }>();
   const [data, setData] = useState<SoireeData | null>(null);
   const [vibes, setVibes] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -42,7 +46,6 @@ export default function SoireeScreen() {
   const [status, setStatus] = useState<'idle' | 'composing' | 'error'>('idle');
   const [composed, setComposed] = useState<ComposedSoiree | null>(null);
   const [busyRedo, setBusyRedo] = useState<string | null>(null);
-  const [chosen, setChosen] = useState<Set<number>>(new Set());
   // 'signin': not signed in, needs a link to /compte. A string: a plain error message.
   const [notice, setNotice] = useState<'signin' | string | null>(null);
 
@@ -62,6 +65,10 @@ export default function SoireeScreen() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (saved) getSoireeState(saved).then(setComposed).catch(() => null);
+  }, [saved]);
 
   // Claude's titles arrive a few seconds after the composition: poll until they do.
   useEffect(() => {
@@ -89,8 +96,10 @@ export default function SoireeScreen() {
   async function compose() {
     setStatus('composing');
     try {
-      setComposed(await composeSoiree(night));
-      setChosen(new Set());
+      const history = (await currentUser()) ? await eveningsHistory().catch(() => []) : [];
+      const fresh = await composeSoiree({ ...night, done: history.map((h) => ({ page_name: h.page_name, route_index: h.route_index })) });
+      setComposed(fresh);
+      router.setParams({ soiree: fresh.name, route: undefined });
       setStatus('idle');
     } catch {
       setStatus('error');
@@ -122,19 +131,21 @@ export default function SoireeScreen() {
         pageName: composed.name, routeIndex: route.index, title: route.title, pitch: route.pitch,
         vibes: composed.vibes.map((v) => vibes[v] || v), day: route.day,
       });
-      setChosen((prev) => new Set(prev).add(route.index));
+      router.setParams({ route: String(route.index) });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Impossible de la garder.');
     }
   }
 
   if (composed) {
+    const shown = picked === undefined ? composed.routes : composed.routes.filter((r) => String(r.index) === picked);
     return (
       <Screen>
         <AccountNav />
         <TextButton onPress={() => setComposed(null)}>← Recomposer la soirée</TextButton>
         <ThemedText type="title" style={styles.sub}>
-          {composed.routes.length > 0 ? `${composed.routes.length} soirées pour vous deux` : 'Aucun parcours ce soir-là'}
+          {picked !== undefined && shown.length ? `Votre soirée du ${longDay(shown[0].day)}`
+            : composed.routes.length > 0 ? `${composed.routes.length} soirées pour vous deux` : 'Aucun parcours ce soir-là'}
         </ThemedText>
         {composed.routes.length === 0 ? (
           <ThemedText themeColor="textSecondary">Élargissez les horaires, le budget ou les envies, et recomposez.</ThemedText>
@@ -147,11 +158,11 @@ export default function SoireeScreen() {
         ) : notice ? (
           <ThemedText style={styles.error}>{notice}</ThemedText>
         ) : null}
-        {composed.routes.map((route) => (
+        {shown.map((route) => (
           <RouteResult
             key={route.index}
             route={route}
-            chosen={chosen.has(route.index)}
+            chosen={picked === String(route.index)}
             busyRedo={busyRedo}
             onRedo={redo}
             onChoose={() => choose(route)}

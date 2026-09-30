@@ -57,6 +57,8 @@ export type Night = {
   budget: number | null;
   day: string;
   profile: Profile | null;
+  // The evenings the couple chose (its history): their activities are never proposed again.
+  done?: { page_name: string; route_index: number }[];
 };
 
 export const getSoiree = () => api<SoireeData>('/api/soiree');

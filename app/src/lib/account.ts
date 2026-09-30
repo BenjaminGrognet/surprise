@@ -62,6 +62,14 @@ export async function eveningsHistory(): Promise<EveningHistoryRow[]> {
   return data as EveningHistoryRow[];
 }
 
+// The next evening the couple chose, until its day is over.
+export async function upcomingEvening(today: string): Promise<EveningHistoryRow | null> {
+  const { data, error } = await supabase
+    .from('soirees_choisies').select('*').gte('day', today).order('day').order('chosen_at', { ascending: false }).limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.[0] as EveningHistoryRow) ?? null;
+}
+
 // One evening kept in the couple's history: the route they actually picked, among the ones proposed.
 export async function chooseEvening(input: {
   pageName: string;

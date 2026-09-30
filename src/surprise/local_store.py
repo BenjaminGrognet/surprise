@@ -293,7 +293,8 @@ class LocalStore:
             )
 
     def soiree(self, soiree_id: str) -> dict[str, Any] | None:
-        """An evening as saved: its requests (JSON), naming, routes, current steps, and every activity it ever showed."""
+        """An evening as saved: its requests (JSON), naming, routes, current steps, every activity it ever showed, and
+        each route's number of steps as composed."""
         row = self._run("select requests, naming from soirees where id = ?", (soiree_id,)).fetchone()
         if row is None:
             return None
@@ -310,7 +311,21 @@ class LocalStore:
             "seen": self._run(
                 "select distinct source_id, external_id from soiree_steps where soiree_id = ? and not night", (soiree_id,)
             ).fetchall(),
+            # Each route's steps as composed, before the couple took some out: its highest position ever saved.
+            "sizes": dict(self._run(
+                "select route, max(position) + 1 from soiree_steps where soiree_id = ? and not night group by route", (soiree_id,)
+            ).fetchall()),
         }
+
+    def chosen_activities(self, routes: Sequence[tuple[str, int]]) -> set[tuple[str, str]]:
+        """The activities of these routes (evening, route index), as they were when chosen: their current steps."""
+        found: set[tuple[str, str]] = set()
+        for soiree_id, route in routes:
+            found |= set(self._run(
+                "select source_id, external_id from soiree_steps where soiree_id = ? and route = ? and not night and replaced_at is null",
+                (soiree_id, route),
+            ).fetchall())
+        return found
 
     def save_soiree(
         self, soiree_id: str, requests: str, naming: int, routes: Sequence[tuple[Any, ...]], steps: Sequence[tuple[Any, ...]]

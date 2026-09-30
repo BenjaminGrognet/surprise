@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryLink, TextLink } from '@/components/buttons';
@@ -9,7 +10,6 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { currentUser, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
-import { API_URL } from '@/lib/api';
 import { supabaseConfigured } from '@/lib/supabase';
 
 const BANNER = 'https://images.unsplash.com/photo-1504730513966-dfcd6e53fdc8?auto=format&fit=crop&w=1600&q=60';
@@ -83,7 +83,7 @@ function HistoryCard({ row }: { row: EveningHistoryRow }) {
   const theme = useTheme();
   return (
     <Pressable
-      onPress={() => Linking.openURL(`${API_URL}/parcours/${row.page_name}.html#parcours-${row.route_index + 1}`)}
+      onPress={() => router.push({ pathname: '/soiree', params: { soiree: row.page_name, route: String(row.route_index) } })}
       style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
       <ThemedText type="small" themeColor="textSecondary">{row.day ? frDay(row.day) : 'Date libre'}</ThemedText>
       <ThemedText type="subtitle" style={styles.cardTitle}>{row.title}</ThemedText>

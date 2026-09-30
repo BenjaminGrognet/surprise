@@ -29,6 +29,7 @@ import html
 import json
 import math
 import os
+import random
 import re
 import secrets
 import sys
@@ -126,6 +127,7 @@ class Request:
     no_dinner: bool = False  # the couple will have eaten: no meal step (dinner cruises and shows included)
     overnight: bool = False  # the evening ends in a hotel ("découcher")
     night_budget: float | None = None  # euros for the room, added to the evening's budget (night_budget_for by default)
+    done: set[tuple[str, str]] = field(default_factory=set)  # activities of evenings the couple chose: never again
 
     @property
     def room_budget(self) -> float:
@@ -837,6 +839,7 @@ def _same(title: str) -> str:
     return " ".join(re.findall(r"\w+", title.lower()))
 
 
+VARIETY = 2.0  # score drawn at random for each activity at each composition, up to about one asked vibe
 KM_WEIGHT = 1.5  # score lost per km from the step before, on top of the travel time
 
 
@@ -1608,18 +1611,22 @@ def evening_routes(store: LocalStore, base: Base, request: Request, checks: int 
 
 
 def candidates_for(store: LocalStore, base: Base, request: Request, checks: int = 60) -> list[Candidate]:
-    """The activities that can be a step that evening, scored."""
+    """The activities that can be a step that evening, scored, with a draw of luck (VARIETY) so that two
+    compositions of the same evening, and the activities checked for it, differ."""
     items = base.items
-    prescore = {key: quick_score(i, request, base.originality[key]) for i in items if (key := (i["source_id"], i["external_id"]))}
+    luck = {(i["source_id"], i["external_id"]): random.uniform(0, VARIETY) for i in items}
+    prescore = {key: quick_score(i, request, base.originality[key]) + luck[key] for i in items if (key := (i["source_id"], i["external_id"]))}
     checked = check_engines(store, items, request, checks, prescore) if checks else store.cached_availability(
         request.day.isoformat(), request.party, CACHE_HOURS
     )
     candidates = []
     for item in items:
         key = (item["source_id"], item["external_id"])
+        if key in request.done:
+            continue
         candidate = build_candidate(item, request, checked.get(key), base.originality[key])
         if candidate:
-            candidate.score = score(candidate, request)
+            candidate.score = score(candidate, request) + luck[key]
             if candidate.score > -math.inf:
                 candidates.append(candidate)
     kinds = Counter(c.kind for c in candidates)
@@ -1853,7 +1860,7 @@ def load(name: str) -> dict[str, Any] | None:
         for index, request, title, pitch, score in data["routes"]
     ]
     seen = {(source_id, external_id) for source_id, external_id in data["seen"]}
-    return {"routes": routes, "requests": requests, "seen": seen, "naming": data["naming"]}
+    return {"routes": routes, "requests": requests, "seen": seen, "naming": data["naming"], "sizes": data.get("sizes") or {}}
 
 
 def regenerate(
@@ -1896,6 +1903,9 @@ def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: 
         keys, titles = {s.candidate.key for s in route.steps}, {_same(s.candidate.title) for s in route.steps}
         venues = {s.candidate.venue.lower() for s in route.steps} - {""}
         found = compose([c for c in candidates if c.key not in keys and _same(c.title) not in titles and c.venue.lower() not in venues], request)
+        # As many steps as the route had when composed, the ones the couple took out included, if such routes exist.
+        size = max(len(route.steps), state["sizes"].get(index, 0))
+        found = [r for r in found if len(r.steps) >= size] or found
         others = [r for r in routes if r is not route]
         fresh = [r for r in found if not {s.candidate.key for s in r.steps} & state["seen"]]
         chosen = pick_shown(fresh, 1, others) or pick_shown(found, 1, others)
