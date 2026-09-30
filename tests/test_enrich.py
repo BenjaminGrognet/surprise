@@ -247,3 +247,67 @@ def test_a_bracketed_template_in_a_page_is_no_link():
     # Accor Arena's script: "https://[domain]/…" made urlsplit raise "Invalid IPv6 URL".
     page = '<script>var u = "https://[domain]/tickets";</script><a href="https://www.ticketmaster.fr/fr/manifestation/x">Réserver</a>'
     assert enrich.booking_link("https://www.accorarena.com/fr/programmation/x", page) == "https://www.ticketmaster.fr/fr/manifestation/x"
+
+
+def test_match_place_by_distance_then_postcode_then_unique_name():
+    def place(lat, postcode=None, url="n/1"):
+        return {"latitude": lat, "longitude": 2.35, "opening_hours": None, "osm_address": None, "osm_postal_code": postcode, "osm_url": url}
+
+    index = {
+        "dipsy": [place(48.85, url="n/1"), place(48.86, url="n/2")],
+        "chez nous": [place(48.87, "75011", "n/3"), place(48.87, "75006", "n/4")],
+        "unique": [place(48.88, url="n/5")],
+    }
+    near = {"name": "Le Dipsy", "postal_code": "75006", "latitude": 48.8601, "longitude": 2.35}
+    assert enrich.match_place(index, near)["osm_url"] == "n/2"
+    # Coordinates given, but no place of that name close by.
+    assert enrich.match_place(index, near | {"latitude": 48.80}) is None
+    assert enrich.match_place(index, {"name": "Chez Nous !", "postal_code": "75006"})["osm_url"] == "n/4"
+    assert enrich.match_place(index, {"name": "Unique", "postal_code": "75018"})["osm_postal_code"] == "75018"
+    # Two untagged places of that name: which one is unknown.
+    assert enrich.match_place(index, {"name": "Dipsy", "postal_code": "75006"}) is None
+
+
+def test_an_event_with_coordinates_skips_openstreetmap(monkeypatch):
+    asked = []
+    monkeypatch.setattr(enrich, "venue_place", lambda client, venue: asked.append(venue))
+    venue = activity()["venue"] | {"latitude": 48.85, "longitude": 2.34}
+    item = {"activity": activity(website=None, image={"url": "x"}, kind="temporary", venue=venue), "source_text": None}
+    enrich.enrich_one(item, httpx.Client())
+    assert not asked
+    enrich.enrich_one(item | {"activity": item["activity"] | {"kind": "permanent"}}, httpx.Client())
+    assert asked
+
+
+@respx.mock
+def test_a_booking_platform_page_is_not_read_for_its_ticketing():
+    page = respx.get(url__startswith="https://wecandoo.fr/")
+    item = {"activity": activity(website=None, image={"url": "x"}, offers=[{"booking_url": "https://wecandoo.fr/atelier/paris-x"}]), "source_text": "T."}
+    with httpx.Client() as client:
+        enrich.enrich_one(item, client)
+    assert not page.called
+
+
+def test_summarize_keeps_the_first_sentences_of_the_prose():
+    assert enrich.summarize("La Terra Madre | Restaurants à Ménilmontant, Paris\nPetite pépite du 20e ! Cuisine italienne.") == (
+        "Petite pépite du 20e ! Cuisine italienne."
+    )
+    assert enrich.summarize("La Rotonde | Restaurants à 10e arrondissement, Paris") is None
+    # Paragraphs and headings end their line; a list stops the description.
+    assert enrich.summarize("<p>***Les dimanches du Supersonic***</p><p>Des groupes rejouent les tubes du rock ⭐</p>Les bienfaits :\nDétente") == (
+        "Les dimanches du Supersonic. Des groupes rejouent les tubes du rock."
+    )
+    # Facts laid out in a row are no sentence.
+    assert enrich.summarize("Artiste: María Moreno Auteurs: María Durée: 60 mn\nSalut, moi c'est María, humoriste.") == "Salut, moi c'est María, humoriste."
+    long = "Une phrase " + "très " * 80 + "longue."
+    assert enrich.summarize(long).endswith("très…") and len(enrich.summarize(long)) <= enrich.MAX_DESCRIPTION_CHARS
+
+
+def test_an_enriched_activity_only_gets_its_description_from_the_kept_excerpt():
+    item = {"activity": activity(), "source_text": None, "site_excerpt": "Un cabaret intimiste depuis 1950."}
+    assert enrich.describe_only(item, lambda act, text: enrich.summarize(text)) == {"description": "Un cabaret intimiste depuis 1950."}
+
+
+def test_summarize_skips_a_headline_said_again():
+    text = "Apprenez à réussir vos semis avec Marguerite, maraîchère. Apprenez à réussir vos semis avec Marguerite ! Visite de la serre."
+    assert enrich.summarize(text) == "Apprenez à réussir vos semis avec Marguerite, maraîchère. Visite de la serre."

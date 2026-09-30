@@ -130,16 +130,21 @@ uv run python -m surprise.enrich
 
 - Image : photo de la source, sinon `og:image` du site officiel, sinon Google Places si `GOOGLE_PLACES_API_KEY`
   est définie (seul l'identifiant du lieu est stocké, la photo est chargée à l'affichage avec son crédit).
-- Lieu : coordonnées, horaires et, s'il manque, adresse depuis OpenStreetMap (Nominatim, 1 requête/s),
-  cherchés par nom et code postal.
+- Lieu : coordonnées, horaires et, s'il manque, adresse depuis OpenStreetMap, cherchés par nom puis par distance
+  ou code postal : d'abord dans les lieux nommés de Paris téléchargés une fois par semaine depuis Overpass
+  (`data/osm_paris.json`), sinon par Nominatim (1 requête/s). La réponse de chaque lieu est gardée 3 mois
+  (`pipeline.osm_places`, migration `20260930000001_osm_places.sql`). Un événement qui a déjà ses coordonnées
+  s'en passe : les horaires du lieu ne disent rien de ses dates.
 - Réservation : lien « Réserver » du site officiel si la fiche n'en a pas ; si le lien de la fiche mène à la page
   du spectacle sur le site du lieu, son bouton « Acheter » vers la billetterie.
-- Description : rédigée par Claude si `ANTHROPIC_API_KEY` est définie (modèle : `SURPRISE_LLM_MODEL`,
-  `claude-opus-5-5` par défaut), à partir du texte de la source (`lead_text` : texte de la fiche ou de l'article,
-  gardé pour ce prototype perso) ou de l'extrait du site officiel.
+- Description : par défaut, sans appel extérieur, les premières phrases (280 caractères au plus) du texte de la
+  source (`lead_text` : texte de la fiche ou de l'article, gardé pour ce prototype perso), sinon de l'extrait du
+  site officiel, nettoyées (balises, titre de page, listes, emojis) ; `description_model` vaut alors `extrait`.
+  Avec `--claude`, rédigée par Claude (`ANTHROPIC_API_KEY`, modèle `SURPRISE_LLM_MODEL`, `claude-opus-5-5` par
+  défaut). Une activité déjà enrichie ne reçoit que sa description, sans rien télécharger.
 
 `--refresh` retraite aussi les activités déjà enrichies, `--source` limite à une source, `--no-descriptions`
-se passe de Claude.
+se passe des descriptions.
 
 ## Tags et vibes
 

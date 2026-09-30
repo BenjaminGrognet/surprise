@@ -228,3 +228,12 @@ def test_stag_party_offers_are_not_for_couples():
     assert GROUP_PARTY.search("Atelier pour un enterrement de vie de jeune fille")
     assert GROUP_PARTY.search("La Bringue - Halloween Stripclub Girls Only - Paris")
     assert not GROUP_PARTY.search("Atelier bougie en duo") and not GROUP_PARTY.search("Soirée Evgeny Kissin")
+
+
+def test_time_out_venue_name_drops_the_page_title():
+    from surprise.collectors import time_out
+
+    payload = {"url": "https://www.timeout.fr/paris/restaurants/volver", "name": "Volver | Restaurants à Roquette",
+               "venue_name": "Volver | Restaurants à Roquette", "address": "1 rue de la Roquette", "postal_code": "75011"}
+    activity = time_out.normalize(payload, datetime(2026, 9, 30, tzinfo=timezone.utc)).activity
+    assert activity.venue.name == "Volver"

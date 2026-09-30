@@ -12,7 +12,7 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   `uv run --env-file .env …`), ou toutes ensemble par `python -m surprise.collect --limit 50`. Jamais sans limite : on valide le
   fonctionnement ensemble, source par source, sur un petit volume. Les pages encore fraîches ne sont pas relues
   (`FRESH_DAYS` par collecteur, 7 jours par défaut ; `--refresh` pour forcer).
-- Enrichissement : `--no-descriptions` tant que les descriptions Claude ne sont pas demandées ;
+- Enrichissement : descriptions extraites des textes par défaut, sans appel extérieur ; `--claude` seulement sur demande ;
   `--source` pour ne retraiter que les sources modifiées.
 - Images : prendre celles des sites (source ou site officiel) sans se soucier des licences pour
   l'instant ; garder l'origine pour pouvoir changer de stratégie si le produit est commercialisé.
