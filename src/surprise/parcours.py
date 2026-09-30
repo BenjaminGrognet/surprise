@@ -28,8 +28,8 @@ import html
 import json
 import math
 import os
-import pickle
 import re
+import secrets
 import sys
 import threading
 import time as clock
@@ -37,7 +37,7 @@ import webbrowser
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
@@ -56,6 +56,8 @@ from surprise.tags import TAGS, VIBES, describe
 
 PARIS = ZoneInfo("Europe/Paris")
 OUTPUT_DIR = Path("data/parcours")
+# Where composed evenings are kept (table soirees): SUPABASE_DB_URL, else data/surprise.db; surprise.quiz sets its --db.
+DB: Path | str | None = None
 CACHE_HOURS = 6
 CHECK_WORKERS = 8  # booking engines asked at once
 WALK_KM = 1.3  # about 20 minutes on foot
@@ -1630,7 +1632,8 @@ def generate(
     if claude and not later:
         name_with_claude(routes, requests[0])
     days = [request.day for request in requests]
-    name = name or (days[0].isoformat() if len(days) == 1 else f"{days[0].isoformat()}_{days[-1].isoformat()}")
+    # Unique: the page's name is the evening's id in the store.
+    name = name or f"{days[0].isoformat()}{'' if len(days) == 1 else '_' + days[-1].isoformat()}-{secrets.token_urlsafe(6)}"
     state = {"routes": routes, "requests": requests, "seen": {s.candidate.key for r in routes for s in r.steps}, "naming": int(later)}
     with _SAVING:
         save(name, state)
@@ -1659,7 +1662,7 @@ def _name_later(name: str, routes: list[Route], request: Request) -> None:
 
 
 # Regeneration ----------------------------------------------------------------
-# The page's routes are kept next to it (data/parcours/<name>.pkl), so that one route, or one step
+# The page's routes are kept in the store (soirees, soiree_routes, soiree_steps), so that one route, or one step
 # of a route, can be drawn again from the page. Activities already shown are not proposed again
 # while others fit.
 
@@ -1668,28 +1671,107 @@ def _name_later(name: str, routes: list[Route], request: Request) -> None:
 _SAVING = threading.RLock()
 
 
+_TYPES = {cls.__name__: cls for cls in (Request, Candidate, Step)}
+
+
+def _encode(value: Any) -> Any:
+    """JSON for the store, the types JSON lacks tagged: dataclasses, dates, sets, non-string keys, infinities."""
+    if is_dataclass(value):
+        return {"_type": type(value).__name__, **{f.name: _encode(getattr(value, f.name)) for f in fields(value)}}
+    if isinstance(value, datetime):
+        return {"_datetime": value.isoformat()}
+    if isinstance(value, date):
+        return {"_date": value.isoformat()}
+    if isinstance(value, (set, frozenset)):
+        return {"_set": [_encode(v) for v in sorted(value, key=repr)]}
+    if isinstance(value, tuple):
+        return {"_tuple": [_encode(v) for v in value]}
+    if isinstance(value, dict):
+        if all(isinstance(k, str) for k in value):
+            return {k: _encode(v) for k, v in value.items()}
+        return {"_pairs": [[_encode(k), _encode(v)] for k, v in value.items()]}
+    if isinstance(value, list):
+        return [_encode(v) for v in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return {"_float": repr(value)}
+    return value
+
+
+def _decode(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_decode(v) for v in value]
+    if not isinstance(value, dict):
+        return value
+    if "_datetime" in value:
+        moment = datetime.fromisoformat(value["_datetime"])
+        return moment.astimezone(PARIS) if moment.tzinfo else moment
+    if "_date" in value:
+        return date.fromisoformat(value["_date"])
+    if "_set" in value:
+        return {_decode(v) for v in value["_set"]}
+    if "_tuple" in value:
+        return tuple(_decode(v) for v in value["_tuple"])
+    if "_pairs" in value:
+        return {_decode(k): _decode(v) for k, v in value["_pairs"]}
+    if "_float" in value:
+        return float(value["_float"])
+    if "_type" in value:
+        return _TYPES[value["_type"]](**{k: _decode(v) for k, v in value.items() if k != "_type"})
+    return {k: _decode(v) for k, v in value.items()}
+
+
+def _json(value: Any) -> str:
+    # Postgres jsonb refuses the NUL character, which a few scraped pages carry.
+    return json.dumps(_encode(value), ensure_ascii=False).replace("\\u0000", "")
+
+
 def save(name: str, state: dict[str, Any]) -> None:
-    """The routes and requests behind a composed evening, kept under this name so a route or a
-    step of it can be drawn again (see `regenerate`) — not a page: surprise.quiz sends JSON."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUTPUT_DIR / f"{name}.pkl").write_bytes(pickle.dumps(state))
+    """A composed evening in the store (soirees, soiree_routes, soiree_steps), under this name, so a route or a
+    step of it can be drawn again (see `regenerate`). The activities already shown are its steps, replaced ones too."""
+    requests = state["requests"]
+    routes = [
+        (index, requests.index(route.request) if route.request in requests else None, route.title, route.pitch, route.score)
+        for index, route in enumerate(state["routes"])
+    ]
+    steps = [
+        (index, position, *step.candidate.key, step.start.isoformat(), step.end.isoformat(), step is route.night, _json(step))
+        for index, route in enumerate(state["routes"])
+        for position, step in enumerate([*route.steps, *filter(None, [route.night])])
+    ]
+    # ponytail: one connection per save and load (under a second through the pooler); pass the store along if it drags.
+    with open_store(DB) as store:
+        store.save_soiree(name, _json(requests), int(state.get("naming") or 0), routes, steps)
 
 
 def write_page(name: str) -> Path:
     """The routes saved under `name`, as a page — command-line only, see `render`."""
     state = load(name)
     requests = state["requests"]
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / f"{name}.html"
     path.write_text(render(state["routes"], requests[0], [r.day for r in requests], name, bool(state.get("naming"))), encoding="utf-8")
     return path
 
 
 def load(name: str) -> dict[str, Any] | None:
-    path = OUTPUT_DIR / f"{name}.pkl"
-    try:
-        return pickle.loads(path.read_bytes()) if path.exists() else None
-    except (pickle.UnpicklingError, AttributeError, EOFError, TypeError):
-        return None  # written by an older version of this module
+    with open_store(DB) as store:
+        data = store.soiree(name)
+    if data is None:
+        return None
+    requests = _decode(json.loads(data["requests"]))
+    steps: dict[int, list[Step]] = {}
+    nights: dict[int, Step] = {}
+    for route, night, step in data["steps"]:
+        if night:
+            nights[route] = _decode(json.loads(step))
+        else:
+            steps.setdefault(route, []).append(_decode(json.loads(step)))
+    routes = [
+        Route(steps.get(index, []), score, title, pitch, None if request is None else requests[request], nights.get(index))
+        for index, request, title, pitch, score in data["routes"]
+    ]
+    seen = {(source_id, external_id) for source_id, external_id in data["seen"]}
+    return {"routes": routes, "requests": requests, "seen": seen, "naming": data["naming"]}
 
 
 def regenerate(

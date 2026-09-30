@@ -260,7 +260,7 @@ def valid_day(value: Any) -> str | None:
 def valid_profile(value: Any) -> dict[str, Any] | None:
     """A profile as the page sends it back (its own, computed by /api/profiles or synced from Supabase), or None.
 
-    The profile itself is no longer kept server-side, so this is the trust boundary: reshape it into
+    The profile the couple sends back is not read from the store, so this is the trust boundary: reshape it into
     exactly what `requests_for`/`evening` read, dropping anything unexpected.
     """
     if not isinstance(value, dict):
@@ -363,6 +363,7 @@ BASE_MINUTES = 15
 
 
 def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type[BaseHTTPRequestHandler]:
+    parcours.DB = db
     # One composition at a time: it checks booking engines and writes the page.
     composing = threading.Lock()
     # The activities take seconds to load: loaded when the server starts, then again in the background
@@ -438,10 +439,13 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
             except ValueError:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "JSON invalide"})
             if path == "/api/profiles":
-                # Stateless: the couple's profile now lives client-side (localStorage, and Supabase
-                # for a signed-in couple), not here. This only runs the quiz's scoring rules.
+                # The couple keeps its profile client-side (localStorage, and couple_profiles once signed
+                # in) and sends it back with each evening; every profile drawn is also recorded here.
                 answers = body.get("answers") if isinstance(body.get("answers"), dict) else {}
-                return self._send_json(HTTPStatus.OK, {"profile": profile_from(answers)})
+                profile = profile_from(answers)
+                with open_store(db) as store:
+                    store.save_profile(new_id(), answers, profile)
+                return self._send_json(HTTPStatus.OK, {"profile": profile})
             if path == "/api/soirees":
                 return self._compose(body)
             if redo := _REDO.match(path):

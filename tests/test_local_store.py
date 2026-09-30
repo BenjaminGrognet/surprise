@@ -163,13 +163,36 @@ def test_availability_cache(tmp_path):
         assert store.cached_availability("2026-10-10", 2, max_age_hours=6) == {}
 
 
+def _step(external_id, position=0, start="20:00"):
+    return (0, position, "que_faire_a_paris", external_id, f"2026-10-09T{start}+02:00", "2026-10-09T23:00+02:00", False, "{}")
+
+
+def test_a_redraw_keeps_the_replaced_steps(tmp_path):
+    with LocalStore(tmp_path / "s.db") as store:
+        store.save_soiree("soiree-a", "[]", 0, [(0, None, "Titre", "Pitch", 1.0)], [_step("bar"), _step("club", 1)])
+        # The bar gives way to a show; the club stays, later.
+        store.save_soiree("soiree-a", "[]", 0, [(0, None, "Titre", "Pitch", 1.0)], [_step("show"), _step("club", 1, "21:00")])
+        saved = store.soiree("soiree-a")
+        history = store._run(
+            "select external_id, starts_at, replaced_at is not null from soiree_steps order by id"
+        ).fetchall()
+    assert [step for _, _, step in saved["steps"]] == ["{}", "{}"]
+    assert set(saved["seen"]) == {("que_faire_a_paris", "bar"), ("que_faire_a_paris", "club"), ("que_faire_a_paris", "show")}
+    assert history == [("bar", "2026-10-09T20:00+02:00", 1), ("club", "2026-10-09T21:00+02:00", 0), ("show", "2026-10-09T20:00+02:00", 0)]
+
+
 def test_copy_adds_only_missing_rows(tmp_path, monkeypatch):
     monkeypatch.delenv("SUPABASE_DB_URL", raising=False)
     source, _ = _store_with_fixture(tmp_path / "a.db")
     with source, open_store(tmp_path / "b.db") as target:
         source.set_status("que_faire_a_paris", "12345", "approved")
         source.save_enrichment("que_faire_a_paris", "12345", {"image_url": "https://example.com/a.jpg"})
+        source.save_soiree("soiree-a", "[]", 0, [(0, None, "Titre", "Pitch", 1.0)], [_step("12345")])
         assert isinstance(target, LocalStore)
-        assert copy(source, target) == {"raw_records": 4, "normalized": 4, "moderation": 1, "enrichment": 1, "keywords": 0, "osm_places": 0}
+        assert copy(source, target) == {
+            "raw_records": 4, "normalized": 4, "moderation": 1, "enrichment": 1, "keywords": 0, "osm_places": 0,
+            "profiles": 0, "soirees": 1, "soiree_routes": 1, "soiree_steps": 1,
+        }
+        assert target.soiree("soiree-a") == source.soiree("soiree-a") and target.soiree("absente") is None
         assert set(copy(source, target).values()) == {0}
         assert target.list_for_moderation() == source.list_for_moderation()

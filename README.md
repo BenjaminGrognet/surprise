@@ -232,7 +232,11 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
   activité du même rôle ou de la même étape de la trame, qui s'enchaîne avec ses voisines ; un bar voisin est écourté
   ou prolongé). Les activités déjà proposées ne reviennent pas tant que d'autres conviennent ; celle qu'on change ne revient jamais,
   même vendue sous une autre fiche (même lieu ou même titre). Les parcours sont gardés
-  à côté de la page (`<nom>.pkl`).
+  dans la base, lisibles en SQL (migration `20260930000002_profiles_soirees.sql`) : `pipeline.soirees` (le nom de
+  la page pour identifiant, la demande), `pipeline.soiree_routes` (titre, pitch, score de chaque parcours) et
+  `pipeline.soiree_steps`, chaque étape liée à son activité (`source_id`, `external_id`) avec ses horaires et
+  l'activité telle qu'elle était (`step`) ; une étape régénérée y reste, marquée `replaced_at`. Les activités déjà
+  proposées sont celles de ces étapes.
 - Images : BilletRéduc interdit l'affichage de ses affiches ailleurs que chez lui (`Cross-Origin-Resource-Policy`) ;
   elles sont copiées une fois dans `data/images` (800 px) et servies de là, en modération comme dans les parcours.
 
@@ -246,7 +250,7 @@ Douze questions ludiques sur ce qui dure (où en est le couple, énergie, ce qui
 assiette, musique, fin de soirée habituelle, ce qu'on ne veut jamais, budget, jour de la première sortie, prénoms)
 dessinent le profil du couple : vibes pondérées, persona (« Les Explorateurs », « Les Épicuriens »…), audace, refus,
 genres préférés, envie d'un dîner, budget. Aucune heure précise n'est demandée. Profil et réponses sont stockés
-(table `profiles`).
+(`pipeline.profiles`), compte ou pas.
 
 Chaque soirée se prépare à part, sur sa propre page (`/soiree`, avec `#p=<profil>` ou sans profil) : jusqu'à trois
 envies (« Faire la fête », « Cocooning », « Romantique », « Surprenez-nous »…), si l'on dîne ou pas (obligatoire :

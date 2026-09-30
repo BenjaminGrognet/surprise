@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 
 from surprise import quiz
 from surprise.categories import CATEGORIES
+from surprise.local_store import open_store
 from surprise.tags import TAGS, VIBES
 
 ANSWERS = {
@@ -123,6 +124,8 @@ def test_profile_is_computed_through_the_api(tmp_path):
         body = json.dumps({"answers": ANSWERS}).encode()
         created = json.load(urlopen(Request(f"{url}/api/profiles", data=body, headers={"Content-Type": "application/json"})))
         assert created["profile"]["persona"]["name"] == "Les Romantiques"
+        with open_store(tmp_path / "s.db") as store:
+            assert json.loads(store._run("select profile from profiles").fetchone()[0]) == created["profile"]
         evening = json.load(urlopen(f"{url}/api/soiree"))
         assert evening["max"] == 3 and evening["envies"] and evening["occasions"]
         assert evening["starts"] and evening["ends"] and evening["budgets"]

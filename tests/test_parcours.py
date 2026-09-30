@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 
 from surprise import parcours
+from surprise.local_store import open_store
 from surprise.parcours import PARIS, Request
 
 DAY = date(2026, 10, 9)  # a Friday
@@ -191,7 +192,7 @@ def test_one_step_is_replaced_and_the_evening_still_chains():
 
 def test_regenerate_rewrites_the_saved_state(tmp_path, monkeypatch):
     req, candidates, route = _night()
-    monkeypatch.setattr(parcours, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
     monkeypatch.setattr(parcours, "candidates_for", lambda store, base, request, checks: candidates)
     parcours.name_by_rules(route, req)
     route.request = req
@@ -201,6 +202,13 @@ def test_regenerate_rewrites_the_saved_state(tmp_path, monkeypatch):
     assert parcours.regenerate(None, None, "essai", 0, 1, claude=False) is None
     state = parcours.load("essai")
     assert [s.candidate.key[1] for s in state["routes"][0].steps] == ["bar", "autre", "club"]
+    # The store links the evening to its activities, as redrawn, and keeps the one replaced.
+    with open_store(tmp_path / "s.db") as store:
+        rows = store._run(
+            "select position, external_id, replaced_at is not null from soiree_steps where soiree_id = 'essai' order by id"
+        ).fetchall()
+    assert rows == [(0, "bar", 0), (1, "immersif", 1), (2, "club", 0), (1, "autre", 0)]
+    assert parcours.load("essai")["routes"][0].steps[1].start.tzinfo == parcours.PARIS
     assert ("test", "autre") in state["seen"]
     assert parcours.soiree_json("essai", state)["routes"][0]["steps"][1]["title"] == "Parcours sensoriel dans le noir"
     # The only other evening would repeat a step: the whole route has no other draw.
@@ -220,7 +228,7 @@ def test_no_stag_party_and_no_late_dinner():
 
 def test_claude_titles_come_after_saving(tmp_path, monkeypatch):
     req, _, route = _night()
-    monkeypatch.setattr(parcours, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
     parcours.name_by_rules(route, req)
     route.request = req
     parcours.save("essai", {"routes": [route], "requests": [req], "seen": set(), "naming": 1})

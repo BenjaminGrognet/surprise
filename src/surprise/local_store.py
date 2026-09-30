@@ -102,6 +102,46 @@ create table if not exists osm_places (
   checked_at text not null default (datetime('now')),
   primary key (name, postal_code)
 );
+-- Every profile the questionnaire draws (surprise.quiz), with its answers.
+create table if not exists profiles (
+  id text primary key,
+  answers text not null,
+  profile text not null,
+  created_at text not null default (datetime('now'))
+);
+-- A composed evening (surprise.parcours): the evenings asked, its routes, their steps (see the Supabase migration).
+create table if not exists soirees (
+  id text primary key,
+  requests text not null,
+  naming integer not null default 0,
+  created_at text not null default (datetime('now')),
+  saved_at text not null default (datetime('now'))
+);
+create table if not exists soiree_routes (
+  soiree_id text not null references soirees (id) on delete cascade,
+  route integer not null,
+  request integer,
+  title text not null,
+  pitch text not null,
+  score real not null,
+  primary key (soiree_id, route)
+);
+-- A redraw keeps the steps it replaces (replaced_at).
+create table if not exists soiree_steps (
+  id integer primary key autoincrement,
+  soiree_id text not null references soirees (id) on delete cascade,
+  route integer not null,
+  position integer not null,
+  source_id text not null,
+  external_id text not null,
+  starts_at text not null,
+  ends_at text not null,
+  night boolean not null default false,
+  step text not null,
+  created_at text not null default (datetime('now')),
+  replaced_at text
+);
+create unique index if not exists soiree_steps_current_idx on soiree_steps (soiree_id, route, position) where replaced_at is null;
 """
 # A page read less than this long ago is not read again: its stored payloads are normalized anew.
 FRESH_DAYS = 7
@@ -238,6 +278,73 @@ class LocalStore:
                 "insert into osm_places (name, postal_code, place) values (?, ?, ?)"
                 " on conflict (name, postal_code) do update set place = excluded.place, checked_at = current_timestamp",
                 [(name, postal_code, place and json.dumps(place)) for (name, postal_code), place in places.items()],
+            )
+
+    def save_profile(self, profile_id: str, answers: dict[str, Any], profile: dict[str, Any]) -> None:
+        with self._transaction():
+            self._run(
+                "insert into profiles (id, answers, profile) values (?, ?, ?)",
+                (profile_id, json.dumps(answers, ensure_ascii=False), json.dumps(profile, ensure_ascii=False)),
+            )
+
+    def soiree(self, soiree_id: str) -> dict[str, Any] | None:
+        """An evening as saved: its requests (JSON), naming, routes, current steps, and every activity it ever showed."""
+        row = self._run("select requests, naming from soirees where id = ?", (soiree_id,)).fetchone()
+        if row is None:
+            return None
+        return {
+            "requests": row[0],
+            "naming": row[1],
+            "routes": self._run(
+                "select route, request, title, pitch, score from soiree_routes where soiree_id = ? order by route", (soiree_id,)
+            ).fetchall(),
+            "steps": self._run(
+                "select route, night, step from soiree_steps where soiree_id = ? and replaced_at is null order by route, position",
+                (soiree_id,),
+            ).fetchall(),
+            "seen": self._run(
+                "select distinct source_id, external_id from soiree_steps where soiree_id = ? and not night", (soiree_id,)
+            ).fetchall(),
+        }
+
+    def save_soiree(
+        self, soiree_id: str, requests: str, naming: int, routes: Sequence[tuple[Any, ...]], steps: Sequence[tuple[Any, ...]]
+    ) -> None:
+        """The evening, its routes (route, request, title, pitch, score) and steps (route, position, source_id,
+        external_id, starts_at, ends_at, night, step JSON). A step whose activity changed is kept, marked replaced."""
+        with self._transaction():
+            self._run(
+                "insert into soirees (id, requests, naming) values (?, ?, ?) on conflict (id) do update"
+                " set requests = excluded.requests, naming = excluded.naming, saved_at = current_timestamp",
+                (soiree_id, requests, naming),
+            )
+            self._run("delete from soiree_routes where soiree_id = ?", (soiree_id,))
+            self._run_many(
+                "insert into soiree_routes (soiree_id, route, request, title, pitch, score) values (?, ?, ?, ?, ?, ?)",
+                [(soiree_id, *route) for route in routes],
+            )
+            current = {
+                (route, position, source_id, external_id, bool(night)): step_id
+                for step_id, route, position, source_id, external_id, night in self._run(
+                    "select id, route, position, source_id, external_id, night from soiree_steps"
+                    " where soiree_id = ? and replaced_at is null",
+                    (soiree_id,),
+                ).fetchall()
+            }
+            new = {(*step[:4], step[6]): step for step in steps}
+            self._run_many(
+                "update soiree_steps set replaced_at = current_timestamp where id = ?",
+                [(step_id,) for key, step_id in current.items() if key not in new],
+            )
+            # The same activity at the same place is not replaced: only its hours may have moved (a bar shortened).
+            self._run_many(
+                "update soiree_steps set starts_at = ?, ends_at = ?, step = ? where id = ?",
+                [(step[4], step[5], step[7], current[key]) for key, step in new.items() if key in current],
+            )
+            self._run_many(
+                "insert into soiree_steps (soiree_id, route, position, source_id, external_id, starts_at, ends_at, night, step)"
+                " values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [(soiree_id, *step) for key, step in new.items() if key not in current],
             )
 
     def list_for_moderation(self) -> list[dict[str, Any]]:
@@ -454,6 +561,13 @@ _COPIED = {
     "enrichment": ("source_id", "external_id", *_ENRICHMENT_COLUMNS, "enriched_at"),
     "keywords": ("source_id", "external_id", "keywords", "computed_at"),
     "osm_places": ("name", "postal_code", "place", "checked_at"),
+    "profiles": ("id", "answers", "profile", "created_at"),
+    "soirees": ("id", "requests", "naming", "created_at", "saved_at"),
+    "soiree_routes": ("soiree_id", "route", "request", "title", "pitch", "score"),
+    # ponytail: without its id, a replaced step is copied again on every run; key the history if copies get repeated.
+    "soiree_steps": (
+        "soiree_id", "route", "position", "source_id", "external_id", "starts_at", "ends_at", "night", "step", "created_at", "replaced_at",
+    ),
 }
 
 
