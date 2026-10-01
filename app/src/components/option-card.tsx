@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     paddingLeft: Spacing.two + 2,
     paddingRight: Spacing.three,
   },
-  glow: { boxShadow: '0 2px 8px rgba(212, 175, 55, 0.3)' },
+  glow: { boxShadow: '0 2px 8px rgba(217, 183, 113, 0.3)' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.35 },
   icon: { width: 22, alignItems: 'center' },

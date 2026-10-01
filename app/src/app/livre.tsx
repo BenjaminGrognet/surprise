@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.headingItalic, fontSize: 15, lineHeight: 22, minHeight: 96, padding: Spacing.three,
     borderRadius: 16, textAlignVertical: 'top',
   },
-  seal: { borderRadius: 12, paddingVertical: Spacing.three, alignItems: 'center', boxShadow: '0 4px 20px rgba(212, 175, 55, 0.15)' },
+  seal: { borderRadius: 12, paddingVertical: Spacing.three, alignItems: 'center', boxShadow: '0 4px 20px rgba(217, 183, 113, 0.15)' },
   sealLabel: { fontFamily: Fonts.headingBold, fontSize: 16, lineHeight: 22, letterSpacing: 0.4 },
   dim: { opacity: 0.45 },
   page: { gap: Spacing.three, padding: Spacing.three, borderRadius: 18, borderWidth: 1 },

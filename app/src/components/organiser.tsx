@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   anchorRow: { flexDirection: 'row', gap: Spacing.three, paddingBottom: Spacing.two },
   anchor: {
     width: ANCHOR, height: ANCHOR, borderRadius: ANCHOR / 2, borderWidth: 1, marginTop: 2,
-    alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(212, 175, 55, 0.55)',
+    alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(217, 183, 113, 0.55)',
   },
   anchorCore: { width: 5, height: 5, borderRadius: 3 },
   anchorBody: { flex: 1, gap: Spacing.one },

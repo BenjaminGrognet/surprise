@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { LogoSecretDate } from '@/components/logo-secretdate';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
@@ -24,8 +25,9 @@ export function BrandHeader() {
   return (
     <View style={styles.row}>
       <Link href="/" asChild>
-        <Pressable>
-          <ThemedText style={[styles.wordmark, { color: theme.accent }]}>SecretDate</ThemedText>
+        <Pressable style={styles.brand}>
+          <LogoSecretDate size={34} />
+          <ThemedText style={[styles.wordmark, { color: theme.accent }]}>Secret Date</ThemedText>
         </Pressable>
       </Link>
       {signedIn ? (
@@ -42,6 +44,7 @@ export function BrandHeader() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   wordmark: { fontFamily: Fonts.headingBold, fontSize: 26, lineHeight: 34 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 },
   dot: { width: 8, height: 8, borderRadius: 4 },

@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
-import { MoodSlider } from '@/components/mood-slider';
+import { OptionCard, OptionGrid } from '@/components/option-card';
 import { CheckLine, OptionButton, OptionRow } from '@/components/option-button';
 import { RouteResult } from '@/components/route-result';
 import { Screen } from '@/components/screen';
@@ -19,7 +19,7 @@ import {
 import { isoDay, longDay, nextFriday } from '@/lib/dates';
 import { rememberedProfile } from '@/lib/local-store';
 
-// The mood slider's stops, from "Tamisé & Intime" to "Aventureux & Insolite": each one is one of
+// The mood cards, from "Tamisé & Intime" to "Aventureux & Insolite": each one is one of
 // the server's wishes (surprise.quiz.ENVIES). The other wishes are the "secret options".
 const MOODS = ['cocooning', 'romantique', 'nous', 'curieux', 'surprise'];
 const MIDDLE_MOOD = 2;
@@ -212,13 +212,12 @@ export default function SoireeScreen() {
       </View>
 
       <Section title="L'humeur du soir">
-        <MoodSlider
-          stops={moods.map((m) => ({ label: m.label, emoji: m.emoji }))}
-          value={Math.min(mood, moods.length - 1)}
-          onChange={setMood}
-          left="Tamisé & Intime"
-          right="Aventureux & Insolite"
-        />
+        <OptionGrid>
+          {moods.map((m, i) => (
+            <OptionCard key={m.value} label={m.label} emoji={m.emoji} selected={Math.min(mood, moods.length - 1) === i}
+              onPress={() => setMood(i)} />
+          ))}
+        </OptionGrid>
       </Section>
 
       <Section title="Les options secrètes" hint={`Jusqu'à ${data.max - 1}, glissées dans le programme.`}>

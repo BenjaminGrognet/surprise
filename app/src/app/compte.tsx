@@ -8,7 +8,7 @@ import { PassagerInvite } from '@/components/passager-invite';
 import { LogoSecretDate } from '@/components/logo-secretdate';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Fonts, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, signOut, type AccountProfile } from '@/lib/account';
@@ -43,17 +43,29 @@ export default function CompteScreen() {
 }
 
 function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
+  const theme = useTheme();
   return (
     <>
       <View style={styles.logoContainer}>
         <LogoSecretDate size={100} />
+        <ThemedText style={[styles.appName, { color: theme.accent }]}>Secret Date</ThemedText>
       </View>
       <ThemedText type="eyebrow">Bienvenue, complices</ThemedText>
       <ThemedText type="title">Les soirées qu&apos;on ne voit pas venir.</ThemedText>
       <ThemedText themeColor="textSecondary">
-        SecretDate trame des soirées à deux dans Paris : l&apos;instigateur organise, le passager ne reçoit que des indices
-        jusqu&apos;au jour J. Chacun a son compte ; le passager rejoint l&apos;intrigue par le lien que l&apos;instigateur lui envoie.
+        SecretDate organise des soirées surprises pour les couples à Paris. Une personne planifie l&apos;événement tandis que
+        son partenaire reçoit uniquement des indices jusqu&apos;au jour J.
       </ThemedText>
+      <View style={styles.points}>
+        <ThemedText themeColor="textSecondary">
+          <ThemedText type="smallBold" themeColor="textSecondary">Création de compte : </ThemedText>
+          chaque partenaire possède son propre profil.
+        </ThemedText>
+        <ThemedText themeColor="textSecondary">
+          <ThemedText type="smallBold" themeColor="textSecondary">Invitation : </ThemedText>
+          l&apos;organisateur envoie un lien secret pour intégrer son partenaire à l&apos;aventure.
+        </ThemedText>
+      </View>
       <AuthForm
         onSignedIn={() => {
           onSignedIn();
@@ -126,7 +138,9 @@ function Notice({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  logoContainer: { alignItems: 'center', marginVertical: Spacing.four },
+  logoContainer: { alignItems: 'center', gap: Spacing.two, marginVertical: Spacing.four },
+  appName: { fontFamily: Fonts.headingBold, fontSize: 32, lineHeight: 40, textAlign: 'center' },
+  points: { gap: Spacing.two },
   notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
   persona: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.two },
 });

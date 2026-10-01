@@ -10,7 +10,7 @@ import { Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
-import { eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
+import { accountProfile, eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
 import { getSoireeState, type Profile, type SoireeRoute } from '@/lib/api';
 import { dayHint } from '@/lib/clues';
 import { complicity, type Complicity } from '@/lib/complicity';
@@ -33,7 +33,11 @@ export default function AccueilScreen() {
   useEffect(() => {
     (async () => {
       const remembered = await rememberedProfile();
-      setProfile(remembered?.profile ?? null);
+      let known = remembered?.profile ?? null;
+      if (!known && supabaseConfigured) {
+        known = (await accountProfile().catch(() => null))?.profile ?? null;
+      }
+      setProfile(known);
       if (supabaseConfigured) {
         const today = isoDay(new Date());
         const [row, history] = await Promise.all([
@@ -54,6 +58,9 @@ export default function AccueilScreen() {
     })();
   }, []);
 
+  const profileLink = profile
+    ? `Notre profil : ${profile.persona.name} · le refaire →`
+    : "D'abord, faire notre profil (2 minutes) →";
   return (
     <Screen gap={Spacing.four}>
       {toSeal ? <BookCall row={toSeal} /> : null}
@@ -66,7 +73,7 @@ export default function AccueilScreen() {
       {role === 'instigateur' ? (
         <View style={styles.actions}>
           <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink>
-          {loaded && !profile ? <TextLink href="/profil">D&apos;abord, faire notre profil (2 minutes) →</TextLink> : null}
+          {loaded ? <TextLink href="/profil">{profileLink}</TextLink> : null}
           {couple?.passager ? null : <TextLink href="/compte">Inviter votre passager →</TextLink>}
         </View>
       ) : null}
@@ -74,7 +81,6 @@ export default function AccueilScreen() {
       {gauge ? <Gauge gauge={gauge} /> : null}
 
       <View style={styles.links}>
-        {role === 'instigateur' && profile ? <TextLink href="/profil">{`Notre profil · ${profile.persona.name}`}</TextLink> : null}
         <TextLink href="/historique">Les Archives</TextLink>
         {role === 'instigateur' && profile ? (
           <TextButton onPress={() => forgetProfile().then(() => setProfile(null))}>Oublier ce profil</TextButton>

@@ -11,20 +11,20 @@ import { Platform } from 'react-native';
 // The app is dark by design, so light == dark.
 const brand = {
   text: '#F4F1E8', // off-white, a soft contrast on the emerald
-  background: '#0A1F1D',
-  backgroundElement: '#0F2926',
-  backgroundSelected: '#173832',
-  textSecondary: '#9DB3AB',
-  line: '#22433D',
-  accent: '#D4AF37', // brushed champagne gold: buttons, rules, gauges
-  accentInk: '#E0C062', // gold for text, a touch lighter to read on the emerald
-  accentSoft: 'rgba(212, 175, 55, 0.45)', // the fine gold borders of cards
-  accentFaint: 'rgba(212, 175, 55, 0.3)', // a field's border at rest; full accent once focused
-  satin: '#CDAE5E', // satin champagne: the gold of buttons, softer than the brushed accent
-  onAccent: '#0E3B32', // dark emerald, the text on a gold button
-  accentHair: 'rgba(212, 175, 55, 0.15)', // a velvet card's border at rest
+  background: '#082A1E',
+  backgroundElement: '#0E3727',
+  backgroundSelected: '#164532',
+  textSecondary: '#9DB8AA',
+  line: '#25513F',
+  accent: '#D9B771', // brushed champagne gold: buttons, rules, gauges
+  accentInk: '#EBCF8A', // gold for text, a touch lighter to read on the emerald
+  accentSoft: 'rgba(217, 183, 113, 0.45)', // the fine gold borders of cards
+  accentFaint: 'rgba(217, 183, 113, 0.3)', // a field's border at rest; full accent once focused
+  satin: '#D2B068', // satin champagne: the gold of buttons, softer than the brushed accent
+  onAccent: '#0A3524', // dark emerald, the text on a gold button
+  accentHair: 'rgba(217, 183, 113, 0.15)', // a velvet card's border at rest
   glass: 'rgba(255, 253, 208, 0.04)', // a field's veil over the night, see-through
-  velvet: '#071615', // deep emerald velvet: the quiz cards, darker than the night
+  velvet: '#05180F', // deep emerald velvet: the quiz cards, darker than the night
   cream: '#FFFDD0',
   creamSoft: 'rgba(255, 253, 208, 0.6)', // the cream of an intimate aside
   creamFaint: 'rgba(255, 253, 208, 0.35)', // a placeholder, a whisper

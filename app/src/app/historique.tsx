@@ -119,7 +119,7 @@ function Relic({ row, age, photos }: { row: EveningHistoryRow; age: number; phot
         INTRIGUE SCELLÉE • {row.day ? monthYear(row.day) : 'DATE LIBRE'}
       </ThemedText>
       <ThemedText style={[styles.name, { color: theme.cream, opacity: age === 0 ? 1 : 0.8 }]}>{row.secret_title ?? row.title}</ThemedText>
-      <View style={[styles.card, { backgroundColor: `rgba(7, 22, 21, ${p.card})`, borderColor: `rgba(212, 175, 55, ${p.border})` }]}>
+      <View style={[styles.card, { backgroundColor: `rgba(7, 22, 21, ${p.card})`, borderColor: `rgba(217, 183, 113, ${p.border})` }]}>
         {photo ? (
           <View style={[styles.photo, { opacity: p.photoOpacity }]}>
             <View style={[StyleSheet.absoluteFill, { filter: p.photo }]}>
@@ -176,15 +176,15 @@ const styles = StyleSheet.create({
   title: { fontFamily: Fonts.heading, fontSize: 26, lineHeight: 34, textAlign: 'center', letterSpacing: 0.5 },
   tagline: { fontFamily: Fonts.headingItalic, fontSize: 13, lineHeight: 18, textAlign: 'center' },
   thread: { gap: Spacing.five, paddingTop: Spacing.two },
-  line: { position: 'absolute', left: LINE_X, top: Spacing.three, bottom: Spacing.three, width: 1, backgroundColor: 'rgba(212, 175, 55, 0.2)' },
+  line: { position: 'absolute', left: LINE_X, top: Spacing.three, bottom: Spacing.three, width: 1, backgroundColor: 'rgba(217, 183, 113, 0.2)' },
   entry: { paddingLeft: 40 },
   dot: { position: 'absolute', left: LINE_X - DOT / 2 + 0.5, top: 5, width: DOT, height: DOT, borderRadius: DOT / 2, zIndex: 1 },
-  dimDot: { backgroundColor: 'rgba(212, 175, 55, 0.4)' },
+  dimDot: { backgroundColor: 'rgba(217, 183, 113, 0.4)' },
   hollow: { borderWidth: 1 },
   date: { fontFamily: Fonts.headingBold, fontSize: 10, lineHeight: 16, letterSpacing: 1.2 },
   name: { fontFamily: Fonts.heading, fontSize: 17, lineHeight: 24, marginTop: 2 },
   card: { marginTop: Spacing.three, padding: Spacing.three, borderRadius: 16, borderWidth: 1, gap: Spacing.three },
-  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(212, 175, 55, 0.05)' },
+  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 183, 113, 0.05)' },
   note: { fontFamily: Fonts.headingItalic, fontSize: 13, lineHeight: 20 },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, paddingTop: Spacing.three },
 });
