@@ -419,3 +419,16 @@ def test_a_dead_image_is_replaced_by_the_official_sites_before_leaving_the_step_
     assert parcours.images.of(bar.candidate.item) == "https://site.example/new.jpg"
     with open_store(tmp_path / "s.db") as store:
         assert store.page_checks()["https://example.org/immersif.jpg"] == ("image", True)
+
+
+def test_secret_title_names_the_quarter_never_the_venue():
+    _, _, route = _night()
+    assert parcours.secret_title(route) == "Les Noctambules de Beaubourg"  # a night out, at the heart of Beaubourg
+    assert parcours.route_json(0, route)["secret_title"] == parcours.secret_title(route)
+    # A quarter named like a venue of the evening would give it away: the next one names it.
+    route.steps[0].candidate.venue = "Centre Pompidou, Beaubourg"
+    assert parcours.secret_title(route) == "Les Noctambules des Halles"
+    for step in route.steps:
+        step.candidate.lat, step.candidate.lon = 48.80, 2.20
+        step.candidate.item["activity"]["venue"]["town"] = "Issy-les-Moulineaux"
+    assert parcours.secret_title(route).endswith(" d'Issy-les-Moulineaux")

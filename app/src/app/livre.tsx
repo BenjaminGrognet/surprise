@@ -60,7 +60,7 @@ function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed
 
   return (
     <Screen gap={Spacing.four}>
-      <Header sealed={!!mine} title={evening.title} day={evening.day} />
+      <Header sealed={!!mine} title={evening.secret_title ?? evening.title} day={evening.day} />
 
       {!open ? (
         <ThemedText themeColor="textSecondary" style={styles.center}>

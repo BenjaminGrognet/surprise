@@ -138,7 +138,7 @@ export default function SoireeScreen() {
     }
     try {
       await chooseEvening({
-        pageName: composed.name, routeIndex: route.index, title: route.title, pitch: route.pitch,
+        pageName: composed.name, routeIndex: route.index, title: route.title, secretTitle: route.secret_title, pitch: route.pitch,
         vibes: composed.vibes.map((v) => vibes[v] || v), day: route.day,
       });
       // Kept: on to the day itself, where each partner picks a side — organiser or surprised.

@@ -20,7 +20,7 @@ type Tab = 'aventure' | 'coulisses';
 
 // The organiser's side of a kept evening: a quiet header (the countdown, the whole budget once), then
 // two tabs — the evening itself (L'Aventure) apart from the bookings and what the partner sees (Les Coulisses).
-export function Organiser({ route, pageName }: { route: SoireeRoute; pageName: string }) {
+export function Organiser({ route, pageName, secretTitle }: { route: SoireeRoute; pageName: string; secretTitle: string }) {
   const now = useNow();
   const [tab, setTab] = useState<Tab>('aventure');
   const [booked, setBooked] = useState<string[]>([]);
@@ -49,6 +49,7 @@ export function Organiser({ route, pageName }: { route: SoireeRoute; pageName: s
     <>
       <IntrigueCard>
         <ThemedText type="eyebrow" style={styles.center}>Feuille de route · {longDay(route.day)}</ThemedText>
+        <ThemedText type="title" style={styles.center}>{secretTitle}</ThemedText>
         {now < start ? <Countdown to={start} now={now} /> : <ThemedText type="subtitle">Le rideau est levé</ThemedText>}
         <Badge>{`${route.price_estimated ? '≈ ' : ''}${route.price.toFixed(0)} € à deux`}</Badge>
       </IntrigueCard>
@@ -58,7 +59,7 @@ export function Organiser({ route, pageName }: { route: SoireeRoute; pageName: s
       {tab === 'aventure' ? (
         <Aventure route={route} steps={steps} />
       ) : (
-        <Coulisses route={route} toBook={toBook} booked={booked} onToggle={toggle} error={error} now={now} />
+        <Coulisses route={route} secretTitle={secretTitle} toBook={toBook} booked={booked} onToggle={toggle} error={error} now={now} />
       )}
     </>
   );
@@ -201,9 +202,10 @@ function TextLinkOut({ url, children }: { url: string; children: string }) {
 // Les Coulisses: the bookings to make, ticked off as they're done (kept on the account), and the
 // partner's screen as they see it right now.
 function Coulisses({
-  route, toBook, booked, onToggle, error, now,
+  route, secretTitle, toBook, booked, onToggle, error, now,
 }: {
   route: SoireeRoute;
+  secretTitle: string;
   toBook: SoireeStep[];
   booked: string[];
   onToggle: (id: string) => void;
@@ -255,13 +257,13 @@ function Coulisses({
         {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
       </View>
 
-      <PartnerScreen route={route} now={now} />
+      <PartnerScreen route={route} secretTitle={secretTitle} now={now} />
     </View>
   );
 }
 
 // A facsimile of the surprised partner's screen, framed in brushed gold: the clues they hold, as quotes.
-function PartnerScreen({ route, now }: { route: SoireeRoute; now: number }) {
+function PartnerScreen({ route, secretTitle, now }: { route: SoireeRoute; secretTitle: string; now: number }) {
   const theme = useTheme();
   const clues = cluesFor(route);
   const shown = shownClues(clues, now);
@@ -273,6 +275,7 @@ function PartnerScreen({ route, now }: { route: SoireeRoute; now: number }) {
         <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
           Ce que votre partenaire lit en ce moment. Vous seul voyez le reste.
         </ThemedText>
+        <ThemedText type="subtitle" style={styles.center}>{secretTitle}</ThemedText>
         {shown.map((c) => (
           <View key={c.text} style={[styles.quote, { borderLeftColor: theme.accentSoft }]}>
             <ThemedText type="clue">« {c.text} »</ThemedText>

@@ -118,7 +118,7 @@ function Relic({ row, age, photos }: { row: EveningHistoryRow; age: number; phot
       <ThemedText style={[styles.date, { color: theme.accent, opacity: age === 0 ? 1 : 0.6 }]}>
         INTRIGUE SCELLÉE • {row.day ? monthYear(row.day) : 'DATE LIBRE'}
       </ThemedText>
-      <ThemedText style={[styles.name, { color: theme.cream, opacity: age === 0 ? 1 : 0.8 }]}>{row.title}</ThemedText>
+      <ThemedText style={[styles.name, { color: theme.cream, opacity: age === 0 ? 1 : 0.8 }]}>{row.secret_title ?? row.title}</ThemedText>
       <View style={[styles.card, { backgroundColor: `rgba(7, 22, 21, ${p.card})`, borderColor: `rgba(212, 175, 55, ${p.border})` }]}>
         {photo ? (
           <View style={[styles.photo, { opacity: p.photoOpacity }]}>
@@ -151,7 +151,7 @@ function Anchor({ row }: { row: EveningHistoryRow }) {
   const { role } = useCouple();
   const ahead = !!row.day && row.day >= isoDay(new Date());
   const href = { pathname: ahead ? '/revelation' : '/livre', params: { soiree: row.page_name, route: String(row.route_index) } } as const;
-  // To the passager, an evening to come keeps its secret here too: its title would give it away.
+  // To the passager, an evening to come keeps its secret here too: only its secret name, never its plain title.
   const hidden = ahead && role === 'passager';
   return (
     <Pressable onPress={() => router.push(href)} style={styles.entry}>
@@ -159,7 +159,7 @@ function Anchor({ row }: { row: EveningHistoryRow }) {
       <ThemedText style={[styles.date, { color: theme.accent, opacity: 0.8 }]}>
         {ahead ? 'À VENIR' : 'À SCELLER'} • {row.day ? longDay(row.day).toUpperCase() : 'DATE LIBRE'}
       </ThemedText>
-      <ThemedText style={[styles.name, { color: theme.cream, opacity: 0.8 }]}>{hidden ? 'Une intrigue en préparation' : row.title}</ThemedText>
+      <ThemedText style={[styles.name, { color: theme.cream, opacity: 0.8 }]}>{row.secret_title ?? (hidden ? 'Une intrigue en préparation' : row.title)}</ThemedText>
       <TextLink href={href}>
         {ahead ? (role === 'passager' ? 'Voir les indices →' : 'Voir la feuille de route →') : 'Ouvrir le Livre des Secrets →'}
       </TextLink>

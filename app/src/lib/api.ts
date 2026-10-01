@@ -102,6 +102,7 @@ export type SoireeStep = {
 export type SoireeRoute = {
   index: number;
   title: string;
+  secret_title: string; // its name once kept, shown to the passager too: a mood and a quarter, no venue
   pitch: string;
   day: string;
   start: string;

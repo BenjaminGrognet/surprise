@@ -312,6 +312,11 @@ fonction `join_couple`). Le passager a son propre compte, ne voit que le compte 
 programme voilé des soirées de son instigateur ; le quiz et `/soiree` lui sont fermés. Un compte sans couple est
 instigateur. Limite connue : le passager pourrait lire les données d'une soirée par l'API (l'app seule les voile).
 
+Une soirée gardée prend un nom secret, vu des deux (« Le Pacte de l'Île Saint-Louis ») : un mot d'intrigue tiré de
+son ambiance et le quartier de son étape la plus centrale, jamais un lieu (un quartier qui porte le nom d'un lieu de la
+soirée est sauté). Règles sans Claude (`parcours.secret_title`), envoyé avec chaque parcours (`secret_title`) et figé
+à la garde dans `soirees_choisies.secret_title` (migration `20261001000003_secret_title.sql`).
+
 Le Livre des Secrets (`/livre?soiree=…&route=…`) : en fin de soirée (sa dernière étape commencée) puis les jours
 suivants, chacun des deux scelle une page — une photo, un mot (table `souvenirs`, photos dans le bucket privé
 `souvenirs`, lues par liens signés). Scellée, une page ne se modifie plus ; on ne lit celle de l'autre qu'après avoir

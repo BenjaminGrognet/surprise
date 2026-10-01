@@ -94,7 +94,7 @@ function NextIntrigue({ row, route }: { row: EveningHistoryRow; route: SoireeRou
   return (
     <IntrigueCard onPress={open}>
       <ThemedText type="eyebrow" style={styles.center}>{under ? "L'intrigue a commencé" : 'Votre prochaine intrigue'}</ThemedText>
-      <ThemedText type="title" style={styles.center}>L&apos;Inattendu vous attend…</ThemedText>
+      <ThemedText type="title" style={styles.center}>{row.secret_title ?? route?.secret_title ?? 'L’Inattendu vous attend…'}</ThemedText>
       {start != null && !under ? <Countdown to={start} now={now} /> : null}
       {route ? (
         <ThemedText type="clue" themeColor="textSecondary" style={styles.center}>
@@ -115,7 +115,7 @@ function BookCall({ row }: { row: EveningHistoryRow }) {
       <ThemedText type="eyebrow" style={styles.center}>L&apos;intrigue s&apos;achève</ThemedText>
       <ThemedText type="title" style={styles.center}>Le Livre des Secrets</ThemedText>
       <ThemedText themeColor="textSecondary" style={styles.center}>
-        Le rideau tombe sur « {row.title} ». Déposez une photo et un mot avant qu&apos;ils ne s&apos;évaporent.
+        Le rideau tombe sur « {row.secret_title ?? row.title} ». Déposez une photo et un mot avant qu&apos;ils ne s&apos;évaporent.
       </ThemedText>
       <ThemedText type="small" themeColor="accentInk" style={styles.center}>Ouvrir le grimoire →</ThemedText>
     </IntrigueCard>

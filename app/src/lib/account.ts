@@ -52,6 +52,7 @@ export type EveningHistoryRow = {
   page_name: string;
   route_index: number;
   title: string;
+  secret_title: string | null; // "Le Pacte de l'Île Saint-Louis", fixed when kept; null for older evenings
   pitch: string;
   vibes: string[] | null;
   day: string | null;
@@ -79,6 +80,7 @@ export async function chooseEvening(input: {
   pageName: string;
   routeIndex: number;
   title: string;
+  secretTitle: string;
   pitch: string;
   vibes: string[];
   day: string | null;
@@ -87,9 +89,18 @@ export async function chooseEvening(input: {
   if (!user) throw new Error('Connectez-vous pour la garder dans votre historique.');
   const { error } = await supabase.from('soirees_choisies').insert({
     user_id: user.id, page_name: input.pageName, route_index: input.routeIndex,
-    title: input.title, pitch: input.pitch, vibes: input.vibes, day: input.day,
+    title: input.title, secret_title: input.secretTitle, pitch: input.pitch, vibes: input.vibes, day: input.day,
   });
   if (error) throw new Error(error.message);
+}
+
+// A kept evening's secret name, as it was fixed when kept (readable by the passager too).
+export async function keptSecretTitle(pageName: string, routeIndex: number): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('soirees_choisies').select('secret_title').eq('page_name', pageName).eq('route_index', routeIndex)
+    .order('chosen_at', { ascending: false }).limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.[0]?.secret_title as string | null | undefined) ?? null;
 }
 
 // What the organiser has booked for a kept evening: the id (source_id:external_id) of each step marked "réservé".

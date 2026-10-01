@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Veil } from '@/components/veil';
 import { Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
+import { keptSecretTitle } from '@/lib/account';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { getSoireeState, type SoireeRoute, type SoireeStep } from '@/lib/api';
@@ -23,6 +24,7 @@ import { curtainFalls } from '@/lib/souvenirs';
 export default function RevelationScreen() {
   const { soiree, route: index } = useLocalSearchParams<{ soiree?: string; route?: string }>();
   const [route, setRoute] = useState<SoireeRoute | null | 'missing'>(null);
+  const [kept, setKept] = useState<string | null>(null);
   const { role } = useCouple();
 
   const lost = !soiree || index === undefined;
@@ -32,6 +34,8 @@ export default function RevelationScreen() {
     getSoireeState(soiree)
       .then((s) => setRoute(s.routes.find((r) => String(r.index) === index) ?? 'missing'))
       .catch(() => setRoute('missing'));
+    // The name fixed when it was kept; the one the server would give its steps today, for older evenings.
+    keptSecretTitle(soiree, Number(index)).then(setKept).catch(() => {});
   }, [soiree, index]);
 
   if (!lost && route === null) {
@@ -51,9 +55,14 @@ export default function RevelationScreen() {
     );
   }
 
+  const secretTitle = kept ?? route.secret_title;
   return (
     <Screen gap={Spacing.four}>
-      {role === 'instigateur' ? <Organiser route={route} pageName={soiree!} /> : <Surprised route={route} />}
+      {role === 'instigateur' ? (
+        <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} />
+      ) : (
+        <Surprised route={route} secretTitle={secretTitle} />
+      )}
       <BookLink route={route} soiree={soiree!} />
     </Screen>
   );
@@ -72,7 +81,7 @@ function BookLink({ route, soiree }: { route: SoireeRoute; soiree: string }) {
   );
 }
 
-function Surprised({ route }: { route: SoireeRoute }) {
+function Surprised({ route, secretTitle }: { route: SoireeRoute; secretTitle: string }) {
   const now = useNow();
   const start = Date.parse(route.start);
   const clues = cluesFor(route);
@@ -81,7 +90,7 @@ function Surprised({ route }: { route: SoireeRoute }) {
     <>
       <IntrigueCard>
         <ThemedText type="eyebrow" style={styles.center}>La révélation · {longDay(route.day)}</ThemedText>
-        <ThemedText type="title" style={styles.center}>L&apos;Inattendu vous attend…</ThemedText>
+        <ThemedText type="title" style={styles.center}>{secretTitle}</ThemedText>
         {now < start ? <Countdown to={start} now={now} /> : null}
       </IntrigueCard>
 

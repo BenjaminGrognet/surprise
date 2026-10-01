@@ -24,6 +24,7 @@ The routes are saved (pipeline.soirees) and shown by the app (app/, /soiree?soir
 
 import argparse
 import contextlib
+import hashlib
 import json
 import math
 import os
@@ -33,6 +34,7 @@ import secrets
 import sys
 import threading
 import time as clock
+import unicodedata
 import webbrowser
 from collections import Counter
 from collections.abc import Callable
@@ -1118,6 +1120,88 @@ def _hour(moment: datetime) -> str:
     return hour + (f" {rounded.minute:02d}" if rounded.minute else "")
 
 
+# The secret name of a kept evening, shown to both: "Le Pacte de l'Île Saint-Louis". A word of intrigue drawn
+# from the evening's mood, and the quarter it happens in, never a venue.
+_SECRET_WORDS = {
+    "romance": (["Le Serment", "La Promesse", "Les Confidences", "L'Aveu", "Le Rendez-vous secret", "Le Murmure"],
+                {"romantique", "coquin", "detente", "chandelles", "vue", "en_duo", "massage", "spa"}),
+    "enigme": (["L'Énigme", "L'Affaire", "Le Code secret", "Les Ombres", "Le Mystère", "Le Dossier"],
+               {"defi", "frisson", "insolite", "escape_game", "murder_party", "jeu_de_piste", "souterrain", "dans_le_noir", "cache"}),
+    "nuit": (["La Conspiration", "Les Noctambules", "La Nuit blanche", "Le Complot", "La Conjuration"],
+             {"fete", "electro", "danse", "nuit"}),
+    "scene": (["Le Masque", "Le Sortilège", "L'Illusion", "Le Rideau rouge", "Le Grand Secret"],
+              {"rire", "emerveiller", "musique", "spectacle", "theatre", "cabaret", "humour", "magie", "cirque", "concert"}),
+    "table": (["Le Festin secret", "L'Alchimie", "Le Banquet", "La Recette interdite"],
+              {"savourer", "gastronomique", "degustation", "vin", "mixologie"}),
+}
+_SECRET_ALWAYS = ["Le Pacte", "Le Secret", "La Clé"]
+# Paris by its quarters, at their heart: the nearest one names the evening.
+_QUARTERS = [
+    ("l'Île Saint-Louis", 48.8515, 2.3566), ("l'Île de la Cité", 48.8546, 2.3477), ("le Marais", 48.8578, 2.3600),
+    ("le Haut-Marais", 48.8635, 2.3620), ("Beaubourg", 48.8606, 2.3522), ("les Halles", 48.8620, 2.3460),
+    ("Montorgueil", 48.8655, 2.3470), ("le Palais-Royal", 48.8638, 2.3370), ("les Tuileries", 48.8635, 2.3275),
+    ("l'Opéra", 48.8710, 2.3320), ("la Bourse", 48.8690, 2.3410), ("les Grands Boulevards", 48.8715, 2.3460),
+    ("Saint-Germain-des-Prés", 48.8540, 2.3330), ("l'Odéon", 48.8510, 2.3390), ("le Quartier latin", 48.8490, 2.3470),
+    ("la Contrescarpe", 48.8440, 2.3490), ("le Luxembourg", 48.8462, 2.3372), ("Montparnasse", 48.8430, 2.3240),
+    ("Denfert-Rochereau", 48.8340, 2.3320), ("le Champ-de-Mars", 48.8556, 2.2986), ("les Invalides", 48.8566, 2.3126),
+    ("le Trocadéro", 48.8620, 2.2880), ("Passy", 48.8550, 2.2780), ("Auteuil", 48.8480, 2.2600),
+    ("les Champs-Élysées", 48.8700, 2.3070), ("la Madeleine", 48.8700, 2.3245), ("Monceau", 48.8790, 2.3090),
+    ("les Batignolles", 48.8860, 2.3170), ("la Nouvelle Athènes", 48.8790, 2.3360), ("Pigalle", 48.8820, 2.3370),
+    ("Montmartre", 48.8867, 2.3431), ("la Goutte-d'Or", 48.8850, 2.3540), ("le Canal Saint-Martin", 48.8710, 2.3650),
+    ("Oberkampf", 48.8650, 2.3780), ("la Bastille", 48.8532, 2.3692), ("le Faubourg Saint-Antoine", 48.8510, 2.3780),
+    ("Belleville", 48.8720, 2.3770), ("Ménilmontant", 48.8670, 2.3890), ("les Buttes-Chaumont", 48.8800, 2.3830),
+    ("la Villette", 48.8900, 2.3900), ("Charonne", 48.8540, 2.3940), ("Bercy", 48.8380, 2.3820),
+    ("le Jardin des Plantes", 48.8440, 2.3590), ("la Butte-aux-Cailles", 48.8270, 2.3500), ("Austerlitz", 48.8400, 2.3680),
+    ("Vaugirard", 48.8400, 2.3000), ("Grenelle", 48.8480, 2.2920), ("Montsouris", 48.8220, 2.3380),
+]
+_QUARTER_KM = 1.2  # further from any quarter's heart, the town names the evening, or Paris itself
+
+
+def _plain(text: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if unicodedata.category(c) != "Mn")
+
+
+def _of(place: str) -> str:
+    """"de" before a place: du Marais, des Halles, de la Bastille, de l'Opéra, d'Ivry, de Pigalle."""
+    if place.startswith("le "):
+        return "du " + place[3:]
+    if place.startswith("les "):
+        return "des " + place[4:]
+    if _plain(place[0]) in "aeiouy" and not place.startswith("l'"):
+        return "d'" + place
+    return "de " + place
+
+
+def _secret_place(route: Route) -> str:
+    """The quarter the evening happens in, unless its name gives a venue away ("Montmartre" for the Musée de Montmartre)."""
+    steps = route.steps + ([route.night] if route.night else [])
+    said = " ".join(_plain(f"{s.candidate.title} {s.candidate.venue}") for s in steps)
+    # The step nearest all the others: a real place of the evening, where a mean of far-apart steps would not be.
+    middle = min(route.steps, key=lambda s: sum(distance_km((s.candidate.lat, s.candidate.lon), (o.candidate.lat, o.candidate.lon)) for o in route.steps))
+    near = sorted((distance_km((middle.candidate.lat, middle.candidate.lon), (lat, lon)), name) for name, lat, lon in _QUARTERS)
+    for km, name in near:
+        if km > _QUARTER_KM:
+            break
+        core = _plain(name.split("'", 1)[1] if name.startswith("l'") else name.split(" ", 1)[1] if name.split(" ", 1)[0] in ("le", "la", "les") else name)
+        if core not in said:
+            return name
+    town = (middle.candidate.item["activity"].get("venue") or {}).get("town")
+    return town if town and town != "Paris" and _plain(town) not in said else "la Ville Lumière"
+
+
+def secret_title(route: Route) -> str:
+    """The evening's secret name, the same for the same steps: a word of its mood and its quarter, no venue."""
+    flavours = Counter()
+    for step in route.steps:
+        said = {*step.candidate.tags, *step.candidate.vibes, *(step.candidate.item["activity"].get("categories") or [])}
+        for flavour, (_, signs) in _SECRET_WORDS.items():
+            flavours[flavour] += len(said & signs)
+    mood = max(_SECRET_WORDS, key=lambda f: flavours[f]) if flavours and max(flavours.values()) else None
+    words = (_SECRET_WORDS[mood][0] if mood else []) + _SECRET_ALWAYS
+    seed = int(hashlib.sha1("|".join(":".join(s.candidate.key) for s in route.steps).encode()).hexdigest(), 16)
+    return f"{words[seed % len(words)]} {_of(_secret_place(route))}"
+
+
 def name_with_claude(routes: list[Route], request: Request) -> bool:
     """Title and pitch of each route written by Claude; False when unavailable."""
     if not os.environ.get("ANTHROPIC_API_KEY") or not routes:
@@ -1218,6 +1302,7 @@ def route_json(index: int, route: Route) -> dict[str, Any]:
     steps = [step_json(step, f"routes/{index}/steps/{position}") for position, step in enumerate(route.steps)]
     return {
         "index": index, "title": route.title, "pitch": route.pitch,
+        "secret_title": secret_title(route),  # what both see once it is kept: no venue in it
         "day": route.steps[0].start.date().isoformat(),
         "start": route.steps[0].start.isoformat(), "end": route.steps[-1].end.isoformat(),
         "price": route.price, "price_estimated": any(s.candidate.price_estimated for s in route.steps),
