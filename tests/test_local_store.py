@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,7 +21,8 @@ def test_raw_records_are_deduplicated(tmp_path):
         store.save_raw_records(records)  # read again unchanged: only its fetch time moves
         changed = qfap.to_raw_record({**FIXTURE[0], "title": "Nouveau titre"})
         store.save_raw_records([changed])
-    assert sqlite3.connect(path).execute("select count(*) from raw_records").fetchone() == (5,)
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute("select count(*) from raw_records").fetchone() == (5,)
 
 
 def test_fresh_pages_are_not_read_again(tmp_path):
@@ -89,7 +91,8 @@ def test_latest_normalization_is_kept(tmp_path):
     with LocalStore(path) as store:
         store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
         store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
-    rows = dict(sqlite3.connect(path).execute("select external_id, coalesce(rejection, activity) from normalized"))
+    with closing(sqlite3.connect(path)) as db:
+        rows = dict(db.execute("select external_id, coalesce(rejection, activity) from normalized"))
     assert len(rows) == 4
     assert rows["2"] == "jeune public"
     assert json.loads(rows["12345"])["venue"]["arrondissement"] == 5

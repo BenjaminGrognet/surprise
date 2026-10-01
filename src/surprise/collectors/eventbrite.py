@@ -27,8 +27,8 @@ MAX_PAGES = 30
 
 def fetch_events(client: httpx.Client, delay: float = DELAY_SECONDS) -> Iterator[dict[str, Any]]:
     seen: set[str] = set()
-    for page in range(1, MAX_PAGES + 1):
-        response = client.get(SEARCH_URL, params={"page": page})
+    for number in range(1, MAX_PAGES + 1):
+        response = client.get(SEARCH_URL, params={"page": number})
         if response.status_code != 200:
             return
         items = [element.get("item") or {} for element in ld_node(response.text, "ItemList").get("itemListElement") or []]

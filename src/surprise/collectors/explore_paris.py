@@ -41,8 +41,8 @@ _TRANSPORT = re.compile(r"\((?:métro|rer|bus|tram)[^)]*\)|\b(?:métro|rer|bus|t
 
 def fetch_tour_urls(client: httpx.Client, delay: float = DELAY_SECONDS) -> Iterator[tuple[str, str]]:
     seen: set[str] = set()
-    for page in range(1, MAX_PAGES + 1):
-        response = client.get(LIST_URL, params={"p": page} if page > 1 else None)
+    for number in range(1, MAX_PAGES + 1):
+        response = client.get(LIST_URL, params={"p": number} if number > 1 else None)
         if response.status_code != 200:
             return
         new = [(url, tour_id) for url, tour_id in _TOUR.findall(response.text) if tour_id not in seen]
