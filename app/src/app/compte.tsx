@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { AuthForm } from '@/components/auth-form';
 import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { PassagerInvite } from '@/components/passager-invite';
+import { LogoSecretDate } from '@/components/logo-secretdate';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -44,6 +45,9 @@ export default function CompteScreen() {
 function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <>
+      <View style={styles.logoContainer}>
+        <LogoSecretDate size={100} />
+      </View>
       <ThemedText type="eyebrow">Bienvenue, complices</ThemedText>
       <ThemedText type="title">Les soirées qu&apos;on ne voit pas venir.</ThemedText>
       <ThemedText themeColor="textSecondary">
@@ -122,6 +126,7 @@ function Notice({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  logoContainer: { alignItems: 'center', marginVertical: Spacing.four },
   notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
   persona: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.two },
 });

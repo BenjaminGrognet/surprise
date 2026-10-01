@@ -9,7 +9,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { currentUser } from '@/lib/account';
 import { supabaseConfigured } from '@/lib/supabase';
 
-// Every screen's top line: the SecretDate wordmark (back home) and, once signed in, a pill to the account —
+// Every screen's top line: the SecretDate logo (back home) and, once signed in, a pill to the account —
 // "Complices connectés" once the passager joined, else an invitation to send.
 export function BrandHeader() {
   const theme = useTheme();
