@@ -47,7 +47,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from surprise import availability, images
+from surprise import availability, genres, images
 from surprise.collectors import come_to_paris, funbooker, wecandoo
 from surprise.collectors.common import GROUP_PARTY
 from surprise.collectors.facts import BROWSER_HEADERS
@@ -120,7 +120,8 @@ class Request:
     max_travel: int = 35  # minutes between two steps
     audace: float = 0.5  # 0: classics are fine, 1: only the unusual (questionnaire)
     avoid: set[str] = field(default_factory=set)  # tags, keywords or categories the couple refuses ("dans_le_noir", "sensations")
-    prefer: set[str] = field(default_factory=set)  # tags the couple likes ("jazz", "electro")
+    prefer: set[str] = field(default_factory=set)  # tags the couple likes ("jazz", "chandelles")
+    genres: set[str] = field(default_factory=set)  # the music they like (surprise.genres): concerts keep to it
     dinner: bool = False  # the couple wants a sit-down dinner in the evening
     no_dinner: bool = False  # the couple will have eaten: no meal step (dinner cruises and shows included)
     overnight: bool = False  # the evening ends in a hotel ("découcher")
@@ -154,6 +155,7 @@ class Candidate:
     flexible: bool = False  # walk-in: can leave earlier to fit the evening
     originality: int = 35  # surprise.originality, 0-100
     keywords: list[str] = field(default_factory=list)
+    genres: list[str] = field(default_factory=list)  # what it plays (surprise.genres)
     score: float = 0.0
 
     @property
@@ -374,7 +376,7 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
         item=item, title=activity["title"], venue=venue.get("name") or "", arrondissement=venue.get("arrondissement"),
         lat=place[0], lon=place[1], tags=found["tags"], vibes=found["vibes"], role=role_, duration=duration,
         price=price, price_estimated=estimated, booking_url=link,
-        originality=originality, keywords=item["enrichment"].get("keywords") or [],
+        originality=originality, keywords=item["enrichment"].get("keywords") or [], genres=genres.genres(item),
     )
     latest = request.end - timedelta(minutes=30)
     categories = set(activity.get("categories") or [])
@@ -481,11 +483,13 @@ def score(candidate: Candidate, request: Request) -> float:
         return -math.inf  # the couple said no
     if request.no_dinner and candidate.role == "repas":
         return -math.inf  # they will have eaten
+    if candidate.role == "sortie" and genres.off_key(candidate.genres, set(activity.get("categories") or []), request.genres):
+        return -math.inf  # not their music
     if "romantique" in candidate.vibes:
         value += 1.2
     value += min(2, 0.5 * len(_ROMANTIC_TAGS & set(candidate.tags)))
     value += min(1.2, 0.4 * len(_ROMANTIC_WORDS & set(candidate.keywords)))
-    if request.prefer & set(candidate.tags):
+    if request.prefer & set(candidate.tags) or request.genres & set(candidate.genres):
         value += 1
     # Originality counts more for a daring couple (surprise.originality: offbeat, rare, curated, not a classic).
     value += (candidate.originality - 35) / 25 * (0.5 + request.audace)

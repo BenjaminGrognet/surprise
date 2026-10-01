@@ -432,3 +432,15 @@ def test_secret_title_names_the_quarter_never_the_venue():
         step.candidate.lat, step.candidate.lon = 48.80, 2.20
         step.candidate.item["activity"]["venue"]["town"] = "Issy-les-Moulineaux"
     assert parcours.secret_title(route).endswith(" d'Issy-les-Moulineaux")
+
+
+def test_concerts_keep_to_the_couple_music():
+    req = request(vibes=["musique"], genres={"jazz"})
+    techno = item("techno", "Concert techno", ["concert"], occurrences=[at(21)])
+    jazz = item("jazz", "Jazz au caveau", ["concert"], occurrences=[at(21)])
+    candlelight = item("bougies", "Candlelight : Vivaldi", ["concert"], occurrences=[at(21)])
+    unknown = item("inconnu", "Mica Millar", ["concert"], occurrences=[at(21)])
+    scores = {c.key[1]: c.score for c in _scored([techno, jazz, candlelight, unknown], req)}
+    assert scores["techno"] == float("-inf")
+    assert min(scores["jazz"], scores["bougies"], scores["inconnu"]) > float("-inf")
+    assert scores["jazz"] > scores["inconnu"]  # their music comes first

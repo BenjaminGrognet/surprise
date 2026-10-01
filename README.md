@@ -276,6 +276,11 @@ dessinent le profil du couple : vibes pondérées, persona (« Les Explorateurs 
 genres préférés, envie d'un dîner, budget. Aucune heure précise n'est demandée. Profil et réponses sont stockés
 (`pipeline.profiles`).
 
+« Sur quelles musiques vibrez-vous ? » (autant de genres qu'on veut, ou aucun) filtre les concerts et soirées club
+(`surprise.genres`) : le genre vient de la source quand elle le dit (concerts.paris), sinon du titre et du lieu, puis
+des textes. Un concert d'un genre non coché est écarté ; un concert au genre non reconnu reste proposable ; les
+concerts classiques (Candlelight…) restent toujours possibles, pour une occasion.
+
 Chaque soirée se prépare à part, sur sa propre page (`/soiree`, avec `#p=<profil>` ou sans profil) : jusqu'à trois
 envies (« Faire la fête », « Cocooning », « Romantique », « Surprenez-nous »…), si l'on dîne ou pas (obligatoire :
 « on aura déjà mangé » écarte les formules repas — dîners-croisières, dîners-spectacles, restaurants — mais garde

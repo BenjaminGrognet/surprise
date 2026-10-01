@@ -39,6 +39,7 @@ from urllib.parse import unquote, urlsplit
 
 from surprise import admin, images, parcours
 from surprise.local_store import LocalStore, open_store
+from surprise.genres import GENRES
 from surprise.tags import VIBES
 
 # The site is the app itself, built for the web: one front for the phone and the browser.
@@ -76,7 +77,7 @@ END_OPTIONS: list[dict[str, Any]] = [
 # The profile's questions: what lasts from one evening to the next — no hour or meal, asked
 # each time instead (/soiree). id, question, hint, kind ("single", "multi", "scale", "date", "text"), min/max
 # (multi), options. An option: value, label, desc and icon (the app's velvet card: option-card.tsx), emoji
-# (where there's no icon: /soiree), and what it does: vibe weights, audace, avoid, prefer, budget.
+# (where there's no icon: /soiree), and what it does: vibe weights, audace, avoid, prefer, genre (surprise.genres), budget.
 QUESTIONS: list[dict[str, Any]] = [
     {
         "id": "couple", "kind": "single",
@@ -147,21 +148,23 @@ QUESTIONS: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": "musique", "kind": "multi", "max": 3,
-        "question": "La bande-son de votre couple ?", "hint": "Trois au plus, ou aucune.",
+        # The genres filter the concerts (surprise.genres); classical ones stay possible, ticked or not.
+        "id": "musique", "kind": "multi",
+        "question": "Sur quelles musiques vibrez-vous ?",
+        "hint": "Autant de genres que vous voulez : les concerts s'y tiendront. Aucun, et tous vous seront ouverts. "
+                "Les concerts classiques aux chandelles restent possibles pour les grandes occasions.",
         "options": [
-            {"value": "jazz", "label": "Jazz & soul", "desc": "Clubs feutrés", "icon": "note", "emoji": "🎺",
-             "prefer": ["jazz"], "vibes": {"musique": 1}},
-            {"value": "classique", "label": "Classique", "desc": "Concerts aux chandelles", "icon": "piano", "emoji": "🎻",
-             "prefer": ["classique", "chandelles"], "vibes": {"musique": 1, "romantique": 1}},
-            {"value": "electro", "label": "Électro & house", "desc": "Jusqu'au petit matin", "icon": "casque", "emoji": "🎧",
-             "prefer": ["electro"], "vibes": {"fete": 1}},
-            {"value": "rock", "label": "Rock & indé", "desc": "Les concerts live", "icon": "enceinte", "emoji": "🎸",
-             "prefer": ["concert_live"], "vibes": {"musique": 1}},
-            {"value": "chanson", "label": "Chanson & variété", "desc": "Karaoké, cabaret", "icon": "micro", "emoji": "🎤",
-             "prefer": ["karaoke", "cabaret"], "vibes": {"musique": 1}},
-            {"value": "latino", "label": "Latino & afro", "desc": "Pour danser", "icon": "tambour", "emoji": "💃",
-             "prefer": ["danse"], "vibes": {"fete": 1, "bouger": 1}},
+            {"value": "rock", "label": "Pop, rock & indé", "icon": "enceinte", "emoji": "🎸", "genre": "rock", "vibes": {"musique": 1}},
+            {"value": "chanson", "label": "Chanson & variété", "icon": "micro", "emoji": "🎤", "genre": "chanson", "vibes": {"musique": 1}},
+            {"value": "jazz", "label": "Jazz & blues", "icon": "note", "emoji": "🎺", "genre": "jazz", "vibes": {"musique": 1}},
+            {"value": "soul", "label": "Soul, funk & R&B", "icon": "vinyle", "emoji": "🪩", "genre": "soul", "vibes": {"musique": 1}},
+            {"value": "rap", "label": "Rap & hip-hop", "icon": "radio", "emoji": "🎧", "genre": "rap", "vibes": {"musique": 1}},
+            {"value": "electro", "label": "Électro & techno", "icon": "casque", "emoji": "🎛️", "genre": "electro", "vibes": {"fete": 1}},
+            {"value": "latino", "label": "Latino, afro & reggae", "icon": "tambour", "emoji": "💃", "genre": "latino",
+             "vibes": {"fete": 1, "bouger": 1}},
+            {"value": "metal", "label": "Metal & hard rock", "icon": "eclair", "emoji": "🤘", "genre": "metal", "vibes": {"musique": 1}},
+            {"value": "classique", "label": "Classique & opéra", "icon": "piano", "emoji": "🎻", "genre": "classique",
+             "prefer": ["chandelles"], "vibes": {"musique": 1, "romantique": 1}},
         ],
     },
     {
@@ -248,7 +251,7 @@ DEFAULT_END = "00:30"
 def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
     """The couple's profile from their answers: weighted vibes, main vibes, persona, audace, refusals, a typical budget."""
     weights = {key: 0.0 for key in VIBES}
-    audace, avoid, prefer = 0.5, set(), set()
+    audace, avoid, prefer, genres = 0.5, set(), set(), set()
     budget = 120
     for question in QUESTIONS:
         chosen = answers.get(question["id"])
@@ -261,6 +264,7 @@ def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
             audace = option.get("audace", audace)
             avoid |= set(option.get("avoid") or [])
             prefer |= set(option.get("prefer") or [])
+            genres |= {option["genre"]} if "genre" in option else set()
             budget = option.get("budget", budget)
     ranked = sorted((v for v in weights if weights[v] > 0), key=lambda v: -weights[v])
     top = weights[ranked[0]] if ranked else 0
@@ -274,6 +278,7 @@ def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
         "audace": audace,
         "avoid": sorted(avoid),
         "prefer": sorted(prefer),
+        "genres": sorted(genres),
         "budget": budget,
         "first_day": valid_day(answers.get("premiere")),
         "names": (answers.get("prenoms") or "").strip()[:80] or None,
@@ -302,6 +307,7 @@ def valid_profile(value: Any) -> dict[str, Any] | None:
             "audace": max(0.0, min(1.0, float(value["audace"]))),
             "avoid": [v for v in value.get("avoid") or [] if isinstance(v, str)],
             "prefer": [v for v in value.get("prefer") or [] if isinstance(v, str)],
+            "genres": [v for v in value.get("genres") or [] if v in GENRES],
             "budget": max(1.0, min(1000.0, float(value["budget"]))),
             "first_day": valid_day(value.get("first_day")),
             "names": (str(value["names"])[:80] if value.get("names") else None),
@@ -378,7 +384,8 @@ def requests_for(
         begin, finish = parcours.window(day, night["start"], night["end"])
         requests.append(parcours.Request(
             day, budget if budget is not None else profile["budget"], begin, finish, night["vibes"],
-            audace=night["audace"], avoid=set(night["avoid"]), prefer=set(profile["prefer"]), dinner=night["dinner"],
+            audace=night["audace"], avoid=set(night["avoid"]), prefer=set(profile["prefer"]), genres=set(profile.get("genres") or []),
+            dinner=night["dinner"],
             no_dinner=night["no_dinner"], overnight=overnight,
         ))
     return requests

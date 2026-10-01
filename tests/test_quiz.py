@@ -51,9 +51,17 @@ def test_profile_from_answers():
     assert profile["vibes"][0] == "romantique" and len(profile["vibes"]) <= 4
     assert profile["persona"]["name"] == "Les Romantiques"
     assert profile["audace"] == 0.7 and profile["budget"] == 200
-    assert {"dans_le_noir", "frisson", "spa", "baignade"} <= set(profile["avoid"]) and profile["prefer"] == ["jazz"]
+    assert {"dans_le_noir", "frisson", "spa", "baignade"} <= set(profile["avoid"]) and profile["genres"] == ["jazz"]
     assert (profile["first_day"], profile["names"]) == ("2026-10-09", "Léa & Sam")
     assert "end" not in profile and "dinner" not in profile
+
+
+def test_music_genres_reach_the_evening():
+    profile = quiz.profile_from({**ANSWERS, "musique": ["jazz", "rock", "classique"]})
+    assert profile["genres"] == ["classique", "jazz", "rock"] and "chandelles" in profile["prefer"]
+    assert quiz.valid_profile({**profile, "genres": ["jazz", "bogus"]})["genres"] == ["jazz"]
+    [request] = quiz.requests_for(profile)
+    assert request.genres == {"classique", "jazz", "rock"}
 
 
 def test_empty_answers_still_make_a_profile():

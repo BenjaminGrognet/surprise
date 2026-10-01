@@ -146,7 +146,7 @@ export const QUIZ_ICONS: Record<string, ReactNode> = {
     </>
   ),
 
-  // La bande-son de votre couple ?
+  // Sur quelles musiques vibrez-vous ?
   note: (
     <>
       <Circle cx="8" cy="18" r="4" />
@@ -182,6 +182,23 @@ export const QUIZ_ICONS: Record<string, ReactNode> = {
       <Path d="M7 13.4v7.9M12 14v8M17 13.4v7.9M2 9v8a10 5 0 0 0 20 0V9" />
     </>
   ),
+
+  vinyle: (
+    <>
+      <Circle cx="12" cy="12" r="10" />
+      <Circle cx="12" cy="12" r="3" />
+      <Path d="M6.5 12a5.5 5.5 0 0 1 5.5-5.5" />
+    </>
+  ),
+  radio: (
+    <>
+      <Rect x="2" y="8" width="20" height="13" rx="2" />
+      <Circle cx="7.5" cy="14.5" r="2.5" />
+      <Circle cx="16.5" cy="14.5" r="2.5" />
+      <Path d="M6 8 16 3M11 14.5h2" />
+    </>
+  ),
+  eclair: <Path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />,
 
   // Ce que vous ne voulez jamais
   vagues: (

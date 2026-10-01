@@ -16,17 +16,18 @@ import { getQuiz, saveProfile, type Profile, type Question, type QuizData } from
 import { longDay, nextFriday } from '@/lib/dates';
 import { rememberedProfile, rememberProfile } from '@/lib/local-store';
 
-const BANNER = 'https://images.unsplash.com/photo-1545343403-03e407630152?auto=format&fit=crop&w=1600&q=60';
+// Stored with the app (assets/images/bannieres, sources in SOURCES.md): no outside link to break.
+const BANNER = require('@/assets/images/bannieres/romantiques.jpg');
 
-const PERSONA_BANNERS: Record<string, string> = {
-  'Les Explorateurs': 'https://images.unsplash.com/photo-1504730513966-dfcd6e53fdc8?auto=format&fit=crop&w=1600&q=60',
-  'Les Romantiques': 'https://images.unsplash.com/photo-1545343403-03e407630152?auto=format&fit=crop&w=1600&q=60',
-  'Les Épicuriens': 'https://images.unsplash.com/photo-1671691302268-e316f81c7b3e?auto=format&fit=crop&w=1600&q=60',
-  'Les Noctambules': 'https://images.unsplash.com/photo-1713450605268-5f8ba67f5b55?auto=format&fit=crop&w=1600&q=60',
-  'Les Curieux': 'https://images.unsplash.com/photo-1708941432245-289f6add01c4?auto=format&fit=crop&w=1600&q=60',
-  'Les Complices': 'https://images.unsplash.com/photo-1671032290241-b0837e7a922e?auto=format&fit=crop&w=1600&q=60',
-  'Les Créatifs': 'https://images.unsplash.com/photo-1620140036708-455ed5c0426a?auto=format&fit=crop&w=1600&q=60',
-  'Les Flâneurs': 'https://images.unsplash.com/photo-1782022007537-47cdc954b386?auto=format&fit=crop&w=1600&q=60',
+const PERSONA_BANNERS: Record<string, number> = {
+  'Les Explorateurs': require('@/assets/images/bannieres/explorateurs.jpg'),
+  'Les Romantiques': require('@/assets/images/bannieres/romantiques.jpg'),
+  'Les Épicuriens': require('@/assets/images/bannieres/epicuriens.jpg'),
+  'Les Noctambules': require('@/assets/images/bannieres/noctambules.jpg'),
+  'Les Curieux': require('@/assets/images/bannieres/curieux.jpg'),
+  'Les Complices': require('@/assets/images/bannieres/complices.jpg'),
+  'Les Créatifs': require('@/assets/images/bannieres/creatifs.jpg'),
+  'Les Flâneurs': require('@/assets/images/bannieres/flaneurs.jpg'),
 };
 
 type Phase = 'loading' | 'quiz' | 'saving' | 'error' | 'reveal';
@@ -163,7 +164,6 @@ function QuestionBody({
   onAnswer: (value: unknown) => void;
 }) {
   const options = question.options ?? [];
-  const compact = options.length > 6;
   if (question.kind === 'single' || question.kind === 'scale') {
     return (
       <OptionGrid>
@@ -174,7 +174,6 @@ function QuestionBody({
             desc={o.desc}
             icon={o.icon}
             emoji={o.emoji}
-            compact={compact}
             selected={value === o.value}
             onPress={() => onAnswer(o.value)}
           />
@@ -201,7 +200,6 @@ function QuestionBody({
               desc={o.desc}
               icon={o.icon}
               emoji={o.emoji}
-              compact={compact}
               selected={chosen.has(v)}
               disabled={!chosen.has(v) && !!question.max && chosen.size >= question.max}
               onPress={() => toggle(v)}
@@ -237,7 +235,7 @@ function Reveal({
   const banner = PERSONA_BANNERS[p.persona.name] ?? BANNER;
   return (
     <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
-      <Image source={{ uri: banner }} style={styles.banner} />
+      <Image source={banner} style={styles.banner} />
       <View style={styles.personaBody}>
         <ThemedText type="eyebrow">{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
         <ThemedText type="title">{p.persona.name}</ThemedText>

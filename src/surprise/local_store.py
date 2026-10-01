@@ -383,7 +383,7 @@ class LocalStore:
                    r.url, r.payload ->> 'lead_text', r.payload ->> 'cover_url',
                    e.image_url, e.image_origin, e.place_id, e.site_excerpt, e.description, e.booking_url,
                    e.opening_hours, e.osm_address, e.osm_url, e.latitude, e.longitude, k.keywords,
-                   coalesce(r.payload ->> 'title', r.payload ->> 'name')
+                   coalesce(r.payload ->> 'title', r.payload ->> 'name'), r.payload ->> 'genre'
             from normalized n
             left join moderation m using (source_id, external_id)
             left join enrichment e using (source_id, external_id)
@@ -405,6 +405,7 @@ class LocalStore:
                 "source_url": source_url,
                 "lead_text": lead_text,
                 "cover_url": cover_url,
+                "source_genre": source_genre,  # the music, when the source says it (concerts.paris): surprise.genres
                 "enrichment": {
                     "image_url": image_url,
                     "image_origin": image_origin,
@@ -423,7 +424,7 @@ class LocalStore:
             for (
                 source_id, external_id, activity, status, rejection, changed, decided_at, source_url, lead_text, cover_url,
                 image_url, image_origin, place_id, site_excerpt, description, booking_url,
-                opening_hours, osm_address, osm_url, latitude, longitude, keywords, title,
+                opening_hours, osm_address, osm_url, latitude, longitude, keywords, title, source_genre,
             ) in rows
         ]
 
