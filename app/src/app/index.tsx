@@ -23,7 +23,7 @@ import { supabaseConfigured } from '@/lib/supabase';
 // countdown —, one button to plot a new one, and the couple's complicity gauge. The passager gets the
 // card and the gauge only: the instigateur makes the profile and orders the evenings.
 export default function AccueilScreen() {
-  const { role, couple } = useCouple();
+  const { role } = useCouple();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [upcoming, setUpcoming] = useState<{ row: EveningHistoryRow; route: SoireeRoute | null } | null>(null);
@@ -62,7 +62,7 @@ export default function AccueilScreen() {
     ? `Notre profil : ${profile.persona.name} · le refaire →`
     : "D'abord, faire notre profil (2 minutes) →";
   return (
-    <Screen gap={Spacing.four}>
+    <Screen gap={Spacing.three}>
       {toSeal ? <BookCall row={toSeal} /> : null}
       {loaded ? (
         upcoming ? <NextIntrigue {...upcoming} /> : role === 'passager' ? <AwaitingIntrigue /> : <NoIntrigue />
@@ -74,7 +74,11 @@ export default function AccueilScreen() {
         <View style={styles.actions}>
           <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink>
           {loaded ? <TextLink href="/profil">{profileLink}</TextLink> : null}
-          {couple?.passager ? null : <TextLink href="/compte">Inviter votre passager →</TextLink>}
+          {upcoming && !upcoming.row.passager ? (
+            <TextLink href={{ pathname: '/revelation', params: { soiree: upcoming.row.page_name, route: String(upcoming.row.route_index) } }}>
+              Inviter votre passager à cette soirée →
+            </TextLink>
+          ) : null}
         </View>
       ) : null}
 
@@ -174,9 +178,9 @@ function Gauge({ gauge }: { gauge: Complicity }) {
 
 const styles = StyleSheet.create({
   center: { textAlign: 'center' },
-  placeholder: { height: 280 },
-  actions: { gap: Spacing.two, alignItems: 'center' },
-  gauge: { gap: Spacing.two },
+  placeholder: { height: 180 },
+  actions: { gap: Spacing.one, alignItems: 'center' },
+  gauge: { gap: Spacing.one },
   track: { height: 3, borderRadius: 2, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 2 },
   caption: { fontSize: 12 },

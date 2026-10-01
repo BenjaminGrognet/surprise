@@ -4,14 +4,13 @@ import { Platform, Pressable, Share, StyleSheet, View } from 'react-native';
 import { GhostButton, PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
-import { invitation, invitationLink, renewInvitation } from '@/lib/couple';
+import type { EveningHistoryRow } from '@/lib/account';
+import { invitationLink, resetPassager } from '@/lib/couple';
 
-// The instigateur's side of the couple: invite the passager by a link, see that they joined, or start over.
-export function PassagerInvite() {
+// The instigateur's side of one evening: invite its passager (one at most) by a link, see that they joined, or start over.
+export function PassagerInvite({ evening, onChange }: { evening: EveningHistoryRow; onChange: () => void }) {
   const theme = useTheme();
-  const { couple, refresh } = useCouple();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -22,7 +21,7 @@ export function PassagerInvite() {
     setError('');
     try {
       await action();
-      await refresh();
+      onChange();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -40,31 +39,31 @@ export function PassagerInvite() {
     }
   }
 
-  const link = couple ? invitationLink(couple.invite_code) : null;
+  const link = invitationLink(evening.invite_code);
   return (
     <View style={[styles.card, { borderColor: theme.accentSoft, backgroundColor: theme.backgroundElement }]}>
-      <ThemedText type="eyebrow">Votre passager</ThemedText>
-      {couple?.passager ? (
+      <ThemedText type="eyebrow">Votre passager pour cette soirée</ThemedText>
+      {evening.passager ? (
         <>
           <ThemedText type="subtitle">Complices connectés</ThemedText>
           <ThemedText themeColor="textSecondary">
-            {couple.passager_email ?? 'Votre passager'} reçoit les indices de vos intrigues, rien de plus.
+            {evening.passager_email ?? 'Votre passager'} reçoit les indices de cette soirée, rien de plus.
           </ThemedText>
           {confirm ? (
             <View style={styles.row}>
               <TextButton onPress={() => setConfirm(false)}>Annuler</TextButton>
-              <GhostButton onPress={() => run(renewInvitation).then(() => setConfirm(false))}>Oui, nouveau lien</GhostButton>
+              <GhostButton onPress={() => run(() => resetPassager(evening.id)).then(() => setConfirm(false))}>Oui, nouveau lien</GhostButton>
             </View>
           ) : (
             <TextButton onPress={() => setConfirm(true)}>Changer de passager…</TextButton>
           )}
           {confirm ? (
             <ThemedText type="small" themeColor="textSecondary">
-              {couple.passager_email ?? 'Votre passager'} n&apos;aura plus accès à vos intrigues ; un nouveau lien d&apos;invitation est créé.
+              {evening.passager_email ?? 'Votre passager'} n&apos;aura plus accès à cette soirée ; un nouveau lien d&apos;invitation est créé.
             </ThemedText>
           ) : null}
         </>
-      ) : link ? (
+      ) : (
         <>
           <ThemedText themeColor="textSecondary">
             Envoyez ce lien à votre passager : il crée son propre compte et ne recevra que les indices.
@@ -76,13 +75,6 @@ export function PassagerInvite() {
             {Platform.OS === 'web' ? (copied ? '✓ Lien copié' : 'Copier le lien') : 'Envoyer le lien'}
           </PrimaryButton>
           <ThemedText type="small" themeColor="textSecondary">En attente de votre passager…</ThemedText>
-        </>
-      ) : (
-        <>
-          <ThemedText themeColor="textSecondary">
-            Vous tramez, il ou elle se laisse surprendre : invitez votre passager, il aura son propre compte et ne verra que les indices.
-          </ThemedText>
-          <PrimaryButton wide disabled={busy} onPress={() => run(invitation)}>Inviter mon passager</PrimaryButton>
         </>
       )}
       {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}

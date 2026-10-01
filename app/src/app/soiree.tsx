@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
 import { OptionCard, OptionGrid } from '@/components/option-card';
-import { CheckLine, OptionButton, OptionRow } from '@/components/option-button';
+import { OptionButton, OptionRow } from '@/components/option-button';
 import { RouteResult } from '@/components/route-result';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -199,7 +199,7 @@ export default function SoireeScreen() {
   const ready = envies.length > 0 && night.diner !== null && !!night.day;
 
   return (
-    <Screen gap={Spacing.four}>
+    <Screen gap={Spacing.two}>
       <View style={styles.intro}>
         <ThemedText type="eyebrow">Le filtre de vos envies</ThemedText>
         <ThemedText type="title">Quelle intrigue vous tente ?</ThemedText>
@@ -221,13 +221,13 @@ export default function SoireeScreen() {
       </Section>
 
       <Section title="Les options secrètes" hint={`Jusqu'à ${data.max - 1}, glissées dans le programme.`}>
-        <View>
+        <OptionGrid>
           {others.map((o) => (
-            <CheckLine key={o.value} label={o.label} emoji={o.emoji} checked={secrets.includes(o.value)}
+            <OptionCard key={o.value} label={o.label} emoji={o.emoji} selected={secrets.includes(o.value)}
               disabled={!secrets.includes(o.value) && secrets.length >= data.max - 1}
               onPress={() => toggleSecret(o.value)} />
           ))}
-        </View>
+        </OptionGrid>
       </Section>
 
       <Section title="Le dîner fait-il partie du complot ?">
@@ -296,7 +296,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   return (
     <View style={[styles.section, { borderColor: theme.line, backgroundColor: theme.backgroundElement }]}>
       <View style={styles.sectionHead}>
-        <ThemedText type="subtitle">{title}</ThemedText>
+        <ThemedText type="smallBold">{title}</ThemedText>
         {hint ? <ThemedText type="small" themeColor="textSecondary">{hint}</ThemedText> : null}
       </View>
       {children}
@@ -306,7 +306,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 
 const styles = StyleSheet.create({
   intro: { gap: Spacing.two },
-  section: { gap: Spacing.three, padding: Spacing.four, borderRadius: 22, borderWidth: 1 },
-  sectionHead: { gap: Spacing.one },
+  section: { gap: Spacing.two, padding: Spacing.three, borderRadius: 18, borderWidth: 1 },
+  sectionHead: { gap: 2 },
   notice: { padding: Spacing.three, borderRadius: 14 },
 });

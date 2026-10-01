@@ -52,7 +52,7 @@ export default function LivreScreen() {
 }
 
 function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed: () => void }) {
-  const { role, couple } = useCouple();
+  const { role } = useCouple();
   const mine = pages.find((p) => p.mine);
   const theirs = pages.find((p) => !p.mine);
   const open = bookOpen(evening, isoDay(new Date()));
@@ -71,7 +71,7 @@ function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed
           <PageView page={mine} />
           {theirs ? (
             <PageView page={theirs} />
-          ) : couple?.passager ? (
+          ) : evening.passager ? (
             <AwaitedPage />
           ) : null}
         </>

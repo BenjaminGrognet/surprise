@@ -2,6 +2,7 @@
 // Row-level security scopes couple_profiles/soirees_choisies to the signed-in user.
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/api';
+import { removePhotos } from '@/lib/souvenirs';
 
 export async function currentUser() {
   const { data } = await supabase.auth.getSession();
@@ -49,6 +50,10 @@ export async function saveAccountProfile(answers: Record<string, unknown>, profi
 
 export type EveningHistoryRow = {
   id: string;
+  user_id: string;
+  passager: string | null; // the one passager invited to this evening, once joined
+  passager_email: string | null;
+  invite_code: string; // the link's code, renewed when the passager is let go
   page_name: string;
   route_index: number;
   title: string;
@@ -117,4 +122,33 @@ export async function saveBookedSteps(pageName: string, routeIndex: number, book
     .from('soirees_choisies').update({ booked }).eq('page_name', pageName).eq('route_index', routeIndex).select('id');
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error("Cette soirée n'est pas gardée sur votre compte.");
+}
+
+// A past evening removed from the archives, its book and photos with it (instigateur only, RLS: day is over).
+export async function deleteEvening(id: string) {
+  await removePhotos([id]);
+  const { data, error } = await supabase.from('soirees_choisies').delete().eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("Cette soirée n'a pas pu être supprimée.");
+}
+
+// The account and everything of it: the photos first (storage isn't cascaded), then the auth row (cascade).
+export async function deleteMyAccount() {
+  const user = await currentUser();
+  if (!user) return;
+  const rows = await eveningsHistory();
+  await removePhotos(rows.filter((r) => r.user_id === user.id).map((r) => r.id));
+  await removePhotos(rows.filter((r) => r.user_id !== user.id).map((r) => r.id), user.id);
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw new Error(error.message);
+  await supabase.auth.signOut();
+}
+
+// The kept evening of a page and route, as the revelation finds it.
+export async function keptEvening(pageName: string, routeIndex: number): Promise<EveningHistoryRow | null> {
+  const { data, error } = await supabase
+    .from('soirees_choisies').select('*').eq('page_name', pageName).eq('route_index', routeIndex)
+    .order('chosen_at', { ascending: false }).limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.[0] as EveningHistoryRow | undefined) ?? null;
 }

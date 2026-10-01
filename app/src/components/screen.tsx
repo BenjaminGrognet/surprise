@@ -23,5 +23,5 @@ export function Screen({ children, gap = Spacing.three, bare }: { children: Reac
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, alignItems: 'center' },
-  column: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingTop: Spacing.two, paddingBottom: Spacing.six },
+  column: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingTop: Spacing.two, paddingBottom: Spacing.three },
 });

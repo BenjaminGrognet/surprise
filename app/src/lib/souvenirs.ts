@@ -63,3 +63,21 @@ export function curtainFalls(route: SoireeRoute, now: number) {
   const last = route.steps[route.steps.length - 1];
   return !!last && now >= Date.parse(last.start);
 }
+
+// The photo paths stored under <soiree>/…, or only under <soiree>/<author>/ when one is given.
+async function photoPaths(soireeId: string, author?: string): Promise<string[]> {
+  const bucket = supabase.storage.from('souvenirs');
+  const folders = author ? [author] : ((await bucket.list(soireeId)).data ?? []).map((f) => f.name);
+  const paths: string[] = [];
+  for (const folder of folders) {
+    const { data } = await bucket.list(`${soireeId}/${folder}`);
+    paths.push(...(data ?? []).map((f) => `${soireeId}/${folder}/${f.name}`));
+  }
+  return paths;
+}
+
+// Removes the photos of these evenings (all of them, or only the account's own).
+export async function removePhotos(soireeIds: string[], author?: string) {
+  const paths = (await Promise.all(soireeIds.map((id) => photoPaths(id, author)))).flat();
+  if (paths.length) await supabase.storage.from('souvenirs').remove(paths);
+}

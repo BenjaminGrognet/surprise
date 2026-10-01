@@ -311,11 +311,16 @@ les trois parcours proposés) sur n'importe quel appareil. Le navigateur parle d
 anon ; la sécurité (chacun ne voit que ses données) vient uniquement des policies RLS des migrations
 (`couple_profiles.user_id`, table `soirees_choisies`) — il n'y a pas de code serveur entre les deux.
 
-Deux comptes par couple (table `couples`) : l'instigateur fait le profil, commande les soirées, voit la feuille de
-route et coche ses réservations (`soirees_choisies.booked`) ; il invite le passager par un lien (`/invitation?code=…`,
-fonction `join_couple`). Le passager a son propre compte, ne voit que le compte à rebours, les indices et le
-programme voilé des soirées de son instigateur ; le quiz et `/soiree` lui sont fermés. Un compte sans couple est
-instigateur. Limite connue : le passager pourrait lire les données d'une soirée par l'API (l'app seule les voile).
+L'instigateur fait le profil, commande les soirées, voit la feuille de route et coche ses réservations
+(`soirees_choisies.booked`) ; il invite un passager par soirée, un seul au plus (colonnes `passager*` et `invite_code`
+de `soirees_choisies`), par un lien depuis la révélation de la soirée (`/invitation?code=…`, fonction `join_evening`) ;
+une autre soirée peut avoir un autre passager (`reset_passager` le renvoie et renouvelle le lien). Le passager a son
+propre compte, ne voit que le compte à rebours, les indices et le programme voilé des soirées où il est invité ; le quiz
+et `/soiree` lui sont fermés. Un compte passager d'au moins une soirée est passager, tout autre est instigateur.
+L'instigateur peut supprimer une soirée passée (Archives, livre et photos avec) et chacun son compte
+(`delete_my_account`, photos retirées avant). Limite connue : le passager pourrait lire les données d'une soirée par
+l'API (l'app seule les voile).
+
 
 Une soirée gardée prend un nom secret, vu des deux (« Le Pacte de l'Île Saint-Louis ») : un mot d'intrigue tiré de
 son ambiance et le quartier de son étape la plus centrale, jamais un lieu (un quartier qui porte le nom d'un lieu de la

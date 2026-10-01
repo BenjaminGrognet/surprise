@@ -42,7 +42,7 @@ function Unit({ value, label }: { value: number; label: string }) {
 
 const styles = StyleSheet.create({
   outer: { borderWidth: 1, borderRadius: 28, padding: 6 },
-  inner: { borderWidth: 1, borderRadius: 22, paddingVertical: Spacing.five, paddingHorizontal: Spacing.four, gap: Spacing.four, alignItems: 'center' },
+  inner: { borderWidth: 1, borderRadius: 22, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three, gap: Spacing.two, alignItems: 'center' },
   countdown: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.four },
   unit: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
   number: { fontFamily: Fonts.sansThin, fontSize: 52, lineHeight: 60, letterSpacing: 1 },

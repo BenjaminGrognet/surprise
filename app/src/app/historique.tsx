@@ -1,15 +1,15 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
-import { PrimaryLink, TextLink } from '@/components/buttons';
+import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
-import { eveningsHistory, type EveningHistoryRow } from '@/lib/account';
+import { deleteEvening, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
 import { isoDay, longDay } from '@/lib/dates';
 import { photoUrls } from '@/lib/souvenirs';
 import { supabaseConfigured } from '@/lib/supabase';
@@ -26,7 +26,7 @@ export default function ArchivesScreen() {
   const [state, setState] = useState<State>(supabaseConfigured ? 'loading' : 'error');
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!supabaseConfigured) return;
     eveningsHistory()
       .then(async (rows) => {
@@ -35,6 +35,7 @@ export default function ArchivesScreen() {
       })
       .catch(() => setState('error'));
   }, []);
+  useEffect(load, [load]);
 
   const rows = Array.isArray(state) ? state : [];
   const relics = rows.filter((r) => r.souvenirs?.length);
@@ -59,9 +60,9 @@ export default function ArchivesScreen() {
           <View style={styles.line} />
           {rows.map((row) =>
             row.souvenirs?.length ? (
-              <Relic key={row.id} row={row} age={relics.indexOf(row)} photos={photos} />
+              <Relic key={row.id} row={row} age={relics.indexOf(row)} photos={photos} onDeleted={load} />
             ) : (
-              <Anchor key={row.id} row={row} />
+              <Anchor key={row.id} row={row} onDeleted={load} />
             ),
           )}
         </View>
@@ -105,7 +106,7 @@ function patina(age: number) {
   };
 }
 
-function Relic({ row, age, photos }: { row: EveningHistoryRow; age: number; photos: Record<string, string> }) {
+function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: number; photos: Record<string, string>; onDeleted: () => void }) {
   const theme = useTheme();
   const p = patina(age);
   const pages = row.souvenirs ?? [];
@@ -141,12 +142,13 @@ function Relic({ row, age, photos }: { row: EveningHistoryRow; age: number; phot
           <ThemedText key={i} style={[styles.note, { color: theme.cream, opacity: p.text }]}>« {n} »</ThemedText>
         ))}
       </View>
+      <DeleteEvening row={row} onDeleted={onDeleted} />
     </Pressable>
   );
 }
 
 // Not a relic yet: an evening to come (its revelation), or one whose book still waits to be sealed.
-function Anchor({ row }: { row: EveningHistoryRow }) {
+function Anchor({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => void }) {
   const theme = useTheme();
   const { role } = useCouple();
   const ahead = !!row.day && row.day >= isoDay(new Date());
@@ -163,7 +165,45 @@ function Anchor({ row }: { row: EveningHistoryRow }) {
       <TextLink href={href}>
         {ahead ? (role === 'passager' ? 'Voir les indices →' : 'Voir la feuille de route →') : 'Ouvrir le Livre des Secrets →'}
       </TextLink>
+      <DeleteEvening row={row} onDeleted={onDeleted} />
     </Pressable>
+  );
+}
+
+// A past evening can be struck from the archives (its instigateur only), after a confirmation.
+function DeleteEvening({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => void }) {
+  const { role } = useCouple();
+  const theme = useTheme();
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (role !== 'instigateur' || (row.day && row.day >= isoDay(new Date()))) return null;
+  const run = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await deleteEvening(row.id);
+      onDeleted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={styles.delete}>
+      {confirm ? (
+        <>
+          <ThemedText type="small" style={{ color: theme.creamSoft }}>Cette soirée et son livre seront effacés pour de bon.</ThemedText>
+          <View style={styles.deleteRow}>
+            <TextButton onPress={() => setConfirm(false)}>Annuler</TextButton>
+            <TextButton onPress={run}>{busy ? 'Suppression…' : 'Oui, supprimer'}</TextButton>
+          </View>
+        </>
+      ) : (
+        <TextButton onPress={() => setConfirm(true)}>Supprimer cette soirée</TextButton>
+      )}
+      {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
+    </View>
   );
 }
 
@@ -186,5 +226,7 @@ const styles = StyleSheet.create({
   card: { marginTop: Spacing.three, padding: Spacing.three, borderRadius: 16, borderWidth: 1, gap: Spacing.three },
   photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 183, 113, 0.05)' },
   note: { fontFamily: Fonts.headingItalic, fontSize: 13, lineHeight: 20 },
+  delete: { marginTop: Spacing.two, gap: Spacing.one },
+  deleteRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, paddingTop: Spacing.three },
 });

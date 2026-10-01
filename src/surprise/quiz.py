@@ -150,9 +150,8 @@ QUESTIONS: list[dict[str, Any]] = [
     {
         # The genres filter the concerts (surprise.genres); classical ones stay possible, ticked or not.
         "id": "musique", "kind": "multi",
-        "question": "Sur quelles musiques vibrez-vous ?",
-        "hint": "Autant de genres que vous voulez : les concerts s'y tiendront. Aucun, et tous vous seront ouverts. "
-                "Les concerts classiques aux chandelles restent possibles pour les grandes occasions.",
+        "question": "Vos musiques préférées ?",
+        "hint": "Autant de genres que vous voulez, ou aucun pour tout garder ouvert. Le classique aux chandelles reste possible.",
         "options": [
             {"value": "rock", "label": "Pop, rock & indé", "icon": "enceinte", "emoji": "🎸", "genre": "rock", "vibes": {"musique": 1}},
             {"value": "chanson", "label": "Chanson & variété", "icon": "micro", "emoji": "🎤", "genre": "chanson", "vibes": {"musique": 1}},

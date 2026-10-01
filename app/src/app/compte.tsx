@@ -4,15 +4,14 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 
 import { AuthForm } from '@/components/auth-form';
-import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
-import { PassagerInvite } from '@/components/passager-invite';
+import { GhostButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { LogoSecretDate } from '@/components/logo-secretdate';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
-import { accountProfile, currentUser, signOut, type AccountProfile } from '@/lib/account';
+import { accountProfile, currentUser, signOut, deleteMyAccount, type AccountProfile } from '@/lib/account';
 import { supabaseConfigured } from '@/lib/supabase';
 
 export default function CompteScreen() {
@@ -80,7 +79,7 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
 }
 
 function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
-  const { role, couple } = useCouple();
+  const { role } = useCouple();
   return (
     <>
       <ThemedText type="eyebrow">{role === 'passager' ? 'Passager' : 'Instigateur'}</ThemedText>
@@ -88,17 +87,14 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
       <ThemedText themeColor="textSecondary">Connecté·e en tant que {email}.</ThemedText>
       {role === 'passager' ? (
         <Notice>
-          Vous êtes le passager de {couple?.instigateur_email ?? 'votre instigateur'} : vous recevez les indices de ses intrigues,
-          le reste vous sera révélé le jour J.
+          Vous êtes passager : vous recevez les indices des soirées auxquelles on vous invite, le reste vous sera révélé le jour J.
         </Notice>
       ) : (
-        <>
-          <PassagerInvite />
-          <CoupleProfile />
-        </>
+        <CoupleProfile />
       )}
       <TextLink href="/historique">Les Archives →</TextLink>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
+      <DeleteAccount onDeleted={onSignOut} />
     </>
   );
 }
@@ -131,6 +127,35 @@ function CoupleProfile() {
   );
 }
 
+// Deleting the account: the profile, the evenings and their books go for good; asked twice.
+function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const run = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await deleteMyAccount();
+      onDeleted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  };
+  if (!confirm) return <TextButton onPress={() => setConfirm(true)}>Supprimer mon compte…</TextButton>;
+  return (
+    <>
+      <Notice>Votre compte, votre profil, vos soirées et leurs souvenirs seront effacés définitivement, et vos passagers perdront leurs indices. Cette action est irréversible.</Notice>
+      <View style={styles.confirmRow}>
+        <TextButton onPress={() => setConfirm(false)}>Annuler</TextButton>
+        <GhostButton onPress={run}>{busy ? 'Suppression…' : 'Oui, tout supprimer'}</GhostButton>
+      </View>
+      {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
+    </>
+  );
+}
+
 function Notice({ children }: { children: ReactNode }) {
   const theme = useTheme();
   return (
@@ -146,6 +171,7 @@ const styles = StyleSheet.create({
   justify: { textAlign: 'justify' },
   appName: { fontFamily: Fonts.headingBold, fontSize: 26, lineHeight: 32, textAlign: 'center' },
   points: { gap: 4 },
+  confirmRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
   notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
   persona: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.two },
 });

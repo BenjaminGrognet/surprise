@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, Linking, StyleSheet, View } from 'react-native';
 
 import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
@@ -11,12 +11,13 @@ import { ThemedText } from '@/components/themed-text';
 import { Veil } from '@/components/veil';
 import { Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
-import { keptSecretTitle } from '@/lib/account';
+import { keptEvening, keptSecretTitle, type EveningHistoryRow } from '@/lib/account';
+import { PassagerInvite } from '@/components/passager-invite';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { getSoireeState, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { cluesFor, inTime, nextClue, shownClues, stepRevealed } from '@/lib/clues';
-import { formatTime, longDay } from '@/lib/dates';
+import { formatTime, isoDay, longDay } from '@/lib/dates';
 import { curtainFalls } from '@/lib/souvenirs';
 
 // "La Révélation": the kept evening seen from each account of the couple. The instigateur has the whole timed
@@ -26,6 +27,10 @@ export default function RevelationScreen() {
   const [route, setRoute] = useState<SoireeRoute | null | 'missing'>(null);
   const [kept, setKept] = useState<string | null>(null);
   const { role } = useCouple();
+  const [evening, setEvening] = useState<EveningHistoryRow | null>(null);
+  const loadEvening = useCallback(() => {
+    if (soiree && index !== undefined) keptEvening(soiree, Number(index)).then(setEvening).catch(() => {});
+  }, [soiree, index]);
 
   const lost = !soiree || index === undefined;
 
@@ -36,7 +41,8 @@ export default function RevelationScreen() {
       .catch(() => setRoute('missing'));
     // The name fixed when it was kept; the one the server would give its steps today, for older evenings.
     keptSecretTitle(soiree, Number(index)).then(setKept).catch(() => {});
-  }, [soiree, index]);
+    loadEvening();
+  }, [soiree, index, loadEvening]);
 
   if (!lost && route === null) {
     return (
@@ -59,7 +65,12 @@ export default function RevelationScreen() {
   return (
     <Screen gap={Spacing.four}>
       {role === 'instigateur' ? (
-        <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} />
+        <>
+          <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} />
+          {evening && (!evening.day || evening.day >= isoDay(new Date())) ? (
+            <PassagerInvite evening={evening} onChange={loadEvening} />
+          ) : null}
+        </>
       ) : (
         <Surprised route={route} secretTitle={secretTitle} />
       )}

@@ -29,6 +29,7 @@ export function OptionCard({
       accessibilityState={{ checked: selected, disabled }}
       style={({ pressed }) => [
         styles.card,
+        !desc && styles.compact,
         { backgroundColor: theme.velvet, borderColor: selected ? theme.accent : theme.accentHair },
         selected && styles.glow,
         pressed && styles.pressed,
@@ -57,19 +58,20 @@ export function OptionGrid({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: Spacing.two },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 6 },
   card: {
     width: '49%',
-    minHeight: 52,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
     borderRadius: 12,
     borderWidth: 1,
-    paddingVertical: Spacing.two,
+    paddingVertical: 6,
     paddingLeft: Spacing.two + 2,
     paddingRight: Spacing.three,
   },
+  compact: { minHeight: 36, paddingVertical: 4 },
   glow: { boxShadow: '0 2px 8px rgba(217, 183, 113, 0.3)' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.35 },

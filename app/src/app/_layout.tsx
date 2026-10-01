@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Colors } from '@/constants/theme';
 import { CoupleContext } from '@/hooks/use-couple';
-import { myCouple, type CoupleState } from '@/lib/couple';
+import { myRole, type CoupleState } from '@/lib/couple';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 
 // The navigator's own surfaces (between screens, behind a transition) in the brand's night.
@@ -18,7 +18,7 @@ const navTheme = {
 };
 
 // Unreadable (offline…): an instigateur, the account's default.
-const readCouple = () => myCouple().catch((): CoupleState => ({ role: 'instigateur', couple: null }));
+const readCouple = () => myRole().catch((): CoupleState => ({ role: 'instigateur' }));
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -68,7 +68,7 @@ export default function RootLayout() {
     });
   }, [signedIn]);
 
-  const value = useMemo(() => ({ role: couple?.role ?? 'instigateur', couple: couple?.couple ?? null, refresh }), [couple, refresh]);
+  const value = useMemo(() => ({ role: couple?.role ?? 'instigateur', refresh }), [couple, refresh]);
 
   if (!loaded || signedIn === null || (signedIn && !booted)) return null;
   const instigateur = signedIn && couple?.role === 'instigateur';

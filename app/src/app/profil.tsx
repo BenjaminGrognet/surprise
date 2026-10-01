@@ -127,7 +127,7 @@ export default function ProfilScreen() {
         <View style={[styles.progressBar, { width: `${((index + 1) / quiz.questions.length) * 100}%`, backgroundColor: theme.accent }]} />
       </View>
       <ThemedText type="title">{q.question}</ThemedText>
-      {q.hint ? <ThemedText themeColor="textSecondary">{q.hint}</ThemedText> : null}
+      {q.hint ? <ThemedText type="small" themeColor="textSecondary">{q.hint}</ThemedText> : null}
       <QuestionBody
         question={q}
         value={answers[q.id]}
@@ -249,9 +249,10 @@ function Reveal({
         </OptionRow>
         <View style={styles.facts}>
           <Fact label="première sortie" value={p.first_day ? longDay(p.first_day) : 'Bientôt'} />
-          <Fact label="pour une soirée type" value={p.budget >= 350 ? 'sans compter' : `≈ ${p.budget} €`} />
+          <Fact label="soirée type" value={p.budget >= 350 ? 'sans compter' : `≈ ${p.budget} €`} />
           <View style={[styles.factItem, { borderColor: theme.line }]}>
-            <ThemedText style={styles.factValue}>Audace</ThemedText>
+            <ThemedText style={styles.factValue}>{Math.round(p.audace * 100)} %</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">audace</ThemedText>
             <View style={[styles.meterTrack, { backgroundColor: theme.line }]}>
               <View style={[styles.meterBar, { width: `${p.audace * 100}%`, backgroundColor: theme.accent }]} />
             </View>
@@ -283,16 +284,16 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  banner: { width: '100%', height: 180, opacity: 0.85 },
+  banner: { width: '100%', height: 120, opacity: 0.85 },
   progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden' },
   progressBar: { height: '100%' },
-  nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.three },
+  nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.one },
   persona: { borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
-  personaBody: { gap: Spacing.three, padding: Spacing.four },
-  tag: { borderRadius: 999, borderWidth: 1, paddingVertical: 4, paddingHorizontal: 12, overflow: 'hidden' },
-  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
-  factItem: { flex: 1, minWidth: 130, gap: 4, borderTopWidth: 1, paddingTop: Spacing.two },
-  factValue: { fontFamily: Fonts.heading, fontSize: 18 },
+  personaBody: { gap: Spacing.two, padding: Spacing.three, paddingTop: Spacing.two },
+  tag: { borderRadius: 999, borderWidth: 1, paddingVertical: 2, paddingHorizontal: 10, overflow: 'hidden' },
+  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  factItem: { flex: 1, minWidth: 0, gap: 0, borderTopWidth: 1, paddingTop: Spacing.one },
+  factValue: { fontFamily: Fonts.heading, fontSize: 14, lineHeight: 18 },
   meterTrack: { height: 3, borderRadius: 2, overflow: 'hidden', marginTop: Spacing.two },
   meterBar: { height: '100%' },
 });
