@@ -1,24 +1,22 @@
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
 import { router } from 'expo-router';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { PrimaryLink, TextLink } from '@/components/buttons';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { currentUser, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
+import { isoDay } from '@/lib/dates';
 import { supabaseConfigured } from '@/lib/supabase';
-
-const BANNER = 'https://images.unsplash.com/photo-1504730513966-dfcd6e53fdc8?auto=format&fit=crop&w=1600&q=60';
 
 const frDay = (iso: string) => new Date(`${iso}T12:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 type State = 'loading' | 'anonymous' | 'empty' | 'error' | EveningHistoryRow[];
 
 export default function HistoriqueScreen() {
+  const theme = useTheme();
   const [state, setState] = useState<State>(supabaseConfigured ? 'loading' : 'error');
 
   useEffect(() => {
@@ -35,38 +33,36 @@ export default function HistoriqueScreen() {
     })();
   }, []);
 
+  const notice = [styles.notice, { backgroundColor: theme.backgroundElement, borderColor: theme.line }];
   return (
     <Screen>
-      <Image source={{ uri: BANNER }} style={styles.banner} />
-      <View style={styles.badge}>
-        <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
-      </View>
-      <ThemedText type="title">Mon historique</ThemedText>
+      <ThemedText type="eyebrow">Le carnet</ThemedText>
+      <ThemedText type="title">Nos intrigues</ThemedText>
       {state === 'loading' && <ThemedText themeColor="textSecondary">On retrouve vos soirées…</ThemedText>}
       {state === 'error' && !supabaseConfigured && (
-        <ThemedView type="backgroundElement" style={styles.notice}>
+        <View style={notice}>
           <ThemedText themeColor="textSecondary">Les comptes ne sont pas encore configurés sur ce serveur.</ThemedText>
-        </ThemedView>
+        </View>
       )}
-      {state === 'error' && supabaseConfigured && <ThemedText style={styles.error}>L&apos;historique n&apos;a pas pu être chargé.</ThemedText>}
+      {state === 'error' && supabaseConfigured && <ThemedText themeColor="danger">L&apos;historique n&apos;a pas pu être chargé.</ThemedText>}
       {state === 'anonymous' && (
-        <ThemedView type="backgroundElement" style={styles.notice}>
-          <ThemedText themeColor="textSecondary">Connectez-vous pour retrouver les soirées que vous avez choisies. </ThemedText>
+        <View style={notice}>
+          <ThemedText themeColor="textSecondary">Connectez-vous pour retrouver les intrigues que vous avez gardées. </ThemedText>
           <TextLink href="/compte">Se connecter →</TextLink>
-        </ThemedView>
+        </View>
       )}
       {state === 'empty' && (
         <>
           <ThemedText themeColor="textSecondary">
-            Vous n&apos;avez pas encore choisi de soirée : quand vous composez une soirée, gardez celle que vous avez vraiment faite.
+            Pas encore d&apos;intrigue gardée : lancez-en une, et gardez la soirée que vous allez vraiment vivre.
           </ThemedText>
-          <PrimaryLink href="/soiree">Composer une soirée</PrimaryLink>
+          <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink>
         </>
       )}
       {Array.isArray(state) && (
         <>
           <ThemedText themeColor="textSecondary">
-            {state.length} soirée{state.length > 1 ? 's' : ''} vécue{state.length > 1 ? 's' : ''}.
+            {state.length} intrigue{state.length > 1 ? 's' : ''} gardée{state.length > 1 ? 's' : ''}.
           </ThemedText>
           <View style={styles.list}>
             {state.map((row, i) => (
@@ -79,46 +75,34 @@ export default function HistoriqueScreen() {
   );
 }
 
+// A past evening opens its roadmap; one still to come opens the revelation, where each side keeps its secret.
 function HistoryCard({ row }: { row: EveningHistoryRow }) {
   const theme = useTheme();
+  const ahead = !!row.day && row.day >= isoDay(new Date());
+  const params = { soiree: row.page_name, route: String(row.route_index) };
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/soiree', params: { soiree: row.page_name, route: String(row.route_index) } })}
-      style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
-      <ThemedText type="small" themeColor="textSecondary">{row.day ? frDay(row.day) : 'Date libre'}</ThemedText>
-      <ThemedText type="subtitle" style={styles.cardTitle}>{row.title}</ThemedText>
-      <ThemedText themeColor="textSecondary">{row.pitch}</ThemedText>
+      onPress={() => router.push({ pathname: ahead ? '/revelation' : '/soiree', params })}
+      style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: ahead ? theme.accentSoft : theme.line }]}>
+      <ThemedText type="eyebrow" themeColor={ahead ? 'accentInk' : 'textSecondary'}>
+        {ahead ? 'À venir · ' : ''}{row.day ? frDay(row.day) : 'Date libre'}
+      </ThemedText>
+      {/* An evening to come keeps its secret here too: its title would give it away. */}
+      <ThemedText type="subtitle">{ahead ? 'Une intrigue scellée' : row.title}</ThemedText>
+      {ahead ? null : <ThemedText themeColor="textSecondary">{row.pitch}</ThemedText>}
       <View style={styles.tags}>
         {(row.vibes ?? []).map((v) => (
-          <ThemedText key={v} type="small" style={[styles.tag, { backgroundColor: theme.backgroundSelected }]}>{v}</ThemedText>
+          <ThemedText key={v} type="small" themeColor="accentInk" style={[styles.tag, { borderColor: theme.accentSoft }]}>{v}</ThemedText>
         ))}
       </View>
     </Pressable>
   );
 }
 
-function Screen({ children }: { children: ReactNode }) {
-  return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <SafeAreaView style={styles.safeArea}>{children}</SafeAreaView>
-      </ScrollView>
-    </ThemedView>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: 'center' },
-  safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.three },
-  banner: { width: '100%', height: 160, borderRadius: Spacing.three },
-  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
-  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
-  notice: { padding: Spacing.three, borderRadius: 14 },
-  error: { color: '#ff5c72' },
-  list: { gap: Spacing.two + 2 },
-  card: { padding: Spacing.three + 2, borderRadius: 20, gap: 4 },
-  cardTitle: { fontSize: 19 },
+  notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
+  list: { gap: Spacing.three },
+  card: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.two },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  tag: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 12, overflow: 'hidden' },
+  tag: { borderRadius: 999, borderWidth: 1, paddingVertical: 4, paddingHorizontal: 12, overflow: 'hidden' },
 });

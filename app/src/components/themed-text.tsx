@@ -4,7 +4,7 @@ import { Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
+  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'eyebrow' | 'clue' | 'link' | 'linkPrimary' | 'code';
   themeColor?: ThemeColor;
 };
 
@@ -14,12 +14,14 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
   return (
     <Text
       style={[
-        { color: theme[themeColor ?? 'text'] },
+        { color: theme[themeColor ?? (type === 'eyebrow' ? 'accentInk' : 'text')] },
         type === 'default' && styles.default,
         type === 'title' && styles.title,
         type === 'small' && styles.small,
         type === 'smallBold' && styles.smallBold,
         type === 'subtitle' && styles.subtitle,
+        type === 'eyebrow' && styles.eyebrow,
+        type === 'clue' && styles.clue,
         type === 'link' && styles.link,
         type === 'linkPrimary' && styles.linkPrimary,
         type === 'code' && styles.code,
@@ -50,13 +52,27 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Fonts.heading,
-    fontSize: 34,
+    fontSize: 32,
     lineHeight: 40,
   },
   subtitle: {
-    fontFamily: Fonts.headingBold,
-    fontSize: 28,
-    lineHeight: 34,
+    fontFamily: Fonts.heading,
+    fontSize: 22,
+    lineHeight: 30,
+  },
+  // Small spaced capitals in gold, above a title: "VOTRE PROCHAINE INTRIGUE".
+  eyebrow: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 2.5,
+    textTransform: 'uppercase',
+  },
+  // A hint for the partner to surprise: an italic serif, like a handwritten note.
+  clue: {
+    fontFamily: Fonts.headingItalic,
+    fontSize: 17,
+    lineHeight: 25,
   },
   link: {
     fontFamily: Fonts.sans,

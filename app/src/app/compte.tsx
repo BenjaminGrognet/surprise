@@ -1,17 +1,14 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, signIn, signOut, signUp, type AccountProfile } from '@/lib/account';
 import { supabaseConfigured } from '@/lib/supabase';
-
-const BANNER = 'https://images.unsplash.com/photo-1671691302268-e316f81c7b3e?auto=format&fit=crop&w=1600&q=60';
 
 type TabKey = 'in' | 'up';
 
@@ -27,9 +24,7 @@ export default function CompteScreen() {
     return (
       <Screen>
         <ThemedText type="title">Mon compte</ThemedText>
-        <ThemedView type="backgroundElement" style={styles.notice}>
-          <ThemedText themeColor="textSecondary">Les comptes ne sont pas encore configurés sur ce serveur.</ThemedText>
-        </ThemedView>
+        <Notice>Les comptes ne sont pas encore configurés sur ce serveur.</Notice>
       </Screen>
     );
   }
@@ -64,26 +59,22 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
     }
   }
 
+  const input = [styles.input, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.line }];
   return (
     <>
-      <ThemedText type="title">Mon compte</ThemedText>
+      <ThemedText type="eyebrow">Bienvenue, complices</ThemedText>
+      <ThemedText type="title">Les soirées qu&apos;on ne voit pas venir.</ThemedText>
       <ThemedText themeColor="textSecondary">
-        Un compte garde votre profil et l&apos;historique de vos soirées, retrouvables sur n&apos;importe quel appareil.
+        SecretDate trame des soirées à deux dans Paris : l&apos;un organise, l&apos;autre ne reçoit que des indices jusqu&apos;au
+        jour J. Un compte garde votre profil et vos intrigues, sur tous vos téléphones.
       </ThemedText>
-      <View style={[styles.tabs, { backgroundColor: theme.backgroundElement }]}>
+      <View style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
         <Tab label="Se connecter" active={tab === 'in'} onPress={() => setTab('in')} />
         <Tab label="Créer un compte" active={tab === 'up'} onPress={() => setTab('up')} />
       </View>
       <View style={styles.form}>
         <Field label="Email">
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            autoComplete="email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
-          />
+          <TextInput value={email} onChangeText={setEmail} autoComplete="email" keyboardType="email-address" autoCapitalize="none" style={input} />
         </Field>
         <Field label="Mot de passe">
           <TextInput
@@ -91,17 +82,18 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
             onChangeText={setPassword}
             secureTextEntry
             autoComplete={tab === 'in' ? 'current-password' : 'new-password'}
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={input}
           />
         </Field>
-        {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
-        <PrimaryButton onPress={submit}>{tab === 'in' ? 'Se connecter' : 'Créer notre compte'}</PrimaryButton>
+        {error ? <ThemedText themeColor="danger">{error}</ThemedText> : null}
+        <PrimaryButton wide onPress={submit}>{tab === 'in' ? 'Se connecter' : 'Créer notre compte'}</PrimaryButton>
       </View>
     </>
   );
 }
 
 function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
+  const theme = useTheme();
   const [profile, setProfile] = useState<AccountProfile | null | 'loading' | 'error'>('loading');
 
   useEffect(() => {
@@ -120,7 +112,7 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
     return (
       <>
         <ThemedText type="title">Mon compte</ThemedText>
-        <ThemedText style={styles.error}>Le profil n&apos;a pas pu être chargé.</ThemedText>
+        <ThemedText themeColor="danger">Le profil n&apos;a pas pu être chargé.</ThemedText>
       </>
     );
   }
@@ -130,30 +122,37 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
       <ThemedText type="title">Mon compte</ThemedText>
       <ThemedText themeColor="textSecondary">Connecté·e en tant que {email}.</ThemedText>
       {p ? (
-        <ThemedView type="backgroundElement" style={styles.persona}>
-          <ThemedText type="small" style={styles.eyebrow}>{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
+        <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
+          <ThemedText type="eyebrow">{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
           <ThemedText type="subtitle">{p.persona.name}</ThemedText>
-          <ThemedText>{p.persona.text}</ThemedText>
-        </ThemedView>
+          <ThemedText themeColor="textSecondary">{p.persona.text}</ThemedText>
+        </View>
       ) : (
-        <ThemedView type="backgroundElement" style={styles.notice}>
-          <ThemedText themeColor="textSecondary">Vous n&apos;avez pas encore de profil : faites le quiz, il sera gardé sur votre compte.</ThemedText>
-        </ThemedView>
+        <Notice>Vous n&apos;avez pas encore de profil : faites le quiz, il sera gardé sur votre compte.</Notice>
       )}
       <View style={styles.actions}>
         <PrimaryLink href="/profil">{p ? 'Modifier notre profil' : 'Faire notre profil'}</PrimaryLink>
-        <TextLink href="/historique">Voir notre historique →</TextLink>
+        <TextLink href="/historique">Nos intrigues passées →</TextLink>
       </View>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
     </>
   );
 }
 
+function Notice({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.notice, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
+      <ThemedText themeColor="textSecondary">{children}</ThemedText>
+    </View>
+  );
+}
+
 function Tab({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <Pressable onPress={onPress} style={[styles.tab, active && { backgroundColor: theme.background }]}>
-      <ThemedText type="smallBold" style={active ? { color: theme.text } : { color: theme.textSecondary }}>{label}</ThemedText>
+    <Pressable onPress={onPress} style={[styles.tab, active && { backgroundColor: theme.accent }]}>
+      <ThemedText type="smallBold" themeColor={active ? 'onAccent' : 'textSecondary'}>{label}</ThemedText>
     </Pressable>
   );
 }
@@ -167,37 +166,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Screen({ children }: { children: ReactNode }) {
-  return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <SafeAreaView style={styles.safeArea}>
-          <Image source={{ uri: BANNER }} style={styles.banner} />
-          <View style={styles.badge}>
-            <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
-          </View>
-          {children}
-        </SafeAreaView>
-      </ScrollView>
-    </ThemedView>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: 'center' },
-  safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.three },
-  banner: { width: '100%', height: 160, borderRadius: Spacing.three },
-  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
-  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
-  tabs: { flexDirection: 'row', gap: 4, borderRadius: 999, padding: 4, alignSelf: 'flex-start' },
+  tabs: { flexDirection: 'row', gap: 4, borderRadius: 999, borderWidth: 1, padding: 4, alignSelf: 'flex-start' },
   tab: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, borderRadius: 999 },
-  form: { gap: Spacing.two + 2, maxWidth: 380 },
-  field: { gap: Spacing.one },
-  input: { fontSize: 16, padding: 14, borderRadius: 14 },
-  error: { color: '#ff5c72' },
-  notice: { padding: Spacing.three, borderRadius: 14 },
-  persona: { padding: Spacing.four, borderRadius: 18, gap: Spacing.one },
-  eyebrow: { textTransform: 'uppercase', letterSpacing: 1, color: '#a67c1e' },
+  form: { gap: Spacing.three, maxWidth: 420 },
+  field: { gap: Spacing.two },
+  input: { fontFamily: Fonts.sans, fontSize: 16, padding: 14, borderRadius: 14, borderWidth: 1 },
+  notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
+  persona: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.two },
   actions: { gap: Spacing.two, alignItems: 'flex-start' },
 });

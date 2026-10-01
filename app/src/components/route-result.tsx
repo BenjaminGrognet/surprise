@@ -3,7 +3,6 @@ import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { API_URL, type SoireeRoute, type SoireeStep } from '@/lib/api';
@@ -11,62 +10,71 @@ import { formatTime } from '@/lib/dates';
 
 const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre: 'Un verre', sortie: 'Sortie', nuit: 'La nuit' };
 const BOOKING_LABELS: Record<SoireeStep['booking_action'], string> = { voir_lieu: 'Voir le lieu', voir_fiche: 'Voir la fiche', reserver: 'Réserver' };
-const BADGE_KIND: Record<SoireeStep['kind'], 'ok' | 'free' | 'walk'> = { verifie: 'ok', seance: 'ok', gratuit: 'free', sans_resa: 'walk', nuit: 'walk' };
+const BADGE_KIND: Record<SoireeStep['kind'], 'ok' | 'info' | 'warn'> = { verifie: 'ok', seance: 'ok', gratuit: 'info', sans_resa: 'warn', nuit: 'warn' };
 
-function formatPrice(step: SoireeStep) {
+export function formatPrice(step: SoireeStep) {
   if (step.kind === 'nuit') return `${step.price_estimated ? '≈ ' : 'dès '}${step.price.toFixed(0)} € la nuit`;
   if (step.price === 0) return 'Gratuit';
   return `${step.price_estimated ? '≈ ' : ''}${step.price.toFixed(0)} € à deux`;
 }
 
-function place(step: SoireeStep) {
+export function place(step: SoireeStep) {
   const where = step.arrondissement ? `Paris ${step.arrondissement}ᵉ` : step.town && step.town !== 'Paris' ? step.town : null;
   return [step.venue, where].filter(Boolean).join(' · ');
 }
 
+export const imageUri = (url: string) => (url.startsWith('/') ? API_URL + url : url);
+
+// readOnly: the organiser's roadmap of a kept evening — no redraw, no removal, nothing to choose.
 export function RouteResult({
   route,
   chosen,
   onRedo,
   onChoose,
   busyRedo,
+  readOnly,
 }: {
   route: SoireeRoute;
-  chosen: boolean;
-  onRedo: (redo: string) => void;
-  onChoose: () => void;
-  busyRedo: string | null;
+  chosen?: boolean;
+  onRedo?: (redo: string) => void;
+  onChoose?: () => void;
+  busyRedo?: string | null;
+  readOnly?: boolean;
 }) {
+  const theme = useTheme();
+  const redo = readOnly ? undefined : onRedo;
   // A route keeps one step at least: the last one cannot be taken out.
   const removable = route.steps.length > 1;
   return (
-    <ThemedView type="backgroundElement" style={styles.route}>
+    <View style={[styles.route, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
       <View style={styles.header}>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.eyebrow}>
-          Parcours {route.index + 1} · {formatTime(route.start)} → {formatTime(route.end)} · {route.price_estimated ? '≈ ' : ''}{route.price.toFixed(0)} €
+        <ThemedText type="eyebrow" style={styles.eyebrow}>
+          {readOnly ? '' : `Intrigue ${route.index + 1} · `}{formatTime(route.start)} → {formatTime(route.end)} · {route.price_estimated ? '≈ ' : ''}{route.price.toFixed(0)} €
         </ThemedText>
-        <TextButton onPress={() => onRedo(route.redo)}>{busyRedo === route.redo ? '↻…' : '↻ Tout'}</TextButton>
+        {redo ? <TextButton onPress={() => redo(route.redo)}>{busyRedo === route.redo ? '↻…' : '↻ Tout'}</TextButton> : null}
       </View>
-      <ThemedText type="smallBold">{route.title}</ThemedText>
-      {route.pitch ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>{route.pitch}</ThemedText> : null}
+      <ThemedText type="subtitle">{route.title}</ThemedText>
+      {route.pitch ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={readOnly ? undefined : 2}>{route.pitch}</ThemedText> : null}
 
       <View style={styles.steps}>
         {route.steps.map((step, i) => (
           <View key={i}>
             {i > 0 ? <Hop previous={route.steps[i - 1]} step={step} /> : null}
-            <StepRow step={step} busyRedo={busyRedo} onRedo={onRedo} removable={removable} />
+            <StepRow step={step} busyRedo={busyRedo ?? null} onRedo={redo} removable={removable} />
           </View>
         ))}
         {route.night ? (
           <View>
             <Hop previous={route.steps[route.steps.length - 1]} step={route.night} />
-            <StepRow step={route.night} busyRedo={busyRedo} onRedo={onRedo} removable={false} />
+            <StepRow step={route.night} busyRedo={busyRedo ?? null} onRedo={redo} removable={false} />
           </View>
         ) : null}
       </View>
 
-      <PrimaryButton disabled={chosen} onPress={onChoose}>{chosen ? '✓ Choisie, dans votre historique' : 'On a choisi cette soirée'}</PrimaryButton>
-    </ThemedView>
+      {readOnly || !onChoose ? null : (
+        <PrimaryButton wide disabled={chosen} onPress={onChoose}>{chosen ? '✓ Gardée dans vos intrigues' : 'Garder cette intrigue'}</PrimaryButton>
+      )}
+    </View>
   );
 }
 
@@ -89,60 +97,60 @@ function StepRow({
 }: {
   step: SoireeStep;
   busyRedo: string | null;
-  onRedo: (redo: string) => void;
+  onRedo?: (redo: string) => void;
   removable: boolean;
 }) {
   const theme = useTheme();
-  const badge = BADGE_KIND[step.kind];
-  const badgeColor = badge === 'ok' ? '#1e7a4c' : badge === 'free' ? '#1f5fa8' : '#8a5a00';
   const remove = step.redo ? `${step.redo}/remove` : null;
   const [open, setOpen] = useState(false);
   // ponytail: length stands for "cut at two lines"; measure the text layout if it misfires.
   const long = (step.text?.length ?? 0) > 110 || step.title.length > 70;
   return (
-    <ThemedView style={[styles.card, { borderColor: theme.line }]}>
+    <View style={[styles.card, { borderColor: theme.line, backgroundColor: theme.background }]}>
       <View style={styles.side}>
         <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
-          {step.image_url ? <Image source={{ uri: step.image_url.startsWith('/') ? API_URL + step.image_url : step.image_url }} style={styles.thumbImg} /> : null}
+          {step.image_url ? <Image source={{ uri: imageUri(step.image_url) }} style={styles.thumbImg} /> : null}
         </View>
-        {step.redo ? <TextButton onPress={() => onRedo(step.redo!)}>{busyRedo === step.redo ? '↻…' : '↻ Changer'}</TextButton> : null}
-        {removable && remove ? <TextButton onPress={() => onRedo(remove)}>{busyRedo === remove ? '✕…' : '✕ Retirer'}</TextButton> : null}
+        {onRedo && step.redo ? <TextButton onPress={() => onRedo(step.redo!)}>{busyRedo === step.redo ? '↻…' : '↻ Changer'}</TextButton> : null}
+        {onRedo && removable && remove ? <TextButton onPress={() => onRedo(remove)}>{busyRedo === remove ? '✕…' : '✕ Retirer'}</TextButton> : null}
       </View>
       <View style={styles.body}>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-          <ThemedText type="smallBold">{formatTime(step.start)}</ThemedText> → {formatTime(step.end)} · {ROLE_LABELS[step.role]}
+          <ThemedText type="smallBold" themeColor="accentInk">{formatTime(step.start)}</ThemedText> → {formatTime(step.end)} · {ROLE_LABELS[step.role]}
         </ThemedText>
         <ThemedText type="smallBold" numberOfLines={open ? undefined : 2}>{step.title}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>{place(step)}</ThemedText>
         {step.text ? <ThemedText type="small" numberOfLines={open ? undefined : 2}>{step.text}</ThemedText> : null}
         {long ? <TextButton onPress={() => setOpen(!open)}>{open ? '− Réduire' : '+ Lire la suite'}</TextButton> : null}
-        <ThemedText type="small" style={{ color: badgeColor }} numberOfLines={1}>{step.basis}</ThemedText>
+        <ThemedText type="small" themeColor={BADGE_KIND[step.kind]} numberOfLines={1}>{step.basis}</ThemedText>
         <View style={styles.line}>
           <ThemedText type="smallBold">{formatPrice(step)}</ThemedText>
           {step.booking_url ? (
             <Pressable
               onPress={() => Linking.openURL(step.booking_url!)}
-              style={[styles.book, step.booking_action === 'reserver' ? { backgroundColor: theme.accent } : { borderColor: theme.accent, borderWidth: 1 }]}>
-              <ThemedText type="smallBold" style={{ color: theme.text }}>{BOOKING_LABELS[step.booking_action]} ↗</ThemedText>
+              style={[styles.book, step.booking_action === 'reserver' ? { backgroundColor: theme.accent } : { borderColor: theme.accentSoft, borderWidth: 1 }]}>
+              <ThemedText type="smallBold" themeColor={step.booking_action === 'reserver' ? 'onAccent' : 'accentInk'}>
+                {BOOKING_LABELS[step.booking_action]} ↗
+              </ThemedText>
             </Pressable>
           ) : null}
         </View>
       </View>
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  route: { gap: Spacing.one, padding: Spacing.two + 4, borderRadius: 16, marginTop: Spacing.two },
+  route: { gap: Spacing.two, padding: Spacing.three, borderRadius: 22, borderWidth: 1, marginTop: Spacing.two },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
-  eyebrow: { flexShrink: 1, textTransform: 'uppercase', letterSpacing: 0.5 },
+  eyebrow: { flexShrink: 1 },
   steps: { gap: Spacing.one, marginVertical: Spacing.one },
   hop: { paddingLeft: Spacing.two, paddingVertical: Spacing.half },
-  card: { flexDirection: 'row', gap: Spacing.two, borderWidth: 1, borderRadius: 12, padding: Spacing.two },
-  thumb: { width: 116, height: 116, borderRadius: 10, overflow: 'hidden' },
+  card: { flexDirection: 'row', gap: Spacing.three, borderWidth: 1, borderRadius: 16, padding: Spacing.two + 2 },
+  thumb: { width: 104, height: 104, borderRadius: 12, overflow: 'hidden' },
   thumbImg: { width: '100%', height: '100%' },
   body: { flex: 1, gap: Spacing.half },
-  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
-  side: { width: 116, gap: Spacing.one },
-  book: { borderRadius: 999, paddingVertical: Spacing.one, paddingHorizontal: Spacing.three },
+  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap', marginTop: Spacing.one },
+  side: { width: 104, gap: Spacing.one },
+  book: { borderRadius: 999, paddingVertical: Spacing.one + 2, paddingHorizontal: Spacing.three },
 });

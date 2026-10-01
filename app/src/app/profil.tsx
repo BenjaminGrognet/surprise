@@ -1,15 +1,13 @@
 import { useLocalSearchParams } from 'expo-router';
-import { type ReactNode, useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from 'react';
+import { Image, StyleSheet, TextInput, View } from 'react-native';
 
-import { AccountNav } from '@/components/account-nav';
 import { PrimaryButton, PrimaryLink, TextButton } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
 import { OptionButton, OptionRow } from '@/components/option-button';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, saveAccountProfile } from '@/lib/account';
 import { getQuiz, saveProfile, type Profile, type Question, type QuizData } from '@/lib/api';
@@ -33,6 +31,7 @@ type Phase = 'loading' | 'quiz' | 'saving' | 'error' | 'reveal';
 
 export default function ProfilScreen() {
   const { new: isNew } = useLocalSearchParams<{ new?: string }>();
+  const theme = useTheme();
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
@@ -91,7 +90,7 @@ export default function ProfilScreen() {
   if (phase === 'error') {
     return (
       <Screen>
-        <ThemedText style={{ color: '#ff5c72' }}>Le profil n&apos;a pas pu être enregistré. Réessayez.</ThemedText>
+        <ThemedText themeColor="danger">Le profil n&apos;a pas pu être enregistré. Réessayez.</ThemedText>
         <PrimaryLink href="/profil">Réessayer</PrimaryLink>
       </Screen>
     );
@@ -115,17 +114,10 @@ export default function ProfilScreen() {
 
   return (
     <Screen>
-      <AccountNav />
-      <Image source={{ uri: BANNER }} style={styles.banner} />
-      <View style={styles.badge}>
-        <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
+      <ThemedText type="eyebrow">Votre profil · question {index + 1} sur {quiz.questions.length}</ThemedText>
+      <View style={[styles.progressTrack, { backgroundColor: theme.line }]}>
+        <View style={[styles.progressBar, { width: `${(index / quiz.questions.length) * 100}%`, backgroundColor: theme.accent }]} />
       </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressBar, { width: `${(index / quiz.questions.length) * 100}%` }]} />
-      </View>
-      <ThemedText type="small" themeColor="textSecondary">
-        Question {index + 1} sur {quiz.questions.length}
-      </ThemedText>
       <ThemedText type="title">{q.question}</ThemedText>
       {q.hint ? <ThemedText themeColor="textSecondary">{q.hint}</ThemedText> : null}
       <QuestionBody
@@ -209,8 +201,9 @@ function QuestionBody({
       value={(value as string) || ''}
       onChangeText={onChange}
       placeholder="Léa & Sam"
+      placeholderTextColor={theme.textSecondary}
       maxLength={80}
-      style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+      style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.line }]}
     />
   );
 }
@@ -232,19 +225,15 @@ function Reveal({
   const never = chosen.map((v) => eviter?.options?.find((o) => o.value === v)).filter((o): o is NonNullable<typeof o> => !!o);
   const banner = PERSONA_BANNERS[p.persona.name] ?? BANNER;
   return (
-    <>
-      <AccountNav />
+    <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
       <Image source={{ uri: banner }} style={styles.banner} />
-      <View style={styles.badge}>
-        <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
-      </View>
-      <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
-        <ThemedText style={[styles.eyebrow, { color: theme.accentInk }]}>{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
-        <ThemedText type="subtitle">{p.persona.name}</ThemedText>
+      <View style={styles.personaBody}>
+        <ThemedText type="eyebrow">{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
+        <ThemedText type="title">{p.persona.name}</ThemedText>
         <ThemedText themeColor="textSecondary">{p.persona.text}</ThemedText>
         <OptionRow>
-          {p.vibes.map((v, i) => (
-            <ThemedText key={v} style={[styles.tag, { backgroundColor: i % 2 === 0 ? theme.backgroundSelected : theme.line, color: theme.accentInk }]}>
+          {p.vibes.map((v) => (
+            <ThemedText key={v} type="small" themeColor="accentInk" style={[styles.tag, { borderColor: theme.accentSoft }]}>
               {quiz.vibes[v] || v}
             </ThemedText>
           ))}
@@ -252,25 +241,25 @@ function Reveal({
         <View style={styles.facts}>
           <Fact label="première sortie" value={p.first_day ? longDay(p.first_day) : 'Bientôt'} />
           <Fact label="pour une soirée type" value={p.budget >= 350 ? 'sans compter' : `≈ ${p.budget} €`} />
-          <View style={styles.factItem}>
-            <ThemedText style={{ fontSize: 16 }}>Audace</ThemedText>
+          <View style={[styles.factItem, { borderColor: theme.line }]}>
+            <ThemedText style={styles.factValue}>Audace</ThemedText>
             <View style={[styles.meterTrack, { backgroundColor: theme.line }]}>
               <View style={[styles.meterBar, { width: `${p.audace * 100}%`, backgroundColor: theme.accent }]} />
             </View>
           </View>
         </View>
         {never.length > 0 && (
-          <ThemedText themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
+          <ThemedText themeColor="textSecondary">
             <ThemedText>Jamais : </ThemedText>
             {never.map((o) => (o.label ?? '').toLowerCase()).join(', ')}
           </ThemedText>
         )}
         <View style={styles.nav}>
           <TextButton onPress={onRestart}>Recommencer</TextButton>
-          <PrimaryLink href="/soiree">Préparer une soirée</PrimaryLink>
+          <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink>
         </View>
       </View>
-    </>
+    </View>
   );
 }
 
@@ -278,38 +267,24 @@ function Fact({ label, value }: { label: string; value: string }) {
   const theme = useTheme();
   return (
     <View style={[styles.factItem, { borderColor: theme.line }]}>
-      <ThemedText style={{ fontSize: 16 }}>{value}</ThemedText>
+      <ThemedText style={styles.factValue}>{value}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
     </View>
   );
 }
 
-function Screen({ children }: { children: ReactNode }) {
-  return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <SafeAreaView style={styles.safeArea}>{children}</SafeAreaView>
-      </ScrollView>
-    </ThemedView>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: 'center' },
-  safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.three },
-  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
-  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
-  banner: { width: '100%', height: 160, borderRadius: Spacing.three },
-  progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#efe0cf', overflow: 'hidden' },
-  progressBar: { height: '100%', backgroundColor: '#caa15a' },
+  banner: { width: '100%', height: 180, opacity: 0.85 },
+  progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden' },
+  progressBar: { height: '100%' },
   nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.three },
-  input: { fontSize: 16, padding: 14, borderRadius: 14 },
-  persona: { gap: Spacing.two, padding: Spacing.four, borderRadius: 18 },
-  eyebrow: { textTransform: 'uppercase', letterSpacing: 1, fontSize: 12 },
-  tag: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 12, fontSize: 14, overflow: 'hidden' },
-  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three, marginTop: Spacing.two },
+  input: { fontFamily: Fonts.sans, fontSize: 16, padding: 14, borderRadius: 14, borderWidth: 1 },
+  persona: { borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
+  personaBody: { gap: Spacing.three, padding: Spacing.four },
+  tag: { borderRadius: 999, borderWidth: 1, paddingVertical: 4, paddingHorizontal: 12, overflow: 'hidden' },
+  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   factItem: { flex: 1, minWidth: 130, gap: 4, borderTopWidth: 1, paddingTop: Spacing.two },
-  meterTrack: { height: 8, borderRadius: 999, overflow: 'hidden', marginTop: 4 },
+  factValue: { fontFamily: Fonts.heading, fontSize: 18 },
+  meterTrack: { height: 3, borderRadius: 2, overflow: 'hidden', marginTop: Spacing.two },
   meterBar: { height: '100%' },
 });

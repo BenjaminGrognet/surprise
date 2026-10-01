@@ -1,16 +1,16 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
-import { AccountNav } from '@/components/account-nav';
-import { PrimaryButton, TextButton, TextLink } from '@/components/buttons';
+import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
-import { OptionButton, OptionRow } from '@/components/option-button';
+import { MoodSlider } from '@/components/mood-slider';
+import { CheckLine, OptionButton, OptionRow } from '@/components/option-button';
 import { RouteResult } from '@/components/route-result';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { chooseEvening, currentUser, eveningsHistory } from '@/lib/account';
 import {
   composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart,
@@ -19,15 +19,18 @@ import {
 import { isoDay, longDay, nextFriday } from '@/lib/dates';
 import { rememberedProfile } from '@/lib/local-store';
 
-const BANNER = 'https://images.unsplash.com/photo-1671691302268-e316f81c7b3e?auto=format&fit=crop&w=1600&q=60';
+// The mood slider's stops, from "Tamisé & Intime" to "Aventureux & Insolite": each one is one of
+// the server's wishes (surprise.quiz.ENVIES). The other wishes are the "secret options".
+const MOODS = ['cocooning', 'romantique', 'nous', 'curieux', 'surprise'];
+const MIDDLE_MOOD = 2;
 
 const MEALS = [
-  { value: true, label: 'Oui, on dîne pendant la soirée', emoji: '🍽️' },
-  { value: false, label: "Non, on aura déjà mangé", emoji: '✅' },
+  { value: true, label: 'Oui, on dîne', emoji: '🍽️' },
+  { value: false, label: 'Non, déjà mangé', emoji: '✓' },
 ];
 const NIGHTS = [
-  { value: false, label: 'On rentre chez nous', emoji: '🏠' },
-  { value: true, label: 'On découche : une nuit dans un hôtel ou une love room', emoji: '🛏️' },
+  { value: false, label: 'On rentre', emoji: '🏠' },
+  { value: true, label: 'On découche', emoji: '🗝️' },
 ];
 // While Claude's titles are still coming, poll for up to a minute, every couple of seconds.
 const NAMING_TIMEOUT_MS = 60000;
@@ -40,6 +43,8 @@ export default function SoireeScreen() {
   const [data, setData] = useState<SoireeData | null>(null);
   const [vibes, setVibes] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [mood, setMood] = useState(MIDDLE_MOOD);
+  const [secrets, setSecrets] = useState<string[]>([]);
   const [night, setNight] = useState<Night>({
     envies: [], diner: null, decoucher: false, occasion: null, start: null, end: null, budget: null, day: nextFriday(), profile: null,
   });
@@ -93,11 +98,16 @@ export default function SoireeScreen() {
     );
   }
 
+  const moods = MOODS.map((value) => data.envies.find((e) => e.value === value)).filter((e): e is NonNullable<typeof e> => !!e);
+  const others = data.envies.filter((e) => !MOODS.includes(e.value));
+  const moodValue = moods[Math.min(mood, moods.length - 1)]?.value;
+  const envies = [...(moodValue ? [moodValue] : []), ...secrets].slice(0, data.max);
+
   async function compose() {
     setStatus('composing');
     try {
       const history = (await currentUser()) ? await eveningsHistory().catch(() => []) : [];
-      const fresh = await composeSoiree({ ...night, done: history.map((h) => ({ page_name: h.page_name, route_index: h.route_index })) });
+      const fresh = await composeSoiree({ ...night, envies, done: history.map((h) => ({ page_name: h.page_name, route_index: h.route_index })) });
       setComposed(fresh);
       router.setParams({ soiree: fresh.name, route: undefined });
       setStatus('idle');
@@ -131,7 +141,8 @@ export default function SoireeScreen() {
         pageName: composed.name, routeIndex: route.index, title: route.title, pitch: route.pitch,
         vibes: composed.vibes.map((v) => vibes[v] || v), day: route.day,
       });
-      router.setParams({ route: String(route.index) });
+      // Kept: on to the day itself, where each partner picks a side — organiser or surprised.
+      router.replace({ pathname: '/revelation', params: { soiree: composed.name, route: String(route.index) } });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Impossible de la garder.');
     }
@@ -139,24 +150,32 @@ export default function SoireeScreen() {
 
   if (composed) {
     const shown = picked === undefined ? composed.routes : composed.routes.filter((r) => String(r.index) === picked);
+    const chosen = picked !== undefined && shown.length > 0;
     return (
       <Screen>
-        <AccountNav />
-        <TextButton onPress={() => setComposed(null)}>← Recomposer la soirée</TextButton>
-        <ThemedText type="title" style={styles.sub}>
-          {picked !== undefined && shown.length ? `Votre soirée du ${longDay(shown[0].day)}`
-            : composed.routes.length > 0 ? `${composed.routes.length} soirées pour vous deux` : 'Aucun parcours ce soir-là'}
+        <TextButton onPress={() => (chosen ? router.back() : setComposed(null))}>{chosen ? '← Retour' : '← Changer nos envies'}</TextButton>
+        <ThemedText type="eyebrow">
+          {chosen ? longDay(shown[0].day) : composed.routes.length > 0 ? `${composed.routes.length} intrigues possibles` : 'Aucune intrigue ce soir-là'}
+        </ThemedText>
+        <ThemedText type="title">
+          {chosen ? 'Votre feuille de route' : composed.routes.length > 0 ? 'Gardez celle qui vous trouble' : 'Le hasard a fait chou blanc'}
         </ThemedText>
         {composed.routes.length === 0 ? (
-          <ThemedText themeColor="textSecondary">Élargissez les horaires, le budget ou les envies, et recomposez.</ThemedText>
-        ) : null}
+          <ThemedText themeColor="textSecondary">Élargissez les horaires, le budget ou les envies, et relancez l&apos;intrigue.</ThemedText>
+        ) : !chosen ? (
+          <ThemedText themeColor="textSecondary">
+            Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, l&apos;un de vous deux pourra ne voir que des indices.
+          </ThemedText>
+        ) : (
+          <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name, route: picked } }}>Ouvrir la révélation</PrimaryLink>
+        )}
         {notice === 'signin' ? (
-          <ThemedView type="backgroundElement" style={styles.profileLine}>
-            <ThemedText type="small" themeColor="textSecondary">Connectez-vous pour garder cette soirée dans votre historique. </ThemedText>
+          <View style={styles.notice}>
+            <ThemedText type="small" themeColor="textSecondary">Connectez-vous pour garder cette intrigue. </ThemedText>
             <TextLink href="/compte">Aller à mon compte</TextLink>
-          </ThemedView>
+          </View>
         ) : notice ? (
-          <ThemedText style={styles.error}>{notice}</ThemedText>
+          <ThemedText themeColor="danger">{notice}</ThemedText>
         ) : null}
         {shown.map((route) => (
           <RouteResult
@@ -172,142 +191,123 @@ export default function SoireeScreen() {
     );
   }
 
-  function toggleEnvie(value: string) {
-    setNight((n) => ({
-      ...n,
-      envies: n.envies.includes(value) ? n.envies.filter((v) => v !== value) : n.envies.length < data!.max ? [...n.envies, value] : n.envies,
-    }));
-  }
+  const toggleSecret = (value: string) =>
+    setSecrets((s) => (s.includes(value) ? s.filter((v) => v !== value) : s.length < data.max - 1 ? [...s, value] : s));
   const toggleOccasion = (value: string) => setNight((n) => ({ ...n, occasion: n.occasion === value ? null : value }));
   const toggleStart = (value: string) => setNight((n) => ({ ...n, start: n.start === value ? null : value }));
   const toggleEnd = (value: string) => setNight((n) => ({ ...n, end: n.end === value ? null : value }));
-
-  const p2 = profile;
-  const ready = night.envies.length > 0 && night.diner !== null && !!night.day;
+  const ready = envies.length > 0 && night.diner !== null && !!night.day;
 
   return (
-    <Screen>
-      <AccountNav />
-      {p2 ? (
-        <ThemedView type="backgroundElement" style={styles.profileLine}>
-          <ThemedText type="small" themeColor="textSecondary">
-            {p2.names || p2.persona.name}
-            {p2.names ? ` · ${p2.persona.name}` : ''} — vos « jamais », votre budget et vos goûts s&apos;appliquent.{' '}
-          </ThemedText>
-          <TextLink href="/profil">Voir le profil</TextLink>
-        </ThemedView>
-      ) : (
-        <ThemedView type="backgroundElement" style={styles.profileLine}>
-          <ThemedText type="small" themeColor="textSecondary">Sans profil, on compose avec des réglages par défaut. </ThemedText>
-          <TextLink href="/profil">Faire le quiz</TextLink>
-        </ThemedView>
-      )}
-
-      <Image source={{ uri: BANNER }} style={styles.banner} />
-      <View style={styles.badge}>
-        <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
+    <Screen gap={Spacing.four}>
+      <View style={styles.intro}>
+        <ThemedText type="eyebrow">Le filtre de vos envies</ThemedText>
+        <ThemedText type="title">Quelle intrigue vous tente ?</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {profile
+            ? `${profile.names ? `${profile.names} · ` : ''}${profile.persona.name} : vos « jamais », votre budget et vos goûts s'appliquent.`
+            : 'Sans profil, on trame avec des réglages par défaut.'}
+        </ThemedText>
+        <TextLink href="/profil">{profile ? 'Voir le profil →' : 'Faire le quiz →'}</TextLink>
       </View>
-      <ThemedText type="title">Ce soir, envie de quoi ?</ThemedText>
-      <ThemedText themeColor="textSecondary">Jusqu&apos;à {data.max} envies, on les mêle dans la soirée.</ThemedText>
 
-      <View style={styles.progressRow}>
-        <ThemedText type="smallBold" style={styles.progressLabel}>{night.envies.length} sur {data.max} choisies</ThemedText>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressBar, { width: `${(night.envies.length / data.max) * 100}%` }]} />
+      <Section title="L'humeur du soir">
+        <MoodSlider
+          stops={moods.map((m) => ({ label: m.label, emoji: m.emoji }))}
+          value={Math.min(mood, moods.length - 1)}
+          onChange={setMood}
+          left="Tamisé & Intime"
+          right="Aventureux & Insolite"
+        />
+      </Section>
+
+      <Section title="Les options secrètes" hint={`Jusqu'à ${data.max - 1}, glissées dans le programme.`}>
+        <View>
+          {others.map((o) => (
+            <CheckLine key={o.value} label={o.label} emoji={o.emoji} checked={secrets.includes(o.value)}
+              disabled={!secrets.includes(o.value) && secrets.length >= data.max - 1}
+              onPress={() => toggleSecret(o.value)} />
+          ))}
         </View>
-      </View>
-      <OptionRow>
-        {data.envies.map((o) => (
-          <OptionButton key={o.value} label={o.label} emoji={o.emoji} selected={night.envies.includes(o.value)}
-            disabled={!night.envies.includes(o.value) && night.envies.length >= data.max}
-            onPress={() => toggleEnvie(o.value)} />
-        ))}
-      </OptionRow>
+      </Section>
 
-      <ThemedText type="subtitle" style={styles.sub}>Et pour manger ?</ThemedText>
-      <OptionRow>
-        {MEALS.map((o) => (
-          <OptionButton key={String(o.value)} label={o.label} emoji={o.emoji} selected={night.diner === o.value}
-            onPress={() => setNight((n) => ({ ...n, diner: o.value }))} />
-        ))}
-      </OptionRow>
+      <Section title="Le dîner fait-il partie du complot ?">
+        <OptionRow>
+          {MEALS.map((o) => (
+            <OptionButton key={String(o.value)} label={o.label} emoji={o.emoji} pill selected={night.diner === o.value}
+              onPress={() => setNight((n) => ({ ...n, diner: o.value }))} />
+          ))}
+        </OptionRow>
+      </Section>
 
-      <ThemedText type="subtitle" style={styles.sub}>Et après ?</ThemedText>
-      <OptionRow>
-        {NIGHTS.map((o) => (
-          <OptionButton key={String(o.value)} label={o.label} emoji={o.emoji} selected={night.decoucher === o.value}
-            onPress={() => setNight((n) => ({ ...n, decoucher: o.value }))} />
-        ))}
-      </OptionRow>
+      <Section title="Et quand la nuit tombe ?" hint="Découcher : une nuit à l'hôtel ou dans une love room.">
+        <OptionRow>
+          {NIGHTS.map((o) => (
+            <OptionButton key={String(o.value)} label={o.label} emoji={o.emoji} pill selected={night.decoucher === o.value}
+              onPress={() => setNight((n) => ({ ...n, decoucher: o.value }))} />
+          ))}
+        </OptionRow>
+      </Section>
 
-      <ThemedText type="subtitle" style={styles.sub}>Et pour commencer ?</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">Sans choix : l&apos;heure habituelle, ou plus tôt si une envie le demande.</ThemedText>
-      <OptionRow>
-        {data.starts.map((o) => (
-          <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.start === o.value} onPress={() => toggleStart(o.value)} />
-        ))}
-      </OptionRow>
+      <Section title="L'heure du rendez-vous" hint="Sans choix : l'heure habituelle, ou plus tôt si une envie le demande.">
+        <OptionRow>
+          {data.starts.map((o) => (
+            <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.start === o.value} onPress={() => toggleStart(o.value)} />
+          ))}
+        </OptionRow>
+      </Section>
 
-      <ThemedText type="subtitle" style={styles.sub}>Et pour finir ?</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">Sans choix : ce que vos envies demandent, ou minuit et demi.</ThemedText>
-      <OptionRow>
-        {data.ends.map((o) => (
-          <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.end === o.value} onPress={() => toggleEnd(o.value)} />
-        ))}
-      </OptionRow>
+      <Section title="Le rideau tombe…" hint="Sans choix : ce que vos envies demandent, ou minuit et demi.">
+        <OptionRow>
+          {data.ends.map((o) => (
+            <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.end === o.value} onPress={() => toggleEnd(o.value)} />
+          ))}
+        </OptionRow>
+      </Section>
 
-      <ThemedText type="subtitle" style={styles.sub}>Et le budget, pour cette soirée ?</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">{p2 ? 'Sans choix : le budget habituel de votre profil.' : 'Sans choix : 120 €.'}</ThemedText>
-      <OptionRow>
-        {data.budgets.map((o) => (
-          <OptionButton key={o.budget} label={o.label} emoji={o.emoji} pill selected={night.budget === o.budget}
-            onPress={() => setNight((n) => ({ ...n, budget: n.budget === o.budget ? null : o.budget }))} />
-        ))}
-      </OptionRow>
+      <Section title="Le budget du soir" hint={profile ? 'Sans choix : le budget habituel de votre profil.' : 'Sans choix : 120 €.'}>
+        <OptionRow>
+          {data.budgets.map((o) => (
+            <OptionButton key={o.budget} label={o.label} emoji={o.emoji} pill selected={night.budget === o.budget}
+              onPress={() => setNight((n) => ({ ...n, budget: n.budget === o.budget ? null : o.budget }))} />
+          ))}
+        </OptionRow>
+      </Section>
 
-      <ThemedText type="subtitle" style={styles.sub}>Une occasion ?</ThemedText>
-      <OptionRow>
-        {data.occasions.map((o) => (
-          <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.occasion === o.value} onPress={() => toggleOccasion(o.value)} />
-        ))}
-      </OptionRow>
+      <Section title="Une occasion à célébrer ?">
+        <OptionRow>
+          {data.occasions.map((o) => (
+            <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.occasion === o.value} onPress={() => toggleOccasion(o.value)} />
+          ))}
+        </OptionRow>
+      </Section>
 
-      <DayField value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />
+      <DayField label="Le jour J" value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />
 
-      {status === 'error' && <ThemedText style={styles.error}>La composition a échoué. Réessayez dans un instant.</ThemedText>}
-      <View style={styles.nav}>
-        <View />
-        <PrimaryButton disabled={!ready || status === 'composing'} onPress={compose}>
-          {status === 'composing' ? `On compose votre soirée du ${longDay(night.day)}…` : 'Composer notre soirée'}
-        </PrimaryButton>
-      </View>
+      {status === 'error' && <ThemedText themeColor="danger">L&apos;intrigue n&apos;a pas pu être tramée. Réessayez dans un instant.</ThemedText>}
+      <PrimaryButton wide disabled={!ready || status === 'composing'} onPress={compose}>
+        {status === 'composing' ? `On trame votre soirée du ${longDay(night.day)}…` : night.diner === null ? 'Dîner ou pas ? Dites-le-nous' : 'Tramer nos intrigues'}
+      </PrimaryButton>
     </Screen>
   );
 }
 
-function Screen({ children }: { children: ReactNode }) {
+function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  const theme = useTheme();
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <SafeAreaView style={styles.safeArea}>{children}</SafeAreaView>
-      </ScrollView>
-    </ThemedView>
+    <View style={[styles.section, { borderColor: theme.line, backgroundColor: theme.backgroundElement }]}>
+      <View style={styles.sectionHead}>
+        <ThemedText type="subtitle">{title}</ThemedText>
+        {hint ? <ThemedText type="small" themeColor="textSecondary">{hint}</ThemedText> : null}
+      </View>
+      {children}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: 'center' },
-  safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.two },
-  profileLine: { padding: Spacing.two + 2, borderRadius: 14, marginBottom: Spacing.two },
-  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
-  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
-  banner: { width: '100%', height: 160, borderRadius: Spacing.three },
-  progressRow: { gap: Spacing.one },
-  progressLabel: { color: '#a67c1e' },
-  progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#efe0cf', overflow: 'hidden' },
-  progressBar: { height: '100%', borderRadius: 999, backgroundColor: '#caa15a' },
-  sub: { marginTop: Spacing.three },
-  nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.three, marginBottom: Spacing.four },
-  error: { color: '#ff5c72' },
+  intro: { gap: Spacing.two },
+  section: { gap: Spacing.three, padding: Spacing.four, borderRadius: 22, borderWidth: 1 },
+  sectionHead: { gap: Spacing.one },
+  notice: { padding: Spacing.three, borderRadius: 14 },
 });

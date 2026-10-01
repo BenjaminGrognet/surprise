@@ -7,30 +7,39 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
-// The "carnet insolite doré" brand: warm beige paper,
-// gold accent, no real dark mode yet, so dark == light for now.
-// ponytail: brand has no dark variant designed yet, upgrade when one is designed.
+// SecretDate's "Midnight Emerald" brand: deep emerald night, brushed champagne gold, silky cream.
+// The app is dark by design, so light == dark.
 const brand = {
-  text: '#2e241c',
-  background: '#faf8f5',
-  backgroundElement: '#f3ece0',
-  backgroundSelected: '#efe0cf',
-  textSecondary: '#8a7d6c',
-  line: '#e3d5c3',
-  accent: '#caa15a',
-  accentInk: '#a67c1e',
+  text: '#F4F1E8', // off-white, a soft contrast on the emerald
+  background: '#0A1F1D',
+  backgroundElement: '#0F2926',
+  backgroundSelected: '#173832',
+  textSecondary: '#9DB3AB',
+  line: '#22433D',
+  accent: '#D4AF37', // brushed champagne gold: buttons, rules, gauges
+  accentInk: '#E0C062', // gold for text, a touch lighter to read on the emerald
+  accentSoft: 'rgba(212, 175, 55, 0.45)', // the fine gold borders of cards
+  onAccent: '#0A1F1D', // text on a gold button
+  cream: '#FFFDD0',
+  danger: '#E8857A',
+  ok: '#7FD1A4',
+  info: '#8DB8E8',
+  warn: '#E6B866',
 } as const;
 
 export const Colors = { light: brand, dark: brand } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-// Brand type: Space Grotesk for body text, Fredoka for headings (loaded in _layout.tsx).
+// Playfair Display for titles, Inter for the body (loaded in _layout.tsx).
 export const Fonts = {
-  sans: 'SpaceGrotesk_400Regular',
-  sansMedium: 'SpaceGrotesk_500Medium',
-  heading: 'Fredoka_600SemiBold',
-  headingBold: 'Fredoka_700Bold',
+  sans: 'Inter_400Regular',
+  sansLight: 'Inter_300Light',
+  sansMedium: 'Inter_500Medium',
+  sansSemiBold: 'Inter_600SemiBold',
+  heading: 'PlayfairDisplay_400Regular',
+  headingBold: 'PlayfairDisplay_600SemiBold',
+  headingItalic: 'PlayfairDisplay_400Regular_Italic',
   mono: Platform.select({ ios: 'ui-monospace', default: 'monospace' }),
 };
 
@@ -45,4 +54,4 @@ export const Spacing = {
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const MaxContentWidth = 640;

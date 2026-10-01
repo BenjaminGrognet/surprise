@@ -1,171 +1,129 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 
-import { AccountNav } from '@/components/account-nav';
 import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { Countdown, IntrigueCard } from '@/components/intrigue-card';
+import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
-import { API_URL, getSoireeState, type Profile, type SoireeRoute } from '@/lib/api';
-import { upcomingEvening, type EveningHistoryRow } from '@/lib/account';
-import { formatTime, isoDay, longDay } from '@/lib/dates';
+import { eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
+import { getSoireeState, type Profile, type SoireeRoute } from '@/lib/api';
+import { dayHint } from '@/lib/clues';
+import { complicity, type Complicity } from '@/lib/complicity';
+import { isoDay } from '@/lib/dates';
 import { forgetProfile, rememberedProfile } from '@/lib/local-store';
 import { supabaseConfigured } from '@/lib/supabase';
 
-const BANNER = 'https://images.unsplash.com/photo-1504730513966-dfcd6e53fdc8?auto=format&fit=crop&w=1600&q=60';
-
-const STEPS = [
-  { emoji: '💬', title: 'Votre profil, une fois', text: "Quelques questions sur vous deux : ce qui vous plaît, ce que vous ne voulez jamais, votre budget." },
-  { emoji: '✨', title: 'Une envie par soirée', text: 'Ambiance, date, heure, budget : configurez votre soirée idéale en quelques clics.' },
-  { emoji: '🌙', title: 'Trois parcours au choix', text: "Horaires, trajets, prix et liens de réservation ; une étape ne vous plaît pas, on la retire au sort. Et si vous découchez, la nuit est prévue." },
-];
-
+// "Le Tableau des Complots": no catalogue, one sealed card — the next mystery evening and its
+// countdown —, one button to plot a new one, and the couple's complicity gauge.
 export default function AccueilScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [upcoming, setUpcoming] = useState<EveningHistoryRow | null>(null);
+  const [upcoming, setUpcoming] = useState<{ row: EveningHistoryRow; route: SoireeRoute | null } | null>(null);
+  const [gauge, setGauge] = useState<Complicity | null>(null);
 
   useEffect(() => {
     (async () => {
       const remembered = await rememberedProfile();
       setProfile(remembered?.profile ?? null);
+      if (supabaseConfigured) {
+        const today = isoDay(new Date());
+        const [row, history] = await Promise.all([
+          upcomingEvening(today).catch(() => null),
+          eveningsHistory().catch(() => []),
+        ]);
+        setGauge(complicity(history, today));
+        if (row) {
+          const state = await getSoireeState(row.page_name).catch(() => null);
+          setUpcoming({ row, route: state?.routes.find((r) => r.index === row.route_index) ?? null });
+        }
+      }
       setLoaded(true);
-      if (supabaseConfigured) setUpcoming(await upcomingEvening(isoDay(new Date())).catch(() => null));
     })();
   }, []);
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <SafeAreaView style={styles.safeArea}>
-          <AccountNav />
-          <View style={styles.badge}>
-            <ThemedText type="smallBold" style={styles.badgeText}>Soirée à deux</ThemedText>
-          </View>
-          {/* The upcoming evening's photos stand for the banner; the pitch is for couples new here. */}
-          {upcoming ? <Upcoming row={upcoming} /> : <Image source={{ uri: BANNER }} style={styles.banner} />}
-          {loaded && !profile && (
-            <>
-              <ThemedText type="title">Des soirées uniques à deux dans Paris.</ThemedText>
-              <ThemedText themeColor="textSecondary" style={styles.lead}>
-                Dites-nous qui vous êtes, puis ce qui vous fait envie ce soir-là : on compose trois soirées complètes.
-              </ThemedText>
-            </>
-          )}
+    <Screen gap={Spacing.four}>
+      {loaded ? (upcoming ? <NextIntrigue {...upcoming} /> : <NoIntrigue />) : <IntrigueCard><View style={styles.placeholder} /></IntrigueCard>}
 
-          {loaded && <Start profile={profile} onForget={() => forgetProfile().then(() => setProfile(null))} />}
+      <View style={styles.actions}>
+        <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink>
+        {loaded && !profile ? <TextLink href="/profil">D&apos;abord, faire notre profil (2 minutes) →</TextLink> : null}
+      </View>
 
-          {!profile && (
-            <>
-              <View style={styles.progressTrack}>
-                <View style={styles.progressBar} />
-              </View>
-              <ThemedText type="small" themeColor="textSecondary">3 étapes, à votre rythme</ThemedText>
+      {gauge ? <Gauge gauge={gauge} /> : null}
 
-              <ThemedView style={styles.steps}>
-                {STEPS.map((s) => (
-                  <ThemedView key={s.title} style={styles.step} type="backgroundElement">
-                    <ThemedText style={styles.stepEmoji}>{s.emoji}</ThemedText>
-                    <ThemedView style={styles.stepBody} type="backgroundElement">
-                      <ThemedText type="smallBold">{s.title}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">{s.text}</ThemedText>
-                    </ThemedView>
-                  </ThemedView>
-                ))}
-              </ThemedView>
-            </>
-          )}
-        </SafeAreaView>
-      </ScrollView>
-    </ThemedView>
+      <View style={styles.links}>
+        {profile ? <TextLink href="/profil">{`Notre profil · ${profile.persona.name}`}</TextLink> : null}
+        <TextLink href="/historique">Nos intrigues passées</TextLink>
+        {profile ? <TextButton onPress={() => forgetProfile().then(() => setProfile(null))}>Oublier ce profil</TextButton> : null}
+      </View>
+    </Screen>
   );
 }
 
-// The evening the couple chose, until its day is over: its steps' photos, when and what.
-function Upcoming({ row }: { row: EveningHistoryRow }) {
-  const theme = useTheme();
-  const [route, setRoute] = useState<SoireeRoute | null>(null);
-  useEffect(() => {
-    getSoireeState(row.page_name)
-      .then((s) => setRoute(s.routes.find((r) => r.index === row.route_index) ?? null))
-      .catch(() => null);
-  }, [row.page_name, row.route_index]);
-  const photos = (route?.steps ?? []).map((s) => s.image_url).filter((u): u is string => !!u).slice(0, 3);
+function NextIntrigue({ row, route }: { row: EveningHistoryRow; route: SoireeRoute | null }) {
+  const now = useNow();
+  const start = route ? Date.parse(route.start) : null;
+  const under = start != null && route && now >= start && now < Date.parse(route.end);
+  const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name, route: String(row.route_index) } });
   return (
-    <View style={[styles.upcoming, { borderColor: theme.accent }]}>
-      {photos.length ? (
-        <View style={styles.photos}>
-          {photos.map((u) => (
-            <Image key={u} source={{ uri: u.startsWith('/') ? API_URL + u : u }} style={styles.photo} />
-          ))}
-        </View>
-      ) : null}
-      <View style={styles.upcomingBody}>
-        <ThemedText type="smallBold" style={{ color: theme.accentInk }}>
-          ✨ Notre soirée à venir · {row.day ? longDay(row.day) : ''}{route ? ` · ${formatTime(route.start)} → ${formatTime(route.end)}` : ''}
+    <IntrigueCard onPress={open}>
+      <ThemedText type="eyebrow" style={styles.center}>{under ? "L'intrigue a commencé" : 'Votre prochaine intrigue'}</ThemedText>
+      <ThemedText type="title" style={styles.center}>L&apos;Inattendu vous attend…</ThemedText>
+      {start != null && !under ? <Countdown to={start} now={now} /> : null}
+      {route ? (
+        <ThemedText type="clue" themeColor="textSecondary" style={styles.center}>
+          <ThemedText type="clue" themeColor="accentInk">✦ Indice du jour : </ThemedText>
+          {dayHint(route, now)}
         </ThemedText>
-        <ThemedText type="subtitle">{row.title}</ThemedText>
-        {route ? (
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={3}>
-            {[...route.steps, ...(route.night ? [route.night] : [])].map((s) => `${formatTime(s.start)} ${s.title}`).join(' · ')}
-          </ThemedText>
-        ) : null}
-        <PrimaryLink href={{ pathname: '/soiree', params: { soiree: row.page_name, route: String(row.route_index) } }}>
-          Voir notre soirée
-        </PrimaryLink>
+      ) : null}
+      <ThemedText type="small" themeColor="textSecondary" style={styles.center}>Touchez la carte pour la révélation</ThemedText>
+    </IntrigueCard>
+  );
+}
+
+function NoIntrigue() {
+  return (
+    <IntrigueCard>
+      <ThemedText type="eyebrow" style={styles.center}>Aucune intrigue en cours</ThemedText>
+      <ThemedText type="title" style={styles.center}>Le prochain secret reste à écrire…</ThemedText>
+      <ThemedText themeColor="textSecondary" style={styles.center}>
+        Dites-nous votre humeur : on trame trois soirées dans Paris, vous en gardez une, et l&apos;un de vous deux garde le secret
+        jusqu&apos;au jour J.
+      </ThemedText>
+    </IntrigueCard>
+  );
+}
+
+function Gauge({ gauge }: { gauge: Complicity }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.gauge}>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+        Niveau de complicité : <ThemedText type="smallBold" themeColor="accentInk">{gauge.name}</ThemedText>
+      </ThemedText>
+      <View style={[styles.track, { backgroundColor: theme.line }]}>
+        <View style={[styles.fill, { width: `${Math.max(gauge.progress, 0.03) * 100}%`, backgroundColor: theme.accent }]} />
       </View>
+      <ThemedText type="small" themeColor="textSecondary" style={[styles.center, styles.caption]}>
+        {gauge.lived} soirée{gauge.lived > 1 ? 's' : ''} vécue{gauge.lived > 1 ? 's' : ''} à deux
+        {gauge.next ? ` · encore ${gauge.next.left} pour « ${gauge.next.name} »` : ''}
+      </ThemedText>
     </View>
   );
 }
 
-function Start({ profile: p, onForget }: { profile: Profile | null; onForget: () => void }) {
-  if (!p) {
-    return (
-      <ThemedView style={styles.actions}>
-        <PrimaryLink href="/profil">Faire notre profil</PrimaryLink>
-        <TextLink href="/soiree">Une soirée tout de suite, sans profil →</TextLink>
-      </ThemedView>
-    );
-  }
-  return (
-    <ThemedView style={styles.persona} type="backgroundElement">
-      <ThemedText type="small" themeColor="textSecondary">
-        {p.names ? `${p.names} · ` : ''}<ThemedText type="smallBold">{p.persona.name}</ThemedText>
-      </ThemedText>
-      <PrimaryLink href="/soiree">Préparer une soirée</PrimaryLink>
-      <View style={styles.links}>
-        <TextLink href="/profil">Notre profil</TextLink>
-        <TextLink href={{ pathname: '/profil', params: { new: '1' } }}>Refaire le quiz</TextLink>
-        <TextButton onPress={onForget}>Oublier ce profil</TextButton>
-      </View>
-    </ThemedView>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: 'center' },
-  safeArea: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
-  badge: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#caa15a' },
-  badgeText: { color: '#ffffff', letterSpacing: 0.5 },
-  banner: { width: '100%', height: 200, borderRadius: Spacing.three },
-  lead: { fontSize: 17, lineHeight: 24 },
-  actions: { gap: Spacing.two, alignItems: 'flex-start' },
-  upcoming: {
-    backgroundColor: '#ffffff', borderWidth: 1.5, borderRadius: Spacing.three, overflow: 'hidden',
-    shadowColor: '#caa15a', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 6,
-  },
-  photos: { flexDirection: 'row', gap: 2, height: 150 },
-  photo: { flex: 1, height: '100%' },
-  upcomingBody: { gap: Spacing.two, padding: Spacing.three },
-  links: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
-  persona: { gap: Spacing.two, padding: Spacing.three, borderRadius: Spacing.three },
-  progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#efe0cf', overflow: 'hidden' },
-  progressBar: { height: '100%', width: '33%', borderRadius: 999, backgroundColor: '#caa15a' },
-  steps: { gap: Spacing.two, marginTop: Spacing.three },
-  step: { flexDirection: 'row', gap: Spacing.two, padding: Spacing.three, borderRadius: Spacing.three },
-  stepEmoji: { fontSize: 24 },
-  stepBody: { flex: 1, gap: 2 },
+  center: { textAlign: 'center' },
+  placeholder: { height: 280 },
+  actions: { gap: Spacing.two, alignItems: 'center' },
+  gauge: { gap: Spacing.two },
+  track: { height: 3, borderRadius: 2, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: 2 },
+  caption: { fontSize: 12 },
+  links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: Spacing.four },
 });

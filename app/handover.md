@@ -1,19 +1,31 @@
-# Handover — relooking beige & or
+# Handover — SecretDate, « Midnight Emerald »
 
 ## Fait
 
-- Palette (`src/constants/theme.ts`) : fond beige `#faf8f5`, cartes crème `#f3ece0`, accent or `#caa15a`, encre `#2e241c`. `Night` (reveal du profil) inchangé, déjà cohérent avec l'or.
-- Composants partagés recolorés : `option-button.tsx` (cartes sans bordure, radius 20, ombre or + badge coche sur sélection), `buttons.tsx` (ombre or sur le CTA), `day-field.tsx` (champ sans bordure).
-- `soiree.tsx`, `profil.tsx` (quiz) et `index.tsx` (accueil) : badge "Soirée à deux" + barre de progression.
-- `compte.tsx`, `profil.tsx`, `historique.tsx` : champs/cartes sans bordure, couleurs alignées.
-- Vérifié en web (accueil, quiz, soirée, compte) : palette, sélection, CTA, progression OK.
+- Nom : **SecretDate** (`app.json` : nom, schéma `secretdate`, interface sombre, fonds de splash/icône `#0A1F1D`).
+- Charte (`src/constants/theme.ts`) : fond émeraude `#0A1F1D`, or champagne `#D4AF37` (boutons, filets, jauges),
+  crème `#FFFDD0`, texte blanc cassé `#F4F1E8`. Sombre uniquement (light == dark). Polices : Playfair Display
+  (titres, indices en italique) et Inter (texte), à la place de Fredoka / Space Grotesk.
+- Cadre commun (`components/screen.tsx`) avec l'en-tête `brand-header.tsx` (logo + pastille « Complices connectés »).
+  Les bannières photo génériques et le badge « Soirée à deux » sont retirés.
+- **Accueil, « Le Tableau des Complots »** (`index.tsx`) : une carte scellée (`intrigue-card.tsx`) avec le compte à rebours
+  jusqu'à la prochaine soirée gardée et l'indice du jour ; bouton « Lancer une nouvelle intrigue » ; jauge de complicité
+  (`lib/complicity.ts` : un point par soirée vécue, niveaux nommés).
+- **Préparation, « Le Filtre de vos Envies »** (`soiree.tsx`) : curseur d'humeur (`mood-slider.tsx`) de « Tamisé & Intime »
+  à « Aventureux & Insolite », dont chaque cran est une envie du serveur (cocooning, romantique, nous, curieux,
+  surprise) ; les autres envies sont les « options secrètes » (cases à cocher). Le serveur reçoit les mêmes `envies` qu'avant.
+- **Jour J, « La Révélation »** (`revelation.tsx`, nouvelle route) : chaque téléphone choisit son rôle pour la soirée
+  (gardé sur l'appareil, `lib/local-store.ts`). L'organisateur voit la feuille de route complète, les réservations à faire
+  et les indices montrés à l'autre ; la personne surprise ne voit que des indices (`lib/clues.ts`, règles sans appel à Claude)
+  qui se débloquent de 24 h à 2 h avant, et un programme flouté dont chaque étape se dévoile 15 min avant son heure.
+- Garder une intrigue mène à la Révélation ; dans l'historique, une soirée à venir reste scellée (titre caché).
+- Vérifié sur le web en 375 px : accueil, filtre (curseur glissé), composition, révélation (les deux rôles), quiz.
 
 ## Pas fait / à trancher
 
-- **Badge + barre de progression** ajoutés sur `soiree.tsx`, `profil.tsx` et `index.tsx`. Sur l'accueil, la barre est statique (1/3, pas de logique d'étape réelle) — à relier à un vrai état si un jour l'onboarding devient un vrai wizard à 3 étapes.
-- **CTA en dégradé** : les maquettes proposaient un dégradé or (`#caa15a → #e4c07a`). Le code garde un aplat (pas de `expo-linear-gradient` installé). Ajouter la dépendance si le dégradé est jugé nécessaire.
-- **Compte / historique non testés en conditions réelles** : Supabase n'est pas configuré dans cet environnement, donc les onglets connexion/inscription et les cartes d'historique n'ont pas pu être vérifiés à l'écran (seul le message de repli "comptes non configurés" a été vu).
-- **Non testé sur natif** (iOS/Android, Expo Go) : uniquement vérifié sur le build web (`npx expo start` → web). Le radius/ombre RN (`shadowColor`/`elevation`) est à vérifier sur device.
-- **Couleur d'erreur** (`#ff5c72`, plusieurs fichiers) laissée telle quelle — rouge/corail générique pour les messages d'erreur, pas retouchée pour rester lisible comme signal d'alerte. À revoir si le corail détonne trop avec la nouvelle palette.
-- **Lint pré-existant** non lié à ce chantier : `src/hooks/use-color-scheme.web.ts:11` (`react-hooks/set-state-in-effect`) — présent avant le relooking, pas corrigé.
-- **Dark mode** : `Colors.dark === Colors.light` (ponytail existant, non traité ici) — pas de variante sombre dédiée pour la nouvelle palette.
+- **Avec un compte, pas vu à l'écran** : Supabase n'est pas configuré ici (`app/.env` absent), donc la jauge de complicité,
+  le compte à rebours de l'accueil et la pastille « Complices connectés » n'ont pas été vus avec de vraies données.
+- **Non testé sur natif** (iOS/Android) : le flou des photos (`blurRadius`) et le glisser du curseur sont à vérifier sur un appareil.
+- **Rôle par appareil** : un même compte pour le couple, donc rien n'empêche la personne surprise de choisir « J'organise ».
+  Un vrai secret demanderait deux comptes liés.
+- **Pas de chauffeur** : l'indice « votre chauffeur arrive à 19h30 » de la maquette devient « le rideau se lève à 19h15 ».
