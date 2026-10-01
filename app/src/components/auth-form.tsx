@@ -11,7 +11,8 @@ import { signIn, signUp } from '@/lib/account';
 type TabKey = 'in' | 'up';
 
 // Sign in or create an account (Supabase Auth, email + password); `onSignedIn` decides what comes next.
-export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer notre compte' }: {
+export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer notre compte', compact }: {
+  compact?: boolean;
   onSignedIn: () => void;
   startWith?: TabKey;
   signUpLabel?: string;
@@ -35,16 +36,19 @@ export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer n
 
   return (
     <>
-      <View style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
+      <View style={[styles.tabs, compact && styles.tabsCompact, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
         <Tab label="Se connecter" active={tab === 'in'} onPress={() => setTab('in')} />
         <Tab label="Créer un compte" active={tab === 'up'} onPress={() => setTab('up')} />
       </View>
-      <View style={styles.form}>
-        <Field label="Email">
-          <TextField value={email} onChangeText={setEmail} autoComplete="email" keyboardType="email-address" autoCapitalize="none" />
+      <View style={[styles.form, compact && styles.formCompact]}>
+        <Field label="Email" compact={compact}>
+          <TextField style={compact ? styles.inputCompact : undefined} placeholder={compact ? "Email" : undefined} accessibilityLabel="Email" value={email} onChangeText={setEmail} autoComplete="email" keyboardType="email-address" autoCapitalize="none" />
         </Field>
-        <Field label="Mot de passe">
+        <Field label="Mot de passe" compact={compact}>
           <TextField
+            style={compact ? styles.inputCompact : undefined}
+            placeholder={compact ? "Mot de passe" : undefined}
+            accessibilityLabel="Mot de passe"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -52,7 +56,7 @@ export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer n
           />
         </Field>
         {error ? <ThemedText themeColor="danger">{error}</ThemedText> : null}
-        <PrimaryButton wide onPress={submit}>{tab === 'in' ? 'Se connecter' : signUpLabel}</PrimaryButton>
+        <PrimaryButton wide compact={compact} onPress={submit}>{tab === 'in' ? 'Se connecter' : signUpLabel}</PrimaryButton>
       </View>
     </>
   );
@@ -67,10 +71,10 @@ function Tab({ label, active, onPress }: { label: string; active: boolean; onPre
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children, compact }: { label: string; children: ReactNode; compact?: boolean }) {
   return (
     <View style={styles.field}>
-      <ThemedText type="smallBold">{label}</ThemedText>
+      {compact ? null : <ThemedText type="smallBold">{label}</ThemedText>}
       {children}
     </View>
   );
@@ -78,7 +82,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 4, borderRadius: 999, borderWidth: 1, padding: 4, alignSelf: 'flex-start' },
-  tab: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, borderRadius: 999 },
+  tab: { paddingVertical: 6, paddingHorizontal: Spacing.three, borderRadius: 999 },
   form: { gap: Spacing.three, maxWidth: 420 },
+  tabsCompact: { padding: 3 },
+  inputCompact: { paddingVertical: 9, paddingHorizontal: 12, fontSize: 15, borderRadius: 12 },
+  formCompact: { gap: Spacing.two, maxWidth: '100%', alignSelf: 'stretch' },
   field: { gap: Spacing.two },
 });

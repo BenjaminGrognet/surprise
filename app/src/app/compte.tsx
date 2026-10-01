@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 
 import { AuthForm } from '@/components/auth-form';
@@ -39,7 +40,7 @@ export default function CompteScreen() {
     );
   }
 
-  return <Screen>{user ? <LoggedIn email={user.email} onSignOut={() => signOut().then(refresh)} /> : <LoggedOut onSignedIn={refresh} />}</Screen>;
+  return <Screen bare={!user} gap={user ? undefined : Spacing.two}>{user ? <LoggedIn email={user.email} onSignOut={() => signOut().then(refresh)} /> : <LoggedOut onSignedIn={refresh} />}</Screen>;
 }
 
 function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
@@ -47,26 +48,28 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <>
       <View style={styles.logoContainer}>
-        <LogoSecretDate size={100} />
+        <Image source={require('@/assets/images/bannieres/romantiques.jpg')} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <View style={[StyleSheet.absoluteFill, styles.veil]} />
+        <LogoSecretDate size={64} />
         <ThemedText style={[styles.appName, { color: theme.accent }]}>Secret Date</ThemedText>
       </View>
-      <ThemedText type="eyebrow">Bienvenue, complices</ThemedText>
-      <ThemedText type="title">Les soirées qu&apos;on ne voit pas venir.</ThemedText>
-      <ThemedText themeColor="textSecondary">
-        SecretDate organise des soirées surprises pour les couples à Paris. Une personne planifie l&apos;événement tandis que
+      <ThemedText type="subtitle">Les soirées qu&apos;on ne voit pas venir.</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.justify}>
+        Secret Date organise des soirées surprises pour les couples à Paris. Une personne planifie l&apos;événement tandis que
         son partenaire reçoit uniquement des indices jusqu&apos;au jour J.
       </ThemedText>
       <View style={styles.points}>
-        <ThemedText themeColor="textSecondary">
+        <ThemedText type="small" themeColor="textSecondary" style={styles.justify}>
           <ThemedText type="smallBold" themeColor="textSecondary">Création de compte : </ThemedText>
           chaque partenaire possède son propre profil.
         </ThemedText>
-        <ThemedText themeColor="textSecondary">
+        <ThemedText type="small" themeColor="textSecondary" style={styles.justify}>
           <ThemedText type="smallBold" themeColor="textSecondary">Invitation : </ThemedText>
           l&apos;organisateur envoie un lien secret pour intégrer son partenaire à l&apos;aventure.
         </ThemedText>
       </View>
       <AuthForm
+        compact
         onSignedIn={() => {
           onSignedIn();
           router.replace('/');
@@ -138,9 +141,11 @@ function Notice({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  logoContainer: { alignItems: 'center', gap: Spacing.two, marginVertical: Spacing.four },
-  appName: { fontFamily: Fonts.headingBold, fontSize: 32, lineHeight: 40, textAlign: 'center' },
-  points: { gap: Spacing.two },
+  logoContainer: { alignItems: 'center', justifyContent: 'center', gap: 2, height: 120, borderRadius: 16, overflow: 'hidden' },
+  veil: { backgroundColor: 'rgba(8, 42, 30, 0.62)' },
+  justify: { textAlign: 'justify' },
+  appName: { fontFamily: Fonts.headingBold, fontSize: 26, lineHeight: 32, textAlign: 'center' },
+  points: { gap: 4 },
   notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
   persona: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.two },
 });

@@ -31,7 +31,7 @@ export function PassagerInvite() {
   }
 
   async function share(link: string) {
-    const message = `Je te prépare une soirée secrète. Rejoins-moi sur SecretDate, tu n'auras que des indices : ${link}`;
+    const message = `Je te prépare une soirée secrète. Rejoins-moi sur Secret Date, tu n'auras que des indices : ${link}`;
     if (Platform.OS === 'web') {
       await navigator.clipboard?.writeText(link);
       setCopied(true);

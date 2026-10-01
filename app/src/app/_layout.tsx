@@ -77,7 +77,7 @@ export default function RootLayout() {
     <CoupleContext.Provider value={value}>
       <ThemeProvider value={navTheme}>
         <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false, title: 'SecretDate', contentStyle: { backgroundColor: Colors.dark.background } }}>
+        <Stack screenOptions={{ headerShown: false, title: 'Secret Date', contentStyle: { backgroundColor: Colors.dark.background } }}>
           {/* The couple signs in or creates an account before anything else. */}
           <Stack.Protected guard={signedIn}>
             <Stack.Screen name="index" />

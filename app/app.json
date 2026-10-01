@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "SecretDate",
+    "name": "Secret Date",
     "slug": "app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -26,7 +26,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "SecretDate dépose vos photos de soirée dans votre Livre des Secrets.",
+          "photosPermission": "Secret Date dépose vos photos de soirée dans votre Livre des Secrets.",
           "cameraPermission": false,
           "microphonePermission": false
         }

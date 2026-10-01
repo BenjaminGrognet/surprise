@@ -30,14 +30,14 @@ export function TextLink({ href, children }: { href: Href; children: string }) {
 // Same look as PrimaryLink/TextLink, but for in-page actions (advance a quiz step, submit a
 // form) rather than navigation — a Link would remount the screen and lose local state.
 export function PrimaryButton({
-  onPress, disabled, wide, children,
-}: { onPress: () => void; disabled?: boolean; wide?: boolean; children: string }) {
+  onPress, disabled, wide, compact, children,
+}: { onPress: () => void; disabled?: boolean; wide?: boolean; compact?: boolean; children: string }) {
   const theme = useTheme();
   return (
     <Pressable
       disabled={disabled}
       onPress={onPress}
-      style={[styles.primary, wide && styles.wide, { backgroundColor: theme.satin }, disabled && styles.disabled]}>
+      style={[styles.primary, wide && styles.wide, compact && styles.primaryCompact, { backgroundColor: theme.satin }, disabled && styles.disabled]}>
       <ThemedText style={[styles.primaryLabel, { color: theme.onAccent }]}>{children}</ThemedText>
     </Pressable>
   );
@@ -71,6 +71,7 @@ const styles = StyleSheet.create({
   },
   wide: { alignSelf: 'stretch' },
   primaryLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 16, lineHeight: 22 },
+  primaryCompact: { paddingVertical: 10 },
   ghost: { borderWidth: 1, borderRadius: 999, paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, alignSelf: 'flex-start' },
   disabled: { opacity: 0.4 },
 });
