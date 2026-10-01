@@ -16,6 +16,7 @@ import { dayHint } from '@/lib/clues';
 import { complicity, type Complicity } from '@/lib/complicity';
 import { isoDay } from '@/lib/dates';
 import { forgetProfile, rememberedProfile } from '@/lib/local-store';
+import { curtainFalls } from '@/lib/souvenirs';
 import { supabaseConfigured } from '@/lib/supabase';
 
 // "Le Tableau des Complots": no catalogue, one sealed card — the next mystery evening and its
@@ -27,6 +28,7 @@ export default function AccueilScreen() {
   const [loaded, setLoaded] = useState(false);
   const [upcoming, setUpcoming] = useState<{ row: EveningHistoryRow; route: SoireeRoute | null } | null>(null);
   const [gauge, setGauge] = useState<Complicity | null>(null);
+  const [toSeal, setToSeal] = useState<EveningHistoryRow | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -39,6 +41,10 @@ export default function AccueilScreen() {
           eveningsHistory().catch(() => []),
         ]);
         setGauge(complicity(history, today));
+        // An evening of the past week whose book the account hasn't sealed yet.
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        setToSeal(history.find((r) => !!r.day && r.day < today && r.day >= isoDay(weekAgo) && !r.souvenirs?.length) ?? null);
         if (row) {
           const state = await getSoireeState(row.page_name).catch(() => null);
           setUpcoming({ row, route: state?.routes.find((r) => r.index === row.route_index) ?? null });
@@ -50,6 +56,7 @@ export default function AccueilScreen() {
 
   return (
     <Screen gap={Spacing.four}>
+      {toSeal ? <BookCall row={toSeal} /> : null}
       {loaded ? (
         upcoming ? <NextIntrigue {...upcoming} /> : role === 'passager' ? <AwaitingIntrigue /> : <NoIntrigue />
       ) : (
@@ -68,7 +75,7 @@ export default function AccueilScreen() {
 
       <View style={styles.links}>
         {role === 'instigateur' && profile ? <TextLink href="/profil">{`Notre profil · ${profile.persona.name}`}</TextLink> : null}
-        <TextLink href="/historique">Nos intrigues passées</TextLink>
+        <TextLink href="/historique">Les Archives</TextLink>
         {role === 'instigateur' && profile ? (
           <TextButton onPress={() => forgetProfile().then(() => setProfile(null))}>Oublier ce profil</TextButton>
         ) : null}
@@ -79,6 +86,8 @@ export default function AccueilScreen() {
 
 function NextIntrigue({ row, route }: { row: EveningHistoryRow; route: SoireeRoute | null }) {
   const now = useNow();
+  // Its last step begun, the evening calls for its book.
+  if (route && curtainFalls(route, now) && !row.souvenirs?.length) return <BookCall row={row} />;
   const start = route ? Date.parse(route.start) : null;
   const under = start != null && route && now >= start && now < Date.parse(route.end);
   const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name, route: String(row.route_index) } });
@@ -94,6 +103,21 @@ function NextIntrigue({ row, route }: { row: EveningHistoryRow; route: SoireeRou
         </ThemedText>
       ) : null}
       <ThemedText type="small" themeColor="textSecondary" style={styles.center}>Touchez la carte pour la révélation</ThemedText>
+    </IntrigueCard>
+  );
+}
+
+// Le Livre des Secrets, at the end of the evening or the days after: a photo, a note, sealed.
+function BookCall({ row }: { row: EveningHistoryRow }) {
+  const open = () => router.push({ pathname: '/livre', params: { soiree: row.page_name, route: String(row.route_index) } });
+  return (
+    <IntrigueCard onPress={open}>
+      <ThemedText type="eyebrow" style={styles.center}>L&apos;intrigue s&apos;achève</ThemedText>
+      <ThemedText type="title" style={styles.center}>Le Livre des Secrets</ThemedText>
+      <ThemedText themeColor="textSecondary" style={styles.center}>
+        Le rideau tombe sur « {row.title} ». Déposez une photo et un mot avant qu&apos;ils ne s&apos;évaporent.
+      </ThemedText>
+      <ThemedText type="small" themeColor="accentInk" style={styles.center}>Ouvrir le grimoire →</ThemedText>
     </IntrigueCard>
   );
 }

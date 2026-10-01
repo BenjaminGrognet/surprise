@@ -48,16 +48,20 @@ export async function saveAccountProfile(answers: Record<string, unknown>, profi
 }
 
 export type EveningHistoryRow = {
+  id: string;
   page_name: string;
   route_index: number;
   title: string;
   pitch: string;
   vibes: string[] | null;
   day: string | null;
+  // Its Livre des Secrets: empty until the account sealed its own page, then both pages (RLS).
+  souvenirs?: { author: string; note: string; photo: string | null }[];
 };
 
 export async function eveningsHistory(): Promise<EveningHistoryRow[]> {
-  const { data, error } = await supabase.from('soirees_choisies').select('*').order('chosen_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('soirees_choisies').select('*, souvenirs(author,note,photo)').order('chosen_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data as EveningHistoryRow[];
 }
@@ -65,7 +69,7 @@ export async function eveningsHistory(): Promise<EveningHistoryRow[]> {
 // The next evening the couple chose, until its day is over.
 export async function upcomingEvening(today: string): Promise<EveningHistoryRow | null> {
   const { data, error } = await supabase
-    .from('soirees_choisies').select('*').gte('day', today).order('day').order('chosen_at', { ascending: false }).limit(1);
+    .from('soirees_choisies').select('*, souvenirs(author,note,photo)').gte('day', today).order('day').order('chosen_at', { ascending: false }).limit(1);
   if (error) throw new Error(error.message);
   return (data?.[0] as EveningHistoryRow) ?? null;
 }

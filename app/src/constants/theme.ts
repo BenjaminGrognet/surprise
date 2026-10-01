@@ -26,6 +26,8 @@ const brand = {
   glass: 'rgba(255, 253, 208, 0.04)', // a field's veil over the night, see-through
   velvet: '#071615', // deep emerald velvet: the quiz cards, darker than the night
   cream: '#FFFDD0',
+  creamSoft: 'rgba(255, 253, 208, 0.6)', // the cream of an intimate aside
+  creamFaint: 'rgba(255, 253, 208, 0.35)', // a placeholder, a whisper
   danger: '#E8857A',
   ok: '#7FD1A4',
   info: '#8DB8E8',

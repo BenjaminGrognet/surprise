@@ -20,6 +20,6 @@ export function TextField({ style, onFocus, onBlur, ...rest }: TextInputProps) {
 }
 
 const styles = StyleSheet.create({
-  // outlineWidth 0: on web the browser's own focus ring would hide the gold one.
-  input: { fontFamily: Fonts.sans, fontSize: 16, padding: 14, borderRadius: 14, borderWidth: 1, outlineWidth: 0 },
+  // A solid, zero-wide outline: on web the browser's own focus ring (style auto ignores the width) would hide the gold one.
+  input: { fontFamily: Fonts.sans, fontSize: 16, padding: 14, borderRadius: 14, borderWidth: 1, outlineStyle: 'solid', outlineWidth: 0 },
 });

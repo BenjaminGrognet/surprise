@@ -2,7 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Linking, StyleSheet, View } from 'react-native';
 
-import { PrimaryLink, TextButton } from '@/components/buttons';
+import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { Countdown, IntrigueCard } from '@/components/intrigue-card';
 import { Organiser } from '@/components/organiser';
 import { imageUri, place } from '@/components/route-result';
@@ -16,6 +16,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { getSoireeState, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { cluesFor, inTime, nextClue, shownClues, stepRevealed } from '@/lib/clues';
 import { formatTime, longDay } from '@/lib/dates';
+import { curtainFalls } from '@/lib/souvenirs';
 
 // "La Révélation": the kept evening seen from each account of the couple. The instigateur has the whole timed
 // roadmap; the passager only gets riddles, and a veiled programme that lifts step by step.
@@ -53,7 +54,21 @@ export default function RevelationScreen() {
   return (
     <Screen gap={Spacing.four}>
       {role === 'instigateur' ? <Organiser route={route} pageName={soiree!} /> : <Surprised route={route} />}
+      <BookLink route={route} soiree={soiree!} />
     </Screen>
+  );
+}
+
+// The evening's last step begun, its Livre des Secrets opens, for both.
+function BookLink({ route, soiree }: { route: SoireeRoute; soiree: string }) {
+  const now = useNow();
+  if (!curtainFalls(route, now)) return null;
+  return (
+    <View style={styles.bookLink}>
+      <TextLink href={{ pathname: '/livre', params: { soiree, route: String(route.index) } }}>
+        Le rideau tombe : ouvrir le Livre des Secrets →
+      </TextLink>
+    </View>
   );
 }
 
@@ -142,6 +157,7 @@ function VeiledStep({ step, number, now }: { step: SoireeStep; number: number; n
 
 const styles = StyleSheet.create({
   center: { textAlign: 'center' },
+  bookLink: { alignItems: 'center' },
   block: { gap: Spacing.three },
   clues: { gap: Spacing.three, padding: Spacing.four, borderRadius: 22, borderWidth: 1 },
   clue: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },

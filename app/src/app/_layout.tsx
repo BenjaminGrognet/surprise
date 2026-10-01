@@ -83,6 +83,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="revelation" />
             <Stack.Screen name="historique" />
+            <Stack.Screen name="livre" />
             {/* The instigateur makes the profile and orders the evenings; the passager only gets the clues. */}
             <Stack.Protected guard={instigateur}>
               <Stack.Screen name="profil" />

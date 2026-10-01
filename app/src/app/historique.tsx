@@ -1,115 +1,190 @@
-import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { PrimaryLink, TextLink } from '@/components/buttons';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Fonts, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
-import { currentUser, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
-import { isoDay } from '@/lib/dates';
+import { eveningsHistory, type EveningHistoryRow } from '@/lib/account';
+import { isoDay, longDay } from '@/lib/dates';
+import { photoUrls } from '@/lib/souvenirs';
 import { supabaseConfigured } from '@/lib/supabase';
 
-const frDay = (iso: string) => new Date(`${iso}T12:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const monthYear = (iso: string) => new Date(`${iso}T12:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).toUpperCase();
 
-type State = 'loading' | 'anonymous' | 'empty' | 'error' | EveningHistoryRow[];
+type State = 'loading' | 'error' | EveningHistoryRow[];
 
-export default function HistoriqueScreen() {
+// "Les Archives": the couple's evenings along a gold thread, newest first. A sealed evening is a relic — only its
+// Photo Témoin and Note Confidentielle remain, the route has faded — and the older it is, the more it fades too.
+// An evening still to come, or one whose book is still open, is a plain anchor on the thread.
+export default function ArchivesScreen() {
   const theme = useTheme();
-  const { role } = useCouple();
   const [state, setState] = useState<State>(supabaseConfigured ? 'loading' : 'error');
+  const [photos, setPhotos] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!supabaseConfigured) return;
-    (async () => {
-      const user = await currentUser();
-      if (!user) return setState('anonymous');
-      try {
-        const rows = await eveningsHistory();
-        setState(rows.length ? rows : 'empty');
-      } catch {
-        setState('error');
-      }
-    })();
+    eveningsHistory()
+      .then(async (rows) => {
+        setState([...rows].sort((a, b) => (b.day ?? '').localeCompare(a.day ?? '')));
+        setPhotos(await photoUrls(rows.flatMap((r) => r.souvenirs?.map((p) => p.photo) ?? [])));
+      })
+      .catch(() => setState('error'));
   }, []);
 
-  const notice = [styles.notice, { backgroundColor: theme.backgroundElement, borderColor: theme.line }];
+  const rows = Array.isArray(state) ? state : [];
+  const relics = rows.filter((r) => r.souvenirs?.length);
   return (
-    <Screen>
-      <ThemedText type="eyebrow">Le carnet</ThemedText>
-      <ThemedText type="title">Nos intrigues</ThemedText>
-      {state === 'loading' && <ThemedText themeColor="textSecondary">On retrouve vos soirées…</ThemedText>}
-      {state === 'error' && !supabaseConfigured && (
-        <View style={notice}>
-          <ThemedText themeColor="textSecondary">Les comptes ne sont pas encore configurés sur ce serveur.</ThemedText>
+    <Screen gap={Spacing.four}>
+      <View style={[styles.header, { borderColor: theme.accentHair }]}>
+        <ThemedText type="eyebrow" style={styles.kicker}>Mémoire du duo</ThemedText>
+        <ThemedText style={[styles.title, { color: theme.accent }]}>Les Archives</ThemedText>
+        <ThemedText style={[styles.tagline, { color: theme.creamSoft }]}>Le grimoire de vos échappées clandestines.</ThemedText>
+      </View>
+
+      {state === 'loading' ? <ThemedText themeColor="textSecondary">On rouvre le grimoire…</ThemedText> : null}
+      {state === 'error' ? (
+        <ThemedText themeColor={supabaseConfigured ? 'danger' : 'textSecondary'}>
+          {supabaseConfigured ? "Les archives n'ont pas pu être ouvertes." : 'Les comptes ne sont pas encore configurés sur ce serveur.'}
+        </ThemedText>
+      ) : null}
+      {Array.isArray(state) && !rows.length ? <Empty /> : null}
+
+      {rows.length ? (
+        <View style={styles.thread}>
+          <View style={styles.line} />
+          {rows.map((row) =>
+            row.souvenirs?.length ? (
+              <Relic key={row.id} row={row} age={relics.indexOf(row)} photos={photos} />
+            ) : (
+              <Anchor key={row.id} row={row} />
+            ),
+          )}
         </View>
-      )}
-      {state === 'error' && supabaseConfigured && <ThemedText themeColor="danger">L&apos;historique n&apos;a pas pu être chargé.</ThemedText>}
-      {state === 'anonymous' && (
-        <View style={notice}>
-          <ThemedText themeColor="textSecondary">Connectez-vous pour retrouver les intrigues que vous avez gardées. </ThemedText>
-          <TextLink href="/compte">Se connecter →</TextLink>
-        </View>
-      )}
-      {state === 'empty' && (
-        <>
-          <ThemedText themeColor="textSecondary">
-            {role === 'passager'
-              ? "Pas encore d'intrigue : votre instigateur trame la première."
-              : "Pas encore d'intrigue gardée : lancez-en une, et gardez la soirée que vous allez vraiment vivre."}
-          </ThemedText>
-          {role === 'instigateur' ? <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink> : null}
-        </>
-      )}
-      {Array.isArray(state) && (
-        <>
-          <ThemedText themeColor="textSecondary">
-            {state.length} intrigue{state.length > 1 ? 's' : ''} gardée{state.length > 1 ? 's' : ''}.
-          </ThemedText>
-          <View style={styles.list}>
-            {state.map((row, i) => (
-              <HistoryCard key={i} row={row} />
-            ))}
-          </View>
-        </>
-      )}
+      ) : null}
+
+      <View style={[styles.footer, { borderColor: theme.accentHair }]}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}>
+          <ThemedText type="small" style={{ color: theme.creamSoft }}>← Le tableau</ThemedText>
+        </Pressable>
+        <ThemedText type="eyebrow" style={styles.kicker}>
+          {relics.length} secret{relics.length > 1 ? 's' : ''} gardé{relics.length > 1 ? 's' : ''}
+        </ThemedText>
+      </View>
     </Screen>
   );
 }
 
-// The instigateur reopens a past evening's routes, one still to come on its roadmap; the passager opens the
-// revelation, whose steps lift as their hour comes.
-function HistoryCard({ row }: { row: EveningHistoryRow }) {
-  const theme = useTheme();
+function Empty() {
   const { role } = useCouple();
-  const ahead = !!row.day && row.day >= isoDay(new Date());
-  const sealed = ahead && role === 'passager';
-  const params = { soiree: row.page_name, route: String(row.route_index) };
   return (
-    <Pressable
-      onPress={() => router.push({ pathname: ahead || role === 'passager' ? '/revelation' : '/soiree', params })}
-      style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: ahead ? theme.accentSoft : theme.line }]}>
-      <ThemedText type="eyebrow" themeColor={ahead ? 'accentInk' : 'textSecondary'}>
-        {ahead ? 'À venir · ' : ''}{row.day ? frDay(row.day) : 'Date libre'}
+    <>
+      <ThemedText themeColor="textSecondary">
+        {role === 'passager'
+          ? 'Pas encore de secret : votre instigateur trame le premier.'
+          : 'Pas encore de secret : lancez une intrigue, vivez-la, et scellez-en le souvenir.'}
       </ThemedText>
-      {/* To the passager, an evening to come keeps its secret here too: its title would give it away. */}
-      <ThemedText type="subtitle">{sealed ? 'Une intrigue scellée' : row.title}</ThemedText>
-      {sealed ? null : <ThemedText themeColor="textSecondary">{row.pitch}</ThemedText>}
-      <View style={styles.tags}>
-        {(sealed ? [] : row.vibes ?? []).map((v) => (
-          <ThemedText key={v} type="small" themeColor="accentInk" style={[styles.tag, { borderColor: theme.accentSoft }]}>{v}</ThemedText>
+      {role === 'instigateur' ? <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink> : null}
+    </>
+  );
+}
+
+// The patina of time: the newest relic shines, each older one a little dimmer and greyer, down to a floor.
+function patina(age: number) {
+  const t = Math.min(age, 3) / 3;
+  return {
+    photo: `grayscale(${20 + 80 * t}%) sepia(${10 - 10 * t}%) brightness(${85 - 10 * t}%)`,
+    photoOpacity: 1 - 0.4 * t,
+    text: 0.75 - 0.25 * t,
+    card: 1 - 0.4 * t,
+    border: 0.12 - 0.06 * t,
+  };
+}
+
+function Relic({ row, age, photos }: { row: EveningHistoryRow; age: number; photos: Record<string, string> }) {
+  const theme = useTheme();
+  const p = patina(age);
+  const pages = row.souvenirs ?? [];
+  const photo = pages.map((s) => s.photo && photos[s.photo]).find(Boolean);
+  const notes = pages.map((s) => s.note).filter(Boolean);
+  const open = () => router.push({ pathname: '/livre', params: { soiree: row.page_name, route: String(row.route_index) } });
+  return (
+    <Pressable onPress={open} style={styles.entry}>
+      <View style={[styles.dot, age === 0 ? { backgroundColor: theme.accent, boxShadow: `0 0 8px ${theme.accent}` } : styles.dimDot]} />
+      <ThemedText style={[styles.date, { color: theme.accent, opacity: age === 0 ? 1 : 0.6 }]}>
+        INTRIGUE SCELLÉE • {row.day ? monthYear(row.day) : 'DATE LIBRE'}
+      </ThemedText>
+      <ThemedText style={[styles.name, { color: theme.cream, opacity: age === 0 ? 1 : 0.8 }]}>{row.title}</ThemedText>
+      <View style={[styles.card, { backgroundColor: `rgba(7, 22, 21, ${p.card})`, borderColor: `rgba(212, 175, 55, ${p.border})` }]}>
+        {photo ? (
+          <View style={[styles.photo, { opacity: p.photoOpacity }]}>
+            <View style={[StyleSheet.absoluteFill, { filter: p.photo }]}>
+              <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} />
+            </View>
+            {/* A veil rising from the card's velvet, so no photo breaks the night. */}
+            <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none" viewBox="0 0 1 1">
+              <Defs>
+                <LinearGradient id={`fade-${row.id}`} x1="0" y1="1" x2="0" y2="0">
+                  <Stop offset="0" stopColor={theme.velvet} stopOpacity={0.8} />
+                  <Stop offset="0.5" stopColor={theme.velvet} stopOpacity={0} />
+                </LinearGradient>
+              </Defs>
+              <Rect width="1" height="1" fill={`url(#fade-${row.id})`} />
+            </Svg>
+          </View>
+        ) : null}
+        {notes.map((n, i) => (
+          <ThemedText key={i} style={[styles.note, { color: theme.cream, opacity: p.text }]}>« {n} »</ThemedText>
         ))}
       </View>
     </Pressable>
   );
 }
 
+// Not a relic yet: an evening to come (its revelation), or one whose book still waits to be sealed.
+function Anchor({ row }: { row: EveningHistoryRow }) {
+  const theme = useTheme();
+  const { role } = useCouple();
+  const ahead = !!row.day && row.day >= isoDay(new Date());
+  const href = { pathname: ahead ? '/revelation' : '/livre', params: { soiree: row.page_name, route: String(row.route_index) } } as const;
+  // To the passager, an evening to come keeps its secret here too: its title would give it away.
+  const hidden = ahead && role === 'passager';
+  return (
+    <Pressable onPress={() => router.push(href)} style={styles.entry}>
+      <View style={[styles.dot, styles.hollow, { borderColor: theme.accent, backgroundColor: theme.background }]} />
+      <ThemedText style={[styles.date, { color: theme.accent, opacity: 0.8 }]}>
+        {ahead ? 'À VENIR' : 'À SCELLER'} • {row.day ? longDay(row.day).toUpperCase() : 'DATE LIBRE'}
+      </ThemedText>
+      <ThemedText style={[styles.name, { color: theme.cream, opacity: 0.8 }]}>{hidden ? 'Une intrigue en préparation' : row.title}</ThemedText>
+      <TextLink href={href}>
+        {ahead ? (role === 'passager' ? 'Voir les indices →' : 'Voir la feuille de route →') : 'Ouvrir le Livre des Secrets →'}
+      </TextLink>
+    </Pressable>
+  );
+}
+
+const DOT = 8;
+const LINE_X = 17;
+
 const styles = StyleSheet.create({
-  notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
-  list: { gap: Spacing.three },
-  card: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.two },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  tag: { borderRadius: 999, borderWidth: 1, paddingVertical: 4, paddingHorizontal: 12, overflow: 'hidden' },
+  header: { alignItems: 'center', gap: Spacing.two, paddingBottom: Spacing.four, borderBottomWidth: 1 },
+  kicker: { fontSize: 10, letterSpacing: 2.5 },
+  title: { fontFamily: Fonts.heading, fontSize: 26, lineHeight: 34, textAlign: 'center', letterSpacing: 0.5 },
+  tagline: { fontFamily: Fonts.headingItalic, fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  thread: { gap: Spacing.five, paddingTop: Spacing.two },
+  line: { position: 'absolute', left: LINE_X, top: Spacing.three, bottom: Spacing.three, width: 1, backgroundColor: 'rgba(212, 175, 55, 0.2)' },
+  entry: { paddingLeft: 40 },
+  dot: { position: 'absolute', left: LINE_X - DOT / 2 + 0.5, top: 5, width: DOT, height: DOT, borderRadius: DOT / 2, zIndex: 1 },
+  dimDot: { backgroundColor: 'rgba(212, 175, 55, 0.4)' },
+  hollow: { borderWidth: 1 },
+  date: { fontFamily: Fonts.headingBold, fontSize: 10, lineHeight: 16, letterSpacing: 1.2 },
+  name: { fontFamily: Fonts.heading, fontSize: 17, lineHeight: 24, marginTop: 2 },
+  card: { marginTop: Spacing.three, padding: Spacing.three, borderRadius: 16, borderWidth: 1, gap: Spacing.three },
+  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(212, 175, 55, 0.05)' },
+  note: { fontFamily: Fonts.headingItalic, fontSize: 13, lineHeight: 20 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, paddingTop: Spacing.three },
 });

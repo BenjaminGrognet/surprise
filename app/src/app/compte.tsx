@@ -78,7 +78,7 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
           <CoupleProfile />
         </>
       )}
-      <TextLink href="/historique">Nos intrigues passées →</TextLink>
+      <TextLink href="/historique">Les Archives →</TextLink>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
     </>
   );

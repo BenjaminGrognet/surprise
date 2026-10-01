@@ -312,6 +312,12 @@ fonction `join_couple`). Le passager a son propre compte, ne voit que le compte 
 programme voilé des soirées de son instigateur ; le quiz et `/soiree` lui sont fermés. Un compte sans couple est
 instigateur. Limite connue : le passager pourrait lire les données d'une soirée par l'API (l'app seule les voile).
 
+Le Livre des Secrets (`/livre?soiree=…&route=…`) : en fin de soirée (sa dernière étape commencée) puis les jours
+suivants, chacun des deux scelle une page — une photo, un mot (table `souvenirs`, photos dans le bucket privé
+`souvenirs`, lues par liens signés). Scellée, une page ne se modifie plus ; on ne lit celle de l'autre qu'après avoir
+scellé la sienne (fonction `sealed_by_me`). Les Archives (`/historique`) n'en montrent plus que la photo et les
+notes, le long d'un fil d'or, de plus en plus patinées avec l'âge ; le parcours n'y apparaît plus.
+
 ```bash
 # app/.env, lu au build : publiques par nature (clé anon), jamais la service role key
 EXPO_PUBLIC_SUPABASE_URL=...
