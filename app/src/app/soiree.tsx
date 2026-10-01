@@ -5,7 +5,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
 import { OptionCard, OptionGrid } from '@/components/option-card';
-import { OptionButton, OptionRow } from '@/components/option-button';
 import { RouteResult } from '@/components/route-result';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -25,12 +24,12 @@ const MOODS = ['cocooning', 'romantique', 'nous', 'curieux', 'surprise'];
 const MIDDLE_MOOD = 2;
 
 const MEALS = [
-  { value: true, label: 'Oui, on dîne', emoji: '🍽️' },
-  { value: false, label: 'Non, déjà mangé', emoji: '✓' },
+  { value: true, label: 'Oui, on dîne', icon: 'couvert' },
+  { value: false, label: 'Non, déjà mangé', icon: 'coche' },
 ];
 const NIGHTS = [
-  { value: false, label: 'On rentre', emoji: '🏠' },
-  { value: true, label: 'On découche', emoji: '🗝️' },
+  { value: false, label: 'On rentre', icon: 'maison' },
+  { value: true, label: 'On découche', icon: 'cle' },
 ];
 // While Claude's titles are still coming, poll for up to a minute, every couple of seconds.
 const NAMING_TIMEOUT_MS = 60000;
@@ -214,7 +213,7 @@ export default function SoireeScreen() {
       <Section title="L'humeur du soir">
         <OptionGrid>
           {moods.map((m, i) => (
-            <OptionCard key={m.value} label={m.label} emoji={m.emoji} selected={Math.min(mood, moods.length - 1) === i}
+            <OptionCard key={m.value} label={m.label} icon={m.icon} emoji={m.emoji} selected={Math.min(mood, moods.length - 1) === i}
               onPress={() => setMood(i)} />
           ))}
         </OptionGrid>
@@ -223,7 +222,7 @@ export default function SoireeScreen() {
       <Section title="Les options secrètes" hint={`Jusqu'à ${data.max - 1}, glissées dans le programme.`}>
         <OptionGrid>
           {others.map((o) => (
-            <OptionCard key={o.value} label={o.label} emoji={o.emoji} selected={secrets.includes(o.value)}
+            <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={secrets.includes(o.value)}
               disabled={!secrets.includes(o.value) && secrets.length >= data.max - 1}
               onPress={() => toggleSecret(o.value)} />
           ))}
@@ -231,54 +230,54 @@ export default function SoireeScreen() {
       </Section>
 
       <Section title="Le dîner fait-il partie du complot ?">
-        <OptionRow>
+        <OptionGrid>
           {MEALS.map((o) => (
-            <OptionButton key={String(o.value)} label={o.label} emoji={o.emoji} pill selected={night.diner === o.value}
+            <OptionCard key={String(o.value)} label={o.label} icon={o.icon} selected={night.diner === o.value}
               onPress={() => setNight((n) => ({ ...n, diner: o.value }))} />
           ))}
-        </OptionRow>
+        </OptionGrid>
       </Section>
 
       <Section title="Et quand la nuit tombe ?" hint="Découcher : une nuit à l'hôtel ou dans une love room.">
-        <OptionRow>
+        <OptionGrid>
           {NIGHTS.map((o) => (
-            <OptionButton key={String(o.value)} label={o.label} emoji={o.emoji} pill selected={night.decoucher === o.value}
+            <OptionCard key={String(o.value)} label={o.label} icon={o.icon} selected={night.decoucher === o.value}
               onPress={() => setNight((n) => ({ ...n, decoucher: o.value }))} />
           ))}
-        </OptionRow>
+        </OptionGrid>
       </Section>
 
       <Section title="L'heure du rendez-vous" hint="Sans choix : l'heure habituelle, ou plus tôt si une envie le demande.">
-        <OptionRow>
+        <OptionGrid>
           {data.starts.map((o) => (
-            <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.start === o.value} onPress={() => toggleStart(o.value)} />
+            <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={night.start === o.value} onPress={() => toggleStart(o.value)} />
           ))}
-        </OptionRow>
+        </OptionGrid>
       </Section>
 
       <Section title="Le rideau tombe…" hint="Sans choix : ce que vos envies demandent, ou minuit et demi.">
-        <OptionRow>
+        <OptionGrid>
           {data.ends.map((o) => (
-            <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.end === o.value} onPress={() => toggleEnd(o.value)} />
+            <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={night.end === o.value} onPress={() => toggleEnd(o.value)} />
           ))}
-        </OptionRow>
+        </OptionGrid>
       </Section>
 
       <Section title="Le budget du soir" hint={profile ? 'Sans choix : le budget habituel de votre profil.' : 'Sans choix : 120 €.'}>
-        <OptionRow>
+        <OptionGrid>
           {data.budgets.map((o) => (
-            <OptionButton key={o.budget} label={o.label} emoji={o.emoji} pill selected={night.budget === o.budget}
+            <OptionCard key={o.budget} label={o.label} desc={o.desc} icon={o.icon} emoji={o.emoji} selected={night.budget === o.budget}
               onPress={() => setNight((n) => ({ ...n, budget: n.budget === o.budget ? null : o.budget }))} />
           ))}
-        </OptionRow>
+        </OptionGrid>
       </Section>
 
       <Section title="Une occasion à célébrer ?">
-        <OptionRow>
+        <OptionGrid>
           {data.occasions.map((o) => (
-            <OptionButton key={o.value} label={o.label} emoji={o.emoji} pill selected={night.occasion === o.value} onPress={() => toggleOccasion(o.value)} />
+            <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={night.occasion === o.value} onPress={() => toggleOccasion(o.value)} />
           ))}
-        </OptionRow>
+        </OptionGrid>
       </Section>
 
       <DayField label="Le jour J" value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />

@@ -43,8 +43,8 @@ export const getQuiz = () => api<QuizData>('/api/quiz');
 export const saveProfile = (answers: Record<string, unknown>) =>
   api<{ profile: Profile }>('/api/profiles', { method: 'POST', body: JSON.stringify({ answers }) }).then((r) => r.profile);
 
-export type ChipOption = { value: string; label: string; emoji?: string };
-export type BudgetOption = { budget: number; label: string; emoji?: string };
+export type ChipOption = { value: string; label: string; emoji?: string; icon?: string };
+export type BudgetOption = { budget: number; label: string; desc?: string; emoji?: string; icon?: string };
 export type SoireeData = {
   envies: ChipOption[];
   occasions: ChipOption[];

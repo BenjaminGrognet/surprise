@@ -43,7 +43,7 @@ export async function saveAccountProfile(answers: Record<string, unknown>, profi
     const { error } = await supabase.from('couple_profiles').update({ answers, profile }).eq('id', existing.id);
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await supabase.from('couple_profiles').insert({ user_id: user.id, answers, profile });
+    const { error } = await supabase.from('couple_profiles').insert({ id: user.id, user_id: user.id, answers, profile }); // `id` has no default: one profile per account
     if (error) throw new Error(error.message);
   }
 }

@@ -15,22 +15,9 @@ import { accountProfile, currentUser, saveAccountProfile } from '@/lib/account';
 import { getQuiz, saveProfile, type Profile, type Question, type QuizData } from '@/lib/api';
 import { longDay, nextFriday } from '@/lib/dates';
 import { rememberedProfile, rememberProfile } from '@/lib/local-store';
+import { DEFAULT_BANNER, PERSONA_BANNERS } from '@/lib/persona-banners';
 
-// Stored with the app (assets/images/bannieres, sources in SOURCES.md): no outside link to break.
-const BANNER = require('@/assets/images/bannieres/romantiques.jpg');
-
-const PERSONA_BANNERS: Record<string, number> = {
-  'Les Explorateurs': require('@/assets/images/bannieres/explorateurs.jpg'),
-  'Les Romantiques': require('@/assets/images/bannieres/romantiques.jpg'),
-  'Les Épicuriens': require('@/assets/images/bannieres/epicuriens.jpg'),
-  'Les Noctambules': require('@/assets/images/bannieres/noctambules.jpg'),
-  'Les Curieux': require('@/assets/images/bannieres/curieux.jpg'),
-  'Les Complices': require('@/assets/images/bannieres/complices.jpg'),
-  'Les Créatifs': require('@/assets/images/bannieres/creatifs.jpg'),
-  'Les Flâneurs': require('@/assets/images/bannieres/flaneurs.jpg'),
-};
-
-type Phase = 'loading' | 'quiz' | 'saving' | 'error' | 'reveal';
+type Phase = 'loading' | 'quiz' | 'saving' | 'error' | 'unreachable' | 'reveal';
 
 export default function ProfilScreen() {
   const { new: isNew } = useLocalSearchParams<{ new?: string }>();
@@ -59,7 +46,13 @@ export default function ProfilScreen() {
 
   useEffect(() => {
     (async () => {
-      const data = await getQuiz();
+      let data: QuizData;
+      try {
+        data = await getQuiz();
+      } catch {
+        setPhase('unreachable');
+        return;
+      }
       setQuiz(data);
       if (!isNew) {
         const remembered = await rememberedProfile();
@@ -79,6 +72,14 @@ export default function ProfilScreen() {
     })();
   }, [isNew]);
 
+  if (phase === 'unreachable') {
+    return (
+      <Screen>
+        <ThemedText themeColor="danger">Le serveur ne répond pas. Vérifiez qu&apos;il est lancé (fenêtre « surprise - serveur »), puis réessayez.</ThemedText>
+        <PrimaryLink href="/profil">Réessayer</PrimaryLink>
+      </Screen>
+    );
+  }
 
   if (phase === 'loading' || phase === 'saving' || !quiz) {
     return (
@@ -232,7 +233,7 @@ function Reveal({
   const eviter = quiz.questions.find((q) => q.id === 'eviter');
   const chosen = (answers.eviter as string[] | undefined) ?? [];
   const never = chosen.map((v) => eviter?.options?.find((o) => o.value === v)).filter((o): o is NonNullable<typeof o> => !!o);
-  const banner = PERSONA_BANNERS[p.persona.name] ?? BANNER;
+  const banner = PERSONA_BANNERS[p.persona.name] ?? DEFAULT_BANNER;
   return (
     <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
       <Image source={banner} style={styles.banner} />

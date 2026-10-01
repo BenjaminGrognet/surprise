@@ -317,7 +317,7 @@ de `soirees_choisies`), par un lien depuis la révélation de la soirée (`/invi
 une autre soirée peut avoir un autre passager (`reset_passager` le renvoie et renouvelle le lien). Le passager a son
 propre compte, ne voit que le compte à rebours, les indices et le programme voilé des soirées où il est invité ; le quiz
 et `/soiree` lui sont fermés. Un compte passager d'au moins une soirée est passager, tout autre est instigateur.
-L'instigateur peut supprimer une soirée passée (Archives, livre et photos avec) et chacun son compte
+L'instigateur peut supprimer une soirée passée (Mes soirées, livre et photos avec) et chacun son compte
 (`delete_my_account`, photos retirées avant). Limite connue : le passager pourrait lire les données d'une soirée par
 l'API (l'app seule les voile).
 
@@ -330,7 +330,7 @@ soirée est sauté). Règles sans Claude (`parcours.secret_title`), envoyé avec
 Le Livre des Secrets (`/livre?soiree=…&route=…`) : en fin de soirée (sa dernière étape commencée) puis les jours
 suivants, chacun des deux scelle une page — une photo, un mot (table `souvenirs`, photos dans le bucket privé
 `souvenirs`, lues par liens signés). Scellée, une page ne se modifie plus ; on ne lit celle de l'autre qu'après avoir
-scellé la sienne (fonction `sealed_by_me`). Les Archives (`/historique`) n'en montrent plus que la photo et les
+scellé la sienne (fonction `sealed_by_me`). Mes soirées (`/historique`) n'en montrent plus que la photo et les
 notes, le long d'un fil d'or, de plus en plus patinées avec l'âge ; le parcours n'y apparaît plus.
 
 ```bash

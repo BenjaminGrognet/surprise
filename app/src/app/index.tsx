@@ -85,7 +85,7 @@ export default function AccueilScreen() {
       {gauge ? <Gauge gauge={gauge} /> : null}
 
       <View style={styles.links}>
-        <TextLink href="/historique">Les Archives</TextLink>
+        <TextLink href="/historique">Mes soirées</TextLink>
         {role === 'instigateur' && profile ? (
           <TextButton onPress={() => forgetProfile().then(() => setProfile(null))}>Oublier ce profil</TextButton>
         ) : null}

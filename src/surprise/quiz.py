@@ -65,13 +65,13 @@ BUDGET_OPTIONS: list[dict[str, Any]] = [
 ]
 # Asked each time an evening is composed (/soiree), not in the profile: when it starts and ends.
 START_OPTIONS: list[dict[str, Any]] = [
-    {"value": "normal", "label": "À l'heure habituelle", "emoji": "🕖", "start": "19:00"},
-    {"value": "tot", "label": "On commence plus tôt", "emoji": "🌇", "start": "17:00"},
+    {"value": "normal", "label": "À l'heure habituelle", "icon": "horloge", "emoji": "🕖", "start": "19:00"},
+    {"value": "tot", "label": "On commence plus tôt", "icon": "couchant", "emoji": "🌇", "start": "17:00"},
 ]
 END_OPTIONS: list[dict[str, Any]] = [
-    {"value": "tot", "label": "Avant minuit", "emoji": "🌙", "end": "23:30"},
-    {"value": "verre", "label": "Sur un dernier verre", "emoji": "🍸", "end": "00:30"},
-    {"value": "danser", "label": "Au bout de la nuit", "emoji": "🌃", "end": "03:30"},
+    {"value": "tot", "label": "Avant minuit", "icon": "lune", "emoji": "🌙", "end": "23:30"},
+    {"value": "verre", "label": "Sur un dernier verre", "icon": "verre", "emoji": "🍸", "end": "00:30"},
+    {"value": "danser", "label": "Au bout de la nuit", "icon": "disco", "emoji": "🌃", "end": "03:30"},
 ]
 
 # The profile's questions: what lasts from one evening to the next — no hour or meal, asked
@@ -207,29 +207,29 @@ QUESTIONS: list[dict[str, Any]] = [
 # audace, avoid (dropped when another wish of the evening asks for it: party and cocooning go together).
 MAX_ENVIES = 3
 ENVIES: list[dict[str, Any]] = [
-    {"value": "nous", "label": "Fidèles à nous-mêmes", "emoji": "💫", "vibes": []},
-    {"value": "fete", "label": "Faire la fête", "emoji": "🪩", "vibes": ["fete", "musique"], "start": "20:00", "end": "03:30"},
-    {"value": "cocooning", "label": "Cocooning", "emoji": "🧸", "vibes": ["detente", "romantique", "savourer"], "end": "23:30",
+    {"value": "nous", "label": "Fidèles à nous-mêmes", "icon": "ancre", "emoji": "💫", "vibes": []},
+    {"value": "fete", "label": "Faire la fête", "icon": "disco", "emoji": "🪩", "vibes": ["fete", "musique"], "start": "20:00", "end": "03:30"},
+    {"value": "cocooning", "label": "Cocooning", "icon": "fauteuil", "emoji": "🧸", "vibes": ["detente", "romantique", "savourer"], "end": "23:30",
      "avoid": ["nuit", "electro", "danse", "sport", "jeu_actif", "defouloir", "grande_salle", "frisson"]},
-    {"value": "romantique", "label": "Romantique", "emoji": "🕯️", "vibes": ["romantique", "savourer", "emerveiller"], "dinner": True},
-    {"value": "rire", "label": "Rire aux éclats", "emoji": "😂", "vibes": ["rire", "defi"]},
-    {"value": "jouer", "label": "Jouer, relever un défi", "emoji": "🧩", "vibes": ["defi", "bouger"]},
-    {"value": "curieux", "label": "Apprendre, s'émerveiller", "emoji": "🏛️", "vibes": ["cultiver", "emerveiller"]},
-    {"value": "creer", "label": "Créer de nos mains", "emoji": "🎨", "vibes": ["creer", "savourer"]},
-    {"value": "gourmand", "label": "Se régaler", "emoji": "🍽️", "vibes": ["savourer"], "dinner": True},
-    {"value": "musique", "label": "Vibrer en musique", "emoji": "🎷", "vibes": ["musique", "emerveiller"]},
-    {"value": "air", "label": "Prendre l'air", "emoji": "🌿", "vibes": ["flaner", "savourer"], "start": "18:30"},
-    {"value": "pimenter", "label": "Pimenter la soirée", "emoji": "🌶️", "vibes": ["coquin", "romantique"], "start": "20:00"},
-    {"value": "frissons", "label": "Frissonner", "emoji": "👻", "vibes": ["frisson", "insolite"]},
-    {"value": "surprise", "label": "Surprenez-nous", "emoji": "🎁", "vibes": [], "audace": 0.3},
+    {"value": "romantique", "label": "Romantique", "icon": "bougie", "emoji": "🕯️", "vibes": ["romantique", "savourer", "emerveiller"], "dinner": True},
+    {"value": "rire", "label": "Rire aux éclats", "icon": "rires", "emoji": "😂", "vibes": ["rire", "defi"]},
+    {"value": "jouer", "label": "Jouer, relever un défi", "icon": "cible", "emoji": "🧩", "vibes": ["defi", "bouger"]},
+    {"value": "curieux", "label": "Apprendre, s'émerveiller", "icon": "monument", "emoji": "🏛️", "vibes": ["cultiver", "emerveiller"]},
+    {"value": "creer", "label": "Créer de nos mains", "icon": "pinceau", "emoji": "🎨", "vibes": ["creer", "savourer"]},
+    {"value": "gourmand", "label": "Se régaler", "icon": "couvert", "emoji": "🍽️", "vibes": ["savourer"], "dinner": True},
+    {"value": "musique", "label": "Vibrer en musique", "icon": "musique", "emoji": "🎷", "vibes": ["musique", "emerveiller"]},
+    {"value": "air", "label": "Prendre l'air", "icon": "boussole", "emoji": "🌿", "vibes": ["flaner", "savourer"], "start": "18:30"},
+    {"value": "pimenter", "label": "Pimenter la soirée", "icon": "flamme", "emoji": "🌶️", "vibes": ["coquin", "romantique"], "start": "20:00"},
+    {"value": "frissons", "label": "Frissonner", "icon": "frissons", "emoji": "👻", "vibes": ["frisson", "insolite"]},
+    {"value": "surprise", "label": "Surprenez-nous", "icon": "cadeau", "emoji": "🎁", "vibes": [], "audace": 0.3},
 ]
 
 # What the evening celebrates, if anything: added to its wishes.
 OCCASIONS: list[dict[str, Any]] = [
-    {"value": "anniversaire", "label": "Un anniversaire", "emoji": "🎂", "vibes": ["romantique"], "dinner": True},
-    {"value": "retrouvailles", "label": "Des retrouvailles", "emoji": "🫶", "vibes": ["romantique"]},
-    {"value": "grande", "label": "Une grande occasion", "emoji": "💍", "vibes": ["romantique", "emerveiller"], "dinner": True},
-    {"value": "rien", "label": "Rien, juste l'envie", "emoji": "✨", "vibes": []},
+    {"value": "anniversaire", "label": "Un anniversaire", "icon": "gateau", "emoji": "🎂", "vibes": ["romantique"], "dinner": True},
+    {"value": "retrouvailles", "label": "Des retrouvailles", "icon": "coeur", "emoji": "🫶", "vibes": ["romantique"]},
+    {"value": "grande", "label": "Une grande occasion", "icon": "diamant", "emoji": "💍", "vibes": ["romantique", "emerveiller"], "dinner": True},
+    {"value": "rien", "label": "Rien, juste l'envie", "icon": "etincelles", "emoji": "✨", "vibes": []},
 ]
 
 # Persona: the vibes that make it, its name and how it describes the couple.

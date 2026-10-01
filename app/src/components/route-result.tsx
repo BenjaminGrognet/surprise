@@ -3,13 +3,19 @@ import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { API_URL, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { formatTime } from '@/lib/dates';
 
 const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre: 'Un verre', sortie: 'Sortie', nuit: 'La nuit' };
 const BOOKING_LABELS: Record<SoireeStep['booking_action'], string> = { voir_lieu: 'Voir le lieu', voir_fiche: 'Voir la fiche', reserver: 'Réserver' };
+// The activity cards: the night green, with the brand's own inks.
+const PAPER = Colors.dark.background;
+const INK = Colors.dark.text;
+const INK_SOFT = Colors.dark.textSecondary;
+const GOLD_INK = Colors.dark.accentInk;
+const BADGE_INK = { ok: Colors.dark.ok, info: Colors.dark.info, warn: Colors.dark.warn } as const;
 const BADGE_KIND: Record<SoireeStep['kind'], 'ok' | 'info' | 'warn'> = { verifie: 'ok', seance: 'ok', gratuit: 'info', sans_resa: 'warn', nuit: 'warn' };
 
 export function formatPrice(step: SoireeStep) {
@@ -50,7 +56,7 @@ export function RouteResult({
         {onRedo ? <TextButton onPress={() => onRedo(route.redo)}>{busyRedo === route.redo ? '↻…' : '↻ Tout'}</TextButton> : null}
       </View>
       <ThemedText type="subtitle">{route.title}</ThemedText>
-      {route.pitch ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>{route.pitch}</ThemedText> : null}
+      {route.pitch ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>{route.pitch}</ThemedText> : null}
 
       <View style={styles.steps}>
         {route.steps.map((step, i) => (
@@ -100,32 +106,38 @@ function StepRow({
   const remove = step.redo ? `${step.redo}/remove` : null;
   const [open, setOpen] = useState(false);
   // ponytail: length stands for "cut at two lines"; measure the text layout if it misfires.
-  const long = (step.text?.length ?? 0) > 110 || step.title.length > 70;
+  const long = (step.text?.length ?? 0) > 55 || step.title.length > 70;
+  const where = place(step);
+  const showWhere = !!where && where !== step.title && !step.title.includes(step.venue ?? "0000");
   return (
-    <View style={[styles.card, { borderColor: theme.line, backgroundColor: theme.background }]}>
+    <View style={[styles.card, { borderColor: theme.line, backgroundColor: PAPER }]}>
       <View style={styles.side}>
         <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
           {step.image_url ? <Image source={{ uri: imageUri(step.image_url) }} style={styles.thumbImg} /> : null}
         </View>
-        {onRedo && step.redo ? <TextButton onPress={() => onRedo(step.redo!)}>{busyRedo === step.redo ? '↻…' : '↻ Changer'}</TextButton> : null}
-        {onRedo && removable && remove ? <TextButton onPress={() => onRedo(remove)}>{busyRedo === remove ? '✕…' : '✕ Retirer'}</TextButton> : null}
+        {onRedo && step.redo ? <Pressable onPress={() => onRedo(step.redo!)}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === step.redo ? '↻…' : '↻ Changer'}</ThemedText></Pressable> : null}
+        {onRedo && removable && remove ? <Pressable onPress={() => onRedo(remove)}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === remove ? '✕…' : '✕ Retirer'}</ThemedText></Pressable> : null}
       </View>
       <View style={styles.body}>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-          <ThemedText type="smallBold" themeColor="accentInk">{formatTime(step.start)}</ThemedText> → {formatTime(step.end)} · {ROLE_LABELS[step.role]}
+        <ThemedText type="small" style={{ color: INK_SOFT }} numberOfLines={1}>
+          <ThemedText type="smallBold" style={{ color: GOLD_INK }}>{formatTime(step.start)}</ThemedText> → {formatTime(step.end)} · {ROLE_LABELS[step.role]}
         </ThemedText>
-        <ThemedText type="smallBold" numberOfLines={open ? undefined : 2}>{step.title}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>{place(step)}</ThemedText>
-        {step.text ? <ThemedText type="small" numberOfLines={open ? undefined : 2}>{step.text}</ThemedText> : null}
-        {long ? <TextButton onPress={() => setOpen(!open)}>{open ? '− Réduire' : '+ Lire la suite'}</TextButton> : null}
-        <ThemedText type="small" themeColor={BADGE_KIND[step.kind]} numberOfLines={1}>{step.basis}</ThemedText>
+        <ThemedText type="smallBold" style={{ color: INK }} numberOfLines={open ? undefined : 2}>{step.title}</ThemedText>
+        {showWhere ? <ThemedText type="small" style={{ color: INK_SOFT }} numberOfLines={1}>{where}</ThemedText> : null}
+        {step.text ? <ThemedText type="small" style={{ color: INK }} numberOfLines={open ? undefined : 1}>{step.text}</ThemedText> : null}
+        {long ? (
+          <Pressable onPress={() => setOpen(!open)}>
+            <ThemedText type="small" style={{ color: GOLD_INK }}>{open ? '− Réduire' : '+ Lire la suite'}</ThemedText>
+          </Pressable>
+        ) : null}
+        <ThemedText type="small" style={{ color: BADGE_INK[BADGE_KIND[step.kind]] }} numberOfLines={1}>{step.basis}</ThemedText>
         <View style={styles.line}>
-          <ThemedText type="smallBold">{formatPrice(step)}</ThemedText>
+          <ThemedText type="smallBold" style={{ color: INK }}>{formatPrice(step)}</ThemedText>
           {step.booking_url ? (
             <Pressable
               onPress={() => Linking.openURL(step.booking_url!)}
               style={[styles.book, step.booking_action === 'reserver' ? { backgroundColor: theme.satin } : { borderColor: theme.accentSoft, borderWidth: 1 }]}>
-              <ThemedText type="smallBold" themeColor={step.booking_action === 'reserver' ? 'onAccent' : 'accentInk'}>
+              <ThemedText type="smallBold" style={{ color: step.booking_action === 'reserver' ? theme.onAccent : GOLD_INK }}>
                 {BOOKING_LABELS[step.booking_action]} ↗
               </ThemedText>
             </Pressable>
@@ -137,16 +149,16 @@ function StepRow({
 }
 
 const styles = StyleSheet.create({
-  route: { gap: Spacing.two, padding: Spacing.three, borderRadius: 22, borderWidth: 1, marginTop: Spacing.two },
+  route: { gap: Spacing.one, padding: Spacing.two + 2, borderRadius: 18, borderWidth: 1, marginTop: Spacing.one },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
   eyebrow: { flexShrink: 1 },
-  steps: { gap: Spacing.one, marginVertical: Spacing.one },
-  hop: { paddingLeft: Spacing.two, paddingVertical: Spacing.half },
-  card: { flexDirection: 'row', gap: Spacing.three, borderWidth: 1, borderRadius: 16, padding: Spacing.two + 2 },
-  thumb: { width: 104, height: 104, borderRadius: 12, overflow: 'hidden' },
+  steps: { gap: 2, marginVertical: 2 },
+  hop: { paddingLeft: Spacing.two, paddingVertical: 0 },
+  card: { flexDirection: 'row', gap: Spacing.two + 2, borderWidth: 1, borderRadius: 14, padding: Spacing.two },
+  thumb: { width: 72, height: 72, borderRadius: 12, overflow: 'hidden' },
   thumbImg: { width: '100%', height: '100%' },
-  body: { flex: 1, gap: Spacing.half },
-  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap', marginTop: Spacing.one },
-  side: { width: 104, gap: Spacing.one },
+  body: { flex: 1, gap: 1 },
+  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap', marginTop: 2 },
+  side: { width: 72, gap: 2 },
   book: { borderRadius: 999, paddingVertical: Spacing.one + 2, paddingHorizontal: Spacing.three },
 });

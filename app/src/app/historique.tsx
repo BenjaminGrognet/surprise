@@ -18,7 +18,7 @@ const monthYear = (iso: string) => new Date(`${iso}T12:00`).toLocaleDateString('
 
 type State = 'loading' | 'error' | EveningHistoryRow[];
 
-// "Les Archives": the couple's evenings along a gold thread, newest first. A sealed evening is a relic — only its
+// "Mes soirées": the couple's evenings along a gold thread, newest first. A sealed evening is a relic — only its
 // Photo Témoin and Note Confidentielle remain, the route has faded — and the older it is, the more it fades too.
 // An evening still to come, or one whose book is still open, is a plain anchor on the thread.
 export default function ArchivesScreen() {
@@ -43,14 +43,14 @@ export default function ArchivesScreen() {
     <Screen gap={Spacing.four}>
       <View style={[styles.header, { borderColor: theme.accentHair }]}>
         <ThemedText type="eyebrow" style={styles.kicker}>Mémoire du duo</ThemedText>
-        <ThemedText style={[styles.title, { color: theme.accent }]}>Les Archives</ThemedText>
+        <ThemedText style={[styles.title, { color: theme.accent }]}>Mes soirées</ThemedText>
         <ThemedText style={[styles.tagline, { color: theme.creamSoft }]}>Le grimoire de vos échappées clandestines.</ThemedText>
       </View>
 
       {state === 'loading' ? <ThemedText themeColor="textSecondary">On rouvre le grimoire…</ThemedText> : null}
       {state === 'error' ? (
         <ThemedText themeColor={supabaseConfigured ? 'danger' : 'textSecondary'}>
-          {supabaseConfigured ? "Les archives n'ont pas pu être ouvertes." : 'Les comptes ne sont pas encore configurés sur ce serveur.'}
+          {supabaseConfigured ? "Vos soirées n'ont pas pu être ouvertes." : 'Les comptes ne sont pas encore configurés sur ce serveur.'}
         </ThemedText>
       ) : null}
       {Array.isArray(state) && !rows.length ? <Empty /> : null}

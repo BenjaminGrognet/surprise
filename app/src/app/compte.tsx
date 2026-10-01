@@ -12,6 +12,7 @@ import { Fonts, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, signOut, deleteMyAccount, type AccountProfile } from '@/lib/account';
+import { PERSONA_BANNERS, DEFAULT_BANNER } from '@/lib/persona-banners';
 import { supabaseConfigured } from '@/lib/supabase';
 
 export default function CompteScreen() {
@@ -92,7 +93,7 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
       ) : (
         <CoupleProfile />
       )}
-      <TextLink href="/historique">Les Archives →</TextLink>
+      <TextLink href="/historique">Mes soirées →</TextLink>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
       <DeleteAccount onDeleted={onSignOut} />
     </>
@@ -115,9 +116,12 @@ function CoupleProfile() {
     <>
       {p ? (
         <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
-          <ThemedText type="eyebrow">{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
-          <ThemedText type="subtitle">{p.persona.name}</ThemedText>
-          <ThemedText themeColor="textSecondary">{p.persona.text}</ThemedText>
+          <Image source={PERSONA_BANNERS[p.persona.name] ?? DEFAULT_BANNER} style={styles.banner} contentFit="cover" />
+          <View style={styles.personaBody}>
+            <ThemedText type="eyebrow">{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
+            <ThemedText type="subtitle">{p.persona.name}</ThemedText>
+            <ThemedText themeColor="textSecondary">{p.persona.text}</ThemedText>
+          </View>
         </View>
       ) : (
         <Notice>Vous n&apos;avez pas encore de profil : faites le quiz, il sera gardé sur votre compte.</Notice>
@@ -173,5 +177,7 @@ const styles = StyleSheet.create({
   points: { gap: 4 },
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
   notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
-  persona: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.two },
+  persona: { borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
+  banner: { width: '100%', height: 120, opacity: 0.85 },
+  personaBody: { padding: Spacing.four, gap: Spacing.two },
 });
