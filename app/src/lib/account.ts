@@ -87,3 +87,19 @@ export async function chooseEvening(input: {
   });
   if (error) throw new Error(error.message);
 }
+
+// What the organiser has booked for a kept evening: the id (source_id:external_id) of each step marked "réservé".
+export async function bookedSteps(pageName: string, routeIndex: number): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('soirees_choisies').select('booked').eq('page_name', pageName).eq('route_index', routeIndex)
+    .order('chosen_at', { ascending: false }).limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.[0]?.booked as string[] | undefined) ?? [];
+}
+
+export async function saveBookedSteps(pageName: string, routeIndex: number, booked: string[]) {
+  const { data, error } = await supabase
+    .from('soirees_choisies').update({ booked }).eq('page_name', pageName).eq('route_index', routeIndex).select('id');
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("Cette soirée n'est pas gardée sur votre compte.");
+}

@@ -306,6 +306,12 @@ les trois parcours proposés) sur n'importe quel appareil. Le navigateur parle d
 anon ; la sécurité (chacun ne voit que ses données) vient uniquement des policies RLS des migrations
 (`couple_profiles.user_id`, table `soirees_choisies`) — il n'y a pas de code serveur entre les deux.
 
+Deux comptes par couple (table `couples`) : l'instigateur fait le profil, commande les soirées, voit la feuille de
+route et coche ses réservations (`soirees_choisies.booked`) ; il invite le passager par un lien (`/invitation?code=…`,
+fonction `join_couple`). Le passager a son propre compte, ne voit que le compte à rebours, les indices et le
+programme voilé des soirées de son instigateur ; le quiz et `/soiree` lui sont fermés. Un compte sans couple est
+instigateur. Limite connue : le passager pourrait lire les données d'une soirée par l'API (l'app seule les voile).
+
 ```bash
 # app/.env, lu au build : publiques par nature (clé anon), jamais la service role key
 EXPO_PUBLIC_SUPABASE_URL=...

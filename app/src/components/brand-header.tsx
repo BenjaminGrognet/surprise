@@ -4,14 +4,17 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
+import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { currentUser } from '@/lib/account';
 import { supabaseConfigured } from '@/lib/supabase';
 
-// Every screen's top line: the SecretDate wordmark (back home) and, once signed in,
-// the "Complices connectés" pill that leads to the account.
+// Every screen's top line: the SecretDate wordmark (back home) and, once signed in, a pill to the account —
+// "Complices connectés" once the passager joined, else an invitation to send.
 export function BrandHeader() {
   const theme = useTheme();
+  const { couple } = useCouple();
+  const together = !!couple?.passager;
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
@@ -27,9 +30,9 @@ export function BrandHeader() {
       </Link>
       {signedIn ? (
         <Link href="/compte" asChild>
-          <Pressable style={[styles.pill, { backgroundColor: theme.backgroundSelected }]}>
-            <View style={[styles.dot, { backgroundColor: theme.cream }]} />
-            <ThemedText type="small">Complices connectés</ThemedText>
+          <Pressable style={StyleSheet.flatten([styles.pill, { backgroundColor: theme.backgroundSelected }])}>
+            <View style={[styles.dot, { backgroundColor: together ? theme.cream : theme.accent }]} />
+            <ThemedText type="small">{together ? 'Complices connectés' : 'Inviter mon passager'}</ThemedText>
           </Pressable>
         </Link>
       ) : null}

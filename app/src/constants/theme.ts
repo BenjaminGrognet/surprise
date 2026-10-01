@@ -19,7 +19,12 @@ const brand = {
   accent: '#D4AF37', // brushed champagne gold: buttons, rules, gauges
   accentInk: '#E0C062', // gold for text, a touch lighter to read on the emerald
   accentSoft: 'rgba(212, 175, 55, 0.45)', // the fine gold borders of cards
-  onAccent: '#0A1F1D', // text on a gold button
+  accentFaint: 'rgba(212, 175, 55, 0.3)', // a field's border at rest; full accent once focused
+  satin: '#CDAE5E', // satin champagne: the gold of buttons, softer than the brushed accent
+  onAccent: '#0E3B32', // dark emerald, the text on a gold button
+  accentHair: 'rgba(212, 175, 55, 0.15)', // a velvet card's border at rest
+  glass: 'rgba(255, 253, 208, 0.04)', // a field's veil over the night, see-through
+  velvet: '#071615', // deep emerald velvet: the quiz cards, darker than the night
   cream: '#FFFDD0',
   danger: '#E8857A',
   ok: '#7FD1A4',
@@ -34,6 +39,7 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 // Playfair Display for titles, Inter for the body (loaded in _layout.tsx).
 export const Fonts = {
   sans: 'Inter_400Regular',
+  sansThin: 'Inter_200ExtraLight', // watchmaking-fine figures: the countdown
   sansLight: 'Inter_300Light',
   sansMedium: 'Inter_500Medium',
   sansSemiBold: 'Inter_600SemiBold',

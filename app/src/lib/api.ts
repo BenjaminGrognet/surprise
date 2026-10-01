@@ -25,13 +25,14 @@ export type Profile = {
   budget: number;
   audace: number;
 };
-export type QuizOption = { value: unknown; label?: string; emoji?: string };
+export type QuizOption = { value: unknown; label?: string; emoji?: string; desc?: string; icon?: string };
 export type Question = {
   id: string;
   kind: 'single' | 'scale' | 'multi' | 'date' | 'text';
   question: string;
   hint?: string;
   options?: QuizOption[];
+  min?: number;
   max?: number;
 };
 export type QuizData = { questions: Question[]; vibes: Record<string, string> };
@@ -93,6 +94,7 @@ export type SoireeStep = {
   keywords: string[];
   originality: number;
   basis: string;
+  id: string; // source_id:external_id, the activity itself
   source_id: string;
   source_name: string;
   redo: string | null;

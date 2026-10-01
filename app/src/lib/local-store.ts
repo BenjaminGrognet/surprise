@@ -33,18 +33,3 @@ export async function rememberedProfile(): Promise<RememberedProfile | null> {
     return null;
   }
 }
-
-// Who holds this phone on the day of an evening: the partner who organises it sees the whole
-// timed programme, the one being surprised only riddles. Kept per evening, on this device only.
-export type Role = 'organisateur' | 'surpris';
-
-const roleKey = (pageName: string, routeIndex: number) => `secretdate.role.${pageName}.${routeIndex}`;
-
-export async function rememberedRole(pageName: string, routeIndex: number): Promise<Role | null> {
-  const role = await getItem(roleKey(pageName, routeIndex)).catch(() => null);
-  return role === 'organisateur' || role === 'surpris' ? role : null;
-}
-
-export async function rememberRole(pageName: string, routeIndex: number, role: Role) {
-  await setItem(roleKey(pageName, routeIndex), role);
-}

@@ -7,6 +7,7 @@ import { Countdown, IntrigueCard } from '@/components/intrigue-card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useCouple } from '@/hooks/use-couple';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
@@ -18,8 +19,10 @@ import { forgetProfile, rememberedProfile } from '@/lib/local-store';
 import { supabaseConfigured } from '@/lib/supabase';
 
 // "Le Tableau des Complots": no catalogue, one sealed card — the next mystery evening and its
-// countdown —, one button to plot a new one, and the couple's complicity gauge.
+// countdown —, one button to plot a new one, and the couple's complicity gauge. The passager gets the
+// card and the gauge only: the instigateur makes the profile and orders the evenings.
 export default function AccueilScreen() {
+  const { role, couple } = useCouple();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [upcoming, setUpcoming] = useState<{ row: EveningHistoryRow; route: SoireeRoute | null } | null>(null);
@@ -47,19 +50,28 @@ export default function AccueilScreen() {
 
   return (
     <Screen gap={Spacing.four}>
-      {loaded ? (upcoming ? <NextIntrigue {...upcoming} /> : <NoIntrigue />) : <IntrigueCard><View style={styles.placeholder} /></IntrigueCard>}
+      {loaded ? (
+        upcoming ? <NextIntrigue {...upcoming} /> : role === 'passager' ? <AwaitingIntrigue /> : <NoIntrigue />
+      ) : (
+        <IntrigueCard><View style={styles.placeholder} /></IntrigueCard>
+      )}
 
-      <View style={styles.actions}>
-        <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink>
-        {loaded && !profile ? <TextLink href="/profil">D&apos;abord, faire notre profil (2 minutes) →</TextLink> : null}
-      </View>
+      {role === 'instigateur' ? (
+        <View style={styles.actions}>
+          <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink>
+          {loaded && !profile ? <TextLink href="/profil">D&apos;abord, faire notre profil (2 minutes) →</TextLink> : null}
+          {couple?.passager ? null : <TextLink href="/compte">Inviter votre passager →</TextLink>}
+        </View>
+      ) : null}
 
       {gauge ? <Gauge gauge={gauge} /> : null}
 
       <View style={styles.links}>
-        {profile ? <TextLink href="/profil">{`Notre profil · ${profile.persona.name}`}</TextLink> : null}
+        {role === 'instigateur' && profile ? <TextLink href="/profil">{`Notre profil · ${profile.persona.name}`}</TextLink> : null}
         <TextLink href="/historique">Nos intrigues passées</TextLink>
-        {profile ? <TextButton onPress={() => forgetProfile().then(() => setProfile(null))}>Oublier ce profil</TextButton> : null}
+        {role === 'instigateur' && profile ? (
+          <TextButton onPress={() => forgetProfile().then(() => setProfile(null))}>Oublier ce profil</TextButton>
+        ) : null}
       </View>
     </Screen>
   );
@@ -92,8 +104,21 @@ function NoIntrigue() {
       <ThemedText type="eyebrow" style={styles.center}>Aucune intrigue en cours</ThemedText>
       <ThemedText type="title" style={styles.center}>Le prochain secret reste à écrire…</ThemedText>
       <ThemedText themeColor="textSecondary" style={styles.center}>
-        Dites-nous votre humeur : on trame trois soirées dans Paris, vous en gardez une, et l&apos;un de vous deux garde le secret
-        jusqu&apos;au jour J.
+        Dites-nous votre humeur : on trame trois soirées dans Paris, vous en gardez une, et vous seul en gardez le secret ; votre
+        passager ne reçoit que des indices jusqu&apos;au jour J.
+      </ThemedText>
+    </IntrigueCard>
+  );
+}
+
+// The passager, before any evening is kept: nothing to see yet, and that's the point.
+function AwaitingIntrigue() {
+  return (
+    <IntrigueCard>
+      <ThemedText type="eyebrow" style={styles.center}>Passager</ThemedText>
+      <ThemedText type="title" style={styles.center}>Quelque chose se trame…</ThemedText>
+      <ThemedText themeColor="textSecondary" style={styles.center}>
+        Dès que votre instigateur aura scellé une soirée, son compte à rebours et ses indices apparaîtront ici.
       </ThemedText>
     </IntrigueCard>
   );

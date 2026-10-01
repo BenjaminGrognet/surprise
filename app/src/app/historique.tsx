@@ -6,6 +6,7 @@ import { PrimaryLink, TextLink } from '@/components/buttons';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { currentUser, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
 import { isoDay } from '@/lib/dates';
@@ -17,6 +18,7 @@ type State = 'loading' | 'anonymous' | 'empty' | 'error' | EveningHistoryRow[];
 
 export default function HistoriqueScreen() {
   const theme = useTheme();
+  const { role } = useCouple();
   const [state, setState] = useState<State>(supabaseConfigured ? 'loading' : 'error');
 
   useEffect(() => {
@@ -54,9 +56,11 @@ export default function HistoriqueScreen() {
       {state === 'empty' && (
         <>
           <ThemedText themeColor="textSecondary">
-            Pas encore d&apos;intrigue gardée : lancez-en une, et gardez la soirée que vous allez vraiment vivre.
+            {role === 'passager'
+              ? "Pas encore d'intrigue : votre instigateur trame la première."
+              : "Pas encore d'intrigue gardée : lancez-en une, et gardez la soirée que vous allez vraiment vivre."}
           </ThemedText>
-          <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink>
+          {role === 'instigateur' ? <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink> : null}
         </>
       )}
       {Array.isArray(state) && (
@@ -75,23 +79,26 @@ export default function HistoriqueScreen() {
   );
 }
 
-// A past evening opens its roadmap; one still to come opens the revelation, where each side keeps its secret.
+// The instigateur reopens a past evening's routes, one still to come on its roadmap; the passager opens the
+// revelation, whose steps lift as their hour comes.
 function HistoryCard({ row }: { row: EveningHistoryRow }) {
   const theme = useTheme();
+  const { role } = useCouple();
   const ahead = !!row.day && row.day >= isoDay(new Date());
+  const sealed = ahead && role === 'passager';
   const params = { soiree: row.page_name, route: String(row.route_index) };
   return (
     <Pressable
-      onPress={() => router.push({ pathname: ahead ? '/revelation' : '/soiree', params })}
+      onPress={() => router.push({ pathname: ahead || role === 'passager' ? '/revelation' : '/soiree', params })}
       style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: ahead ? theme.accentSoft : theme.line }]}>
       <ThemedText type="eyebrow" themeColor={ahead ? 'accentInk' : 'textSecondary'}>
         {ahead ? 'À venir · ' : ''}{row.day ? frDay(row.day) : 'Date libre'}
       </ThemedText>
-      {/* An evening to come keeps its secret here too: its title would give it away. */}
-      <ThemedText type="subtitle">{ahead ? 'Une intrigue scellée' : row.title}</ThemedText>
-      {ahead ? null : <ThemedText themeColor="textSecondary">{row.pitch}</ThemedText>}
+      {/* To the passager, an evening to come keeps its secret here too: its title would give it away. */}
+      <ThemedText type="subtitle">{sealed ? 'Une intrigue scellée' : row.title}</ThemedText>
+      {sealed ? null : <ThemedText themeColor="textSecondary">{row.pitch}</ThemedText>}
       <View style={styles.tags}>
-        {(row.vibes ?? []).map((v) => (
+        {(sealed ? [] : row.vibes ?? []).map((v) => (
           <ThemedText key={v} type="small" themeColor="accentInk" style={[styles.tag, { borderColor: theme.accentSoft }]}>{v}</ThemedText>
         ))}
       </View>

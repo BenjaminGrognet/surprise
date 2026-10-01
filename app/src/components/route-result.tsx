@@ -25,53 +25,49 @@ export function place(step: SoireeStep) {
 
 export const imageUri = (url: string) => (url.startsWith('/') ? API_URL + url : url);
 
-// readOnly: the organiser's roadmap of a kept evening — no redraw, no removal, nothing to choose.
 export function RouteResult({
   route,
   chosen,
   onRedo,
   onChoose,
   busyRedo,
-  readOnly,
 }: {
   route: SoireeRoute;
   chosen?: boolean;
   onRedo?: (redo: string) => void;
   onChoose?: () => void;
   busyRedo?: string | null;
-  readOnly?: boolean;
 }) {
   const theme = useTheme();
-  const redo = readOnly ? undefined : onRedo;
   // A route keeps one step at least: the last one cannot be taken out.
   const removable = route.steps.length > 1;
   return (
     <View style={[styles.route, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
       <View style={styles.header}>
         <ThemedText type="eyebrow" style={styles.eyebrow}>
-          {readOnly ? '' : `Intrigue ${route.index + 1} · `}{formatTime(route.start)} → {formatTime(route.end)} · {route.price_estimated ? '≈ ' : ''}{route.price.toFixed(0)} €
+          Intrigue {route.index + 1} · {formatTime(route.start)} → {formatTime(route.end)} · {route.price_estimated ? '≈ ' : ''}{route.price.toFixed(0)} €
         </ThemedText>
-        {redo ? <TextButton onPress={() => redo(route.redo)}>{busyRedo === route.redo ? '↻…' : '↻ Tout'}</TextButton> : null}
+        {onRedo ? <TextButton onPress={() => onRedo(route.redo)}>{busyRedo === route.redo ? '↻…' : '↻ Tout'}</TextButton> : null}
       </View>
       <ThemedText type="subtitle">{route.title}</ThemedText>
-      {route.pitch ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={readOnly ? undefined : 2}>{route.pitch}</ThemedText> : null}
+      {route.pitch ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>{route.pitch}</ThemedText> : null}
 
       <View style={styles.steps}>
         {route.steps.map((step, i) => (
           <View key={i}>
             {i > 0 ? <Hop previous={route.steps[i - 1]} step={step} /> : null}
-            <StepRow step={step} busyRedo={busyRedo ?? null} onRedo={redo} removable={removable} />
+            <StepRow step={step} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={removable} />
           </View>
         ))}
         {route.night ? (
           <View>
             <Hop previous={route.steps[route.steps.length - 1]} step={route.night} />
-            <StepRow step={route.night} busyRedo={busyRedo ?? null} onRedo={redo} removable={false} />
+            <StepRow step={route.night} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={false} />
           </View>
         ) : null}
       </View>
 
-      {readOnly || !onChoose ? null : (
+      {!onChoose ? null : (
         <PrimaryButton wide disabled={chosen} onPress={onChoose}>{chosen ? '✓ Gardée dans vos intrigues' : 'Garder cette intrigue'}</PrimaryButton>
       )}
     </View>
@@ -128,7 +124,7 @@ function StepRow({
           {step.booking_url ? (
             <Pressable
               onPress={() => Linking.openURL(step.booking_url!)}
-              style={[styles.book, step.booking_action === 'reserver' ? { backgroundColor: theme.accent } : { borderColor: theme.accentSoft, borderWidth: 1 }]}>
+              style={[styles.book, step.booking_action === 'reserver' ? { backgroundColor: theme.satin } : { borderColor: theme.accentSoft, borderWidth: 1 }]}>
               <ThemedText type="smallBold" themeColor={step.booking_action === 'reserver' ? 'onAccent' : 'accentInk'}>
                 {BOOKING_LABELS[step.booking_action]} ↗
               </ThemedText>

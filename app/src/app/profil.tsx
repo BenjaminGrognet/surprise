@@ -1,11 +1,13 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, TextInput, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, PrimaryLink, TextButton } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
-import { OptionButton, OptionRow } from '@/components/option-button';
+import { OptionRow } from '@/components/option-button';
+import { OptionCard, OptionGrid } from '@/components/option-card';
 import { Screen } from '@/components/screen';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -108,15 +110,20 @@ export default function ProfilScreen() {
   const isLast = index + 1 >= quiz.questions.length;
 
   function goNext(finalAnswers: Record<string, unknown> = answers) {
-    if (isLast) submit(finalAnswers);
-    else setIndex((i) => i + 1);
+    // A date question shows next Friday until it's changed: left as is, that's the answer.
+    const filled = q.kind === 'date' && !finalAnswers[q.id] ? { ...finalAnswers, [q.id]: nextFriday() } : finalAnswers;
+    if (isLast) submit(filled);
+    else {
+      setAnswers(filled);
+      setIndex((i) => i + 1);
+    }
   }
 
   return (
     <Screen>
       <ThemedText type="eyebrow">Votre profil · question {index + 1} sur {quiz.questions.length}</ThemedText>
       <View style={[styles.progressTrack, { backgroundColor: theme.line }]}>
-        <View style={[styles.progressBar, { width: `${(index / quiz.questions.length) * 100}%`, backgroundColor: theme.accent }]} />
+        <View style={[styles.progressBar, { width: `${((index + 1) / quiz.questions.length) * 100}%`, backgroundColor: theme.accent }]} />
       </View>
       <ThemedText type="title">{q.question}</ThemedText>
       {q.hint ? <ThemedText themeColor="textSecondary">{q.hint}</ThemedText> : null}
@@ -139,8 +146,8 @@ export default function ProfilScreen() {
 }
 
 function answered(q: Question, value: unknown) {
-  if (q.kind === 'multi' || q.kind === 'text') return true; // "none" is an answer
-  if (q.kind === 'date') return !!value;
+  if (q.kind === 'multi') return ((value as unknown[] | undefined)?.length ?? 0) >= (q.min ?? 0); // "none" is an answer, unless `min`
+  if (q.kind === 'text' || q.kind === 'date') return true; // a date defaults to next Friday
   return value != null;
 }
 
@@ -155,56 +162,60 @@ function QuestionBody({
   onChange: (value: unknown) => void;
   onAnswer: (value: unknown) => void;
 }) {
-  const theme = useTheme();
+  const options = question.options ?? [];
+  const compact = options.length > 6;
   if (question.kind === 'single' || question.kind === 'scale') {
     return (
-      <OptionRow>
-        {(question.options ?? []).map((o) => (
-          <OptionButton
+      <OptionGrid>
+        {options.map((o) => (
+          <OptionCard
             key={String(o.value)}
             label={o.label ?? String(o.value)}
+            desc={o.desc}
+            icon={o.icon}
             emoji={o.emoji}
+            compact={compact}
             selected={value === o.value}
             onPress={() => onAnswer(o.value)}
           />
         ))}
-      </OptionRow>
+      </OptionGrid>
     );
   }
   if (question.kind === 'multi') {
     const chosen = new Set((value as string[] | undefined) ?? []);
+    const toggle = (v: string) => {
+      const next = new Set(chosen);
+      if (next.has(v)) next.delete(v);
+      else next.add(v);
+      onChange([...next]);
+    };
     return (
-      <OptionRow>
-        {(question.options ?? []).map((o) => (
-          <OptionButton
-            key={String(o.value)}
-            label={o.label ?? String(o.value)}
-            emoji={o.emoji}
-            selected={chosen.has(o.value as string)}
-            disabled={!chosen.has(o.value as string) && !!question.max && chosen.size >= question.max}
-            onPress={() => {
-              const next = new Set(chosen);
-              if (next.has(o.value as string)) next.delete(o.value as string);
-              else next.add(o.value as string);
-              onChange([...next]);
-            }}
-          />
-        ))}
-      </OptionRow>
+      <OptionGrid>
+        {options.map((o) => {
+          const v = o.value as string;
+          return (
+            <OptionCard
+              key={v}
+              label={o.label ?? v}
+              desc={o.desc}
+              icon={o.icon}
+              emoji={o.emoji}
+              compact={compact}
+              selected={chosen.has(v)}
+              disabled={!chosen.has(v) && !!question.max && chosen.size >= question.max}
+              onPress={() => toggle(v)}
+            />
+          );
+        })}
+      </OptionGrid>
     );
   }
   if (question.kind === 'date') {
     return <DayField value={(value as string) || nextFriday()} onChange={onChange} />;
   }
   return (
-    <TextInput
-      value={(value as string) || ''}
-      onChangeText={onChange}
-      placeholder="Léa & Sam"
-      placeholderTextColor={theme.textSecondary}
-      maxLength={80}
-      style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.line }]}
-    />
+    <TextField value={(value as string) || ''} onChangeText={onChange} placeholder="Léa & Sam" maxLength={80} />
   );
 }
 
@@ -278,7 +289,6 @@ const styles = StyleSheet.create({
   progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden' },
   progressBar: { height: '100%' },
   nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.three },
-  input: { fontFamily: Fonts.sans, fontSize: 16, padding: 14, borderRadius: 14, borderWidth: 1 },
   persona: { borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
   personaBody: { gap: Spacing.three, padding: Spacing.four },
   tag: { borderRadius: 999, borderWidth: 1, paddingVertical: 4, paddingHorizontal: 12, overflow: 'hidden' },

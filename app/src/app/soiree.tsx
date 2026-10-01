@@ -164,7 +164,7 @@ export default function SoireeScreen() {
           <ThemedText themeColor="textSecondary">Élargissez les horaires, le budget ou les envies, et relancez l&apos;intrigue.</ThemedText>
         ) : !chosen ? (
           <ThemedText themeColor="textSecondary">
-            Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, l&apos;un de vous deux pourra ne voir que des indices.
+            Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, votre passager n&apos;en verra que les indices.
           </ThemedText>
         ) : (
           <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name, route: picked } }}>Ouvrir la révélation</PrimaryLink>

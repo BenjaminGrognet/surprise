@@ -1207,6 +1207,7 @@ def step_json(step: Step, redo: str | None) -> dict[str, Any]:
         "text": item["enrichment"].get("description") or (item.get("lead_text") or "").strip() or None,
         "vibes": c.vibes, "keywords": c.keywords, "originality": c.originality,
         "basis": step.basis,
+        "id": ":".join(map(str, c.key)),  # source_id:external_id, the activity itself (e.g. what is booked)
         "source_id": item["source_id"], "source_name": source_name(item["source_id"]),
         "redo": redo,
     }

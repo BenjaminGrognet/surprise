@@ -10,7 +10,7 @@ export function PrimaryLink({ href, wide, children }: { href: Href; wide?: boole
   const theme = useTheme();
   return (
     <Link href={href} asChild>
-      <Pressable style={StyleSheet.flatten([styles.primary, wide && styles.wide, { backgroundColor: theme.accent }])}>
+      <Pressable style={StyleSheet.flatten([styles.primary, wide && styles.wide, { backgroundColor: theme.satin }])}>
         <ThemedText style={[styles.primaryLabel, { color: theme.onAccent }]}>{children}</ThemedText>
       </Pressable>
     </Link>
@@ -37,7 +37,7 @@ export function PrimaryButton({
     <Pressable
       disabled={disabled}
       onPress={onPress}
-      style={[styles.primary, wide && styles.wide, { backgroundColor: theme.accent }, disabled && styles.disabled]}>
+      style={[styles.primary, wide && styles.wide, { backgroundColor: theme.satin }, disabled && styles.disabled]}>
       <ThemedText style={[styles.primaryLabel, { color: theme.onAccent }]}>{children}</ThemedText>
     </Pressable>
   );
@@ -68,11 +68,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     alignSelf: 'flex-start',
     alignItems: 'center',
-    shadowColor: '#D4AF37',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 22,
-    elevation: 6,
   },
   wide: { alignSelf: 'stretch' },
   primaryLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 16, lineHeight: 22 },
