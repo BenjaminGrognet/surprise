@@ -2,7 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Linking, StyleSheet, View } from 'react-native';
 
-import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { GhostButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { Countdown, IntrigueCard } from '@/components/intrigue-card';
 import { Organiser } from '@/components/organiser';
 import { imageUri, place } from '@/components/route-result';
@@ -13,10 +13,14 @@ import { Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { keptEvening, keptSecretTitle, type EveningHistoryRow } from '@/lib/account';
 import { PassagerInvite } from '@/components/passager-invite';
+import { RevealModePicker } from '@/components/reveal-mode';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { getSoireeState, type SoireeRoute, type SoireeStep } from '@/lib/api';
-import { cluesFor, inTime, nextClue, shownClues, stepRevealed } from '@/lib/clues';
+import { cluesFor, inTime, nextClue, revealAt, revealMode, shownClues, stepRevealed, type RevealMode } from '@/lib/clues';
+import { nearStep } from '@/lib/arrival';
+import { arrivedSteps, markArrived } from '@/lib/local-store';
+import { askNotify, notifyState, scheduleReveals, type NotifyState } from '@/lib/notifications';
 import { formatTime, isoDay, longDay } from '@/lib/dates';
 import { curtainFalls } from '@/lib/souvenirs';
 
@@ -62,17 +66,21 @@ export default function RevelationScreen() {
   }
 
   const secretTitle = kept ?? route.secret_title;
+  const mode = revealMode(evening?.reveal_mode);
   return (
     <Screen gap={Spacing.four}>
       {role === 'instigateur' ? (
         <>
-          <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} />
+          <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} mode={mode} onRoute={setRoute} />
           {evening && (!evening.day || evening.day >= isoDay(new Date())) ? (
-            <PassagerInvite evening={evening} onChange={loadEvening} />
+            <>
+              <PassagerInvite evening={evening} onChange={loadEvening} />
+              <RevealModePicker key={evening.reveal_mode} evening={evening} onChange={loadEvening} />
+            </>
           ) : null}
         </>
       ) : (
-        <Surprised route={route} secretTitle={secretTitle} />
+        <Surprised route={route} secretTitle={secretTitle} mode={mode} evening={`${soiree}:${route.index}`} />
       )}
       <BookLink route={route} soiree={soiree!} />
     </Screen>
@@ -92,11 +100,31 @@ function BookLink({ route, soiree }: { route: SoireeRoute; soiree: string }) {
   );
 }
 
-function Surprised({ route, secretTitle }: { route: SoireeRoute; secretTitle: string }) {
+function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; secretTitle: string; mode: RevealMode; evening: string }) {
   const now = useNow();
   const start = Date.parse(route.start);
-  const clues = cluesFor(route);
+  const clues = cluesFor(route, mode);
   const steps = [...route.steps, ...(route.night ? [route.night] : [])];
+  const [arrived, setArrived] = useState<string[]>([]);
+  const [notify, setNotify] = useState<NotifyState>('unsupported');
+
+  useEffect(() => {
+    arrivedSteps(evening).then(setArrived);
+  }, [evening]);
+
+  // The clues and veils still to come become notifications on this phone, once allowed; redone when the mode changes.
+  useEffect(() => {
+    notifyState().then(setNotify).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (notify === 'granted') scheduleReveals(evening, route, mode, secretTitle).catch(() => {});
+  }, [notify, evening, route, mode, secretTitle]);
+
+  function arrive(step: SoireeStep) {
+    setArrived((a) => [...a, step.id]);
+    markArrived(evening, step.id);
+  }
+
   return (
     <>
       <IntrigueCard>
@@ -107,11 +135,33 @@ function Surprised({ route, secretTitle }: { route: SoireeRoute; secretTitle: st
 
       <Clues clues={clues} now={now} title="Vos indices" />
 
+      {notify === 'ask' ? (
+        <View style={styles.block}>
+          <ThemedText type="small" themeColor="textSecondary">Soyez prévenu(e) à chaque indice, sans rouvrir l&apos;application.</ThemedText>
+          <GhostButton onPress={() => askNotify().then(setNotify)}>Activer les rappels</GhostButton>
+        </View>
+      ) : null}
+
       <View style={styles.block}>
         <ThemedText type="eyebrow">Le programme</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">Chaque étape se dévoile un quart d&apos;heure avant son heure.</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {mode === 'veille'
+            ? 'Le programme se dévoile la veille.'
+            : mode === 'arrivee'
+              ? 'Chaque étape se dévoile quand vous y êtes.'
+              : 'Chaque étape se dévoile un quart d’heure avant son heure.'}
+        </ThemedText>
         {steps.map((step, i) => (
-          <VeiledStep key={i} step={step} number={i + 1} now={now} />
+          <VeiledStep
+            key={i}
+            route={route}
+            step={step}
+            number={i + 1}
+            now={now}
+            mode={mode}
+            open={stepRevealed(route, step, now, mode, arrived)}
+            onArrive={() => arrive(step)}
+          />
         ))}
       </View>
     </>
@@ -144,10 +194,24 @@ function Clues({ clues, now, title }: { clues: ReturnType<typeof cluesFor>; now:
   );
 }
 
-function VeiledStep({ step, number, now }: { step: SoireeStep; number: number; now: number }) {
+function VeiledStep({
+  route, step, number, now, mode, open, onArrive,
+}: { route: SoireeRoute; step: SoireeStep; number: number; now: number; mode: RevealMode; open: boolean; onArrive: () => void }) {
   const theme = useTheme();
-  const open = stepRevealed(step, now);
+  const [checking, setChecking] = useState(false);
+  const [far, setFar] = useState(false);
   const maps = `https://www.google.com/maps/search/?api=1&query=${step.lat},${step.lon}`;
+  const at = Math.max(revealAt(route, step, mode), 0);
+
+  async function arrive() {
+    setChecking(true);
+    setFar(false);
+    const near = await nearStep(step);
+    setChecking(false);
+    if (near === false) setFar(true);
+    else onArrive();
+  }
+
   return (
     <View style={[styles.step, { borderColor: open ? theme.accentSoft : theme.line }]}>
       <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
@@ -167,7 +231,13 @@ function VeiledStep({ step, number, now }: { step: SoireeStep; number: number; n
         ) : (
           <>
             <Veil widths={['90%', '60%']} />
-            <ThemedText type="small" themeColor="textSecondary">Dévoilée {inTime(Date.parse(step.start) - 15 * 60_000, now)}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {mode === 'arrivee' ? `Scellée jusqu'à votre arrivée (ou ${formatTime(step.start)})` : `Dévoilée ${inTime(at, now)}`}
+            </ThemedText>
+            {mode === 'arrivee' ? (
+              <TextButton onPress={arrive}>{checking ? 'Vérification…' : 'Je suis arrivé(e) →'}</TextButton>
+            ) : null}
+            {far ? <ThemedText type="small" themeColor="danger">Vous semblez encore loin : rapprochez-vous du lieu.</ThemedText> : null}
           </>
         )}
       </View>

@@ -4,6 +4,7 @@ import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing } from '@/constants/theme';
+import { Spinner, busyStyle } from '@/components/spinner';
 import { useTheme } from '@/hooks/use-theme';
 import { API_URL, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { formatTime } from '@/lib/dates';
@@ -48,12 +49,12 @@ export function RouteResult({
   // A route keeps one step at least: the last one cannot be taken out.
   const removable = route.steps.length > 1;
   return (
-    <View style={[styles.route, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
+    <View style={[styles.route, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }, busyStyle(busyRedo === route.redo)]}>
       <View style={styles.header}>
         <ThemedText type="eyebrow" style={styles.eyebrow}>
           Intrigue {route.index + 1} · {formatTime(route.start)} → {formatTime(route.end)} · {route.price_estimated ? '≈ ' : ''}{route.price.toFixed(0)} €
         </ThemedText>
-        {onRedo ? <TextButton onPress={() => onRedo(route.redo)}>{busyRedo === route.redo ? '↻…' : '↻ Tout'}</TextButton> : null}
+        {onRedo ? <TextButton busy={busyRedo === route.redo} onPress={() => onRedo(route.redo)}>{busyRedo === route.redo ? 'Recherche…' : '↻ Tout'}</TextButton> : null}
       </View>
       <ThemedText type="subtitle">{route.title}</ThemedText>
       {route.pitch ? <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>{route.pitch}</ThemedText> : null}
@@ -110,13 +111,13 @@ function StepRow({
   const where = place(step);
   const showWhere = !!where && where !== step.title && !step.title.includes(step.venue ?? "0000");
   return (
-    <View style={[styles.card, { borderColor: theme.line, backgroundColor: PAPER }]}>
+    <View style={[styles.card, { borderColor: theme.line, backgroundColor: PAPER }, busyStyle(!!busyRedo && (busyRedo === step.redo || busyRedo === remove))]}>
       <View style={styles.side}>
         <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
           {step.image_url ? <Image source={{ uri: imageUri(step.image_url) }} style={styles.thumbImg} /> : null}
         </View>
-        {onRedo && step.redo ? <Pressable onPress={() => onRedo(step.redo!)}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === step.redo ? '↻…' : '↻ Changer'}</ThemedText></Pressable> : null}
-        {onRedo && removable && remove ? <Pressable onPress={() => onRedo(remove)}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === remove ? '✕…' : '✕ Retirer'}</ThemedText></Pressable> : null}
+        {onRedo && step.redo ? <Pressable onPress={busyRedo ? undefined : () => onRedo(step.redo!)} style={styles.redoRow}>{busyRedo === step.redo ? <Spinner size={11} /> : null}<ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === step.redo ? 'Recherche…' : '↻ Changer'}</ThemedText></Pressable> : null}
+        {onRedo && removable && remove ? <Pressable onPress={() => onRedo(remove)}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === remove ? 'Retrait…' : '✕ Retirer'}</ThemedText></Pressable> : null}
       </View>
       <View style={styles.body}>
         <ThemedText type="small" style={{ color: INK_SOFT }} numberOfLines={1}>
@@ -149,6 +150,7 @@ function StepRow({
 }
 
 const styles = StyleSheet.create({
+  redoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   route: { gap: Spacing.one, padding: Spacing.two + 2, borderRadius: 18, borderWidth: 1, marginTop: Spacing.one },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
   eyebrow: { flexShrink: 1 },

@@ -7,6 +7,7 @@ import { DayField } from '@/components/day-field';
 import { OptionCard, OptionGrid } from '@/components/option-card';
 import { RouteResult } from '@/components/route-result';
 import { Screen } from '@/components/screen';
+import { Waiting } from '@/components/spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -282,6 +283,7 @@ export default function SoireeScreen() {
 
       <DayField label="Le jour J" value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />
 
+      {status === 'composing' ? <Waiting title="On trame votre soirée…" lines={COMPOSING_LINES} /> : null}
       {status === 'error' && <ThemedText themeColor="danger">L&apos;intrigue n&apos;a pas pu être tramée. Réessayez dans un instant.</ThemedText>}
       <PrimaryButton wide disabled={!ready || status === 'composing'} onPress={compose}>
         {status === 'composing' ? `On trame votre soirée du ${longDay(night.day)}…` : night.diner === null ? 'Dîner ou pas ? Dites-le-nous' : 'Tramer nos intrigues'}
@@ -309,3 +311,11 @@ const styles = StyleSheet.create({
   sectionHead: { gap: 2 },
   notice: { padding: Spacing.three, borderRadius: 14 },
 });
+
+const COMPOSING_LINES = [
+  'On épluche les lieux ouverts ce soir-là…',
+  'On vérifie les disponibilités en direct…',
+  'On compose des enchaînements qui se tiennent…',
+  'On cherche ce que vous n’auriez pas trouvé seuls…',
+  'Encore un instant : ça vaut le détour.',
+];

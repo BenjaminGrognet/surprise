@@ -5,13 +5,14 @@ import { TextButton } from '@/components/buttons';
 import { Countdown, IntrigueCard } from '@/components/intrigue-card';
 import { formatPrice, imageUri, place } from '@/components/route-result';
 import { ThemedText } from '@/components/themed-text';
+import { busyStyle } from '@/components/spinner';
 import { Veil } from '@/components/veil';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { bookedSteps, saveBookedSteps } from '@/lib/account';
-import type { SoireeRoute, SoireeStep } from '@/lib/api';
-import { cluesFor, inTime, nextClue, shownClues } from '@/lib/clues';
+import { redoPart, type SoireeRoute, type SoireeStep } from '@/lib/api';
+import { cluesFor, inTime, nextClue, shownClues, type RevealMode } from '@/lib/clues';
 import { formatTime, longDay } from '@/lib/dates';
 
 const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre: 'Un verre', sortie: 'Sortie', nuit: 'La nuit' };
@@ -20,11 +21,15 @@ type Tab = 'aventure' | 'coulisses';
 
 // The organiser's side of a kept evening: a quiet header (the countdown, the whole budget once), then
 // two tabs — the evening itself (L'Aventure) apart from the bookings and what the partner sees (Les Coulisses).
-export function Organiser({ route, pageName, secretTitle }: { route: SoireeRoute; pageName: string; secretTitle: string }) {
+export function Organiser({
+  route, pageName, secretTitle, mode, onRoute,
+}: { route: SoireeRoute; pageName: string; secretTitle: string; mode: RevealMode; onRoute: (route: SoireeRoute) => void }) {
   const now = useNow();
   const [tab, setTab] = useState<Tab>('aventure');
   const [booked, setBooked] = useState<string[]>([]);
   const [error, setError] = useState('');
+  const [swapping, setSwapping] = useState<string | null>(null);
+  const [swapNotice, setSwapNotice] = useState('');
   const start = Date.parse(route.start);
   const steps = [...route.steps, ...(route.night ? [route.night] : [])];
   const toBook = steps.filter((s) => s.booking_action === 'reserver' && s.booking_url);
@@ -33,6 +38,28 @@ export function Organiser({ route, pageName, secretTitle }: { route: SoireeRoute
   useEffect(() => {
     bookedSteps(pageName, route.index).then(setBooked).catch(() => {});
   }, [pageName, route.index]);
+
+  // Plan B: another activity in place of an upcoming step, the rest of the evening kept. What was booked for the old one goes.
+  async function swap(step: SoireeStep) {
+    if (!step.redo) return;
+    setSwapping(step.id);
+    setSwapNotice('');
+    try {
+      const next = (await redoPart(pageName, step.redo)).routes.find((r) => r.index === route.index);
+      if (!next) throw new Error('Cette soirée a changé : rouvrez-la.');
+      if (booked.includes(step.id)) {
+        const rest = booked.filter((b) => b !== step.id);
+        setBooked(rest);
+        saveBookedSteps(pageName, route.index, rest).catch(() => {});
+      }
+      onRoute(next);
+      setSwapNotice('Plan B en place. Pensez à refaire la réservation si besoin.');
+    } catch {
+      setSwapNotice("Pas d'autre activité qui s'enchaîne à cette étape : réessayez dans un instant.");
+    } finally {
+      setSwapping(null);
+    }
+  }
 
   function toggle(id: string) {
     const before = booked;
@@ -57,9 +84,9 @@ export function Organiser({ route, pageName, secretTitle }: { route: SoireeRoute
       <Tabs tab={tab} onTab={setTab} pending={left} />
 
       {tab === 'aventure' ? (
-        <Aventure route={route} steps={steps} />
+        <Aventure route={route} steps={steps} now={now} swapping={swapping} notice={swapNotice} onSwap={swap} />
       ) : (
-        <Coulisses route={route} secretTitle={secretTitle} toBook={toBook} booked={booked} onToggle={toggle} error={error} now={now} />
+        <Coulisses route={route} secretTitle={secretTitle} toBook={toBook} booked={booked} onToggle={toggle} error={error} now={now} mode={mode} />
       )}
     </>
   );
@@ -102,17 +129,22 @@ function Tabs({ tab, onTab, pending }: { tab: Tab; onTab: (tab: Tab) => void; pe
 }
 
 // L'Aventure: the evening as a silk thread, a fine gold line with each step hung on a glowing anchor.
-function Aventure({ route, steps }: { route: SoireeRoute; steps: SoireeStep[] }) {
+function Aventure({
+  route, steps, now, swapping, notice, onSwap,
+}: { route: SoireeRoute; steps: SoireeStep[]; now: number; swapping: string | null; notice: string; onSwap: (step: SoireeStep) => void }) {
   return (
     <View style={styles.section}>
       {/* The title alone: the pitch would repeat the steps and the price shown below. */}
       <ThemedText type="subtitle">{route.title}</ThemedText>
-      <SilkThread steps={steps} />
+      {notice ? <ThemedText type="small" themeColor="accentInk">{notice}</ThemedText> : null}
+      <SilkThread steps={steps} now={now} swapping={swapping} onSwap={onSwap} />
     </View>
   );
 }
 
-function SilkThread({ steps }: { steps: SoireeStep[] }) {
+function SilkThread({
+  steps, now, swapping, onSwap,
+}: { steps: SoireeStep[]; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void }) {
   const theme = useTheme();
   return (
     <View style={styles.thread}>
@@ -120,14 +152,14 @@ function SilkThread({ steps }: { steps: SoireeStep[] }) {
       {steps.map((step, i) => (
         <View key={step.id + i}>
           {i > 0 ? <Hop previous={steps[i - 1]} step={step} /> : null}
-          <ThreadStep step={step} />
+          <ThreadStep step={step} busy={swapping === step.id} onSwap={step.redo && Date.parse(step.start) > now && swapping === null ? () => onSwap(step) : null} />
         </View>
       ))}
     </View>
   );
 }
 
-function ThreadStep({ step }: { step: SoireeStep }) {
+function ThreadStep({ step, busy, onSwap }: { step: SoireeStep; busy: boolean; onSwap: (() => void) | null }) {
   const theme = useTheme();
   const [more, setMore] = useState(false);
   const [photo, setPhoto] = useState(false);
@@ -135,7 +167,7 @@ function ThreadStep({ step }: { step: SoireeStep }) {
   // ponytail: length stands for "cut at three lines"; measure the text layout if it misfires.
   const long = (step.text?.length ?? 0) > 160;
   return (
-    <View style={styles.anchorRow}>
+    <View style={[styles.anchorRow, busyStyle(busy)]}>
       <View style={[styles.anchor, { borderColor: theme.accent, backgroundColor: theme.background }]}>
         <View style={[styles.anchorCore, { backgroundColor: theme.accent }]} />
       </View>
@@ -171,6 +203,7 @@ function ThreadStep({ step }: { step: SoireeStep }) {
               <TextLinkOut url={step.booking_url}>Le lieu →</TextLinkOut>
             ) : null}
             <TextLinkOut url={maps}>S&apos;y rendre →</TextLinkOut>
+            {onSwap || busy ? <TextButton busy={busy} onPress={onSwap ?? (() => {})}>{busy ? 'On cherche un plan B…' : '↻ Plan B'}</TextButton> : null}
           </View>
         </View>
       </View>
@@ -202,7 +235,7 @@ function TextLinkOut({ url, children }: { url: string; children: string }) {
 // Les Coulisses: the bookings to make, ticked off as they're done (kept on the account), and the
 // partner's screen as they see it right now.
 function Coulisses({
-  route, secretTitle, toBook, booked, onToggle, error, now,
+  route, secretTitle, toBook, booked, onToggle, error, now, mode,
 }: {
   route: SoireeRoute;
   secretTitle: string;
@@ -211,6 +244,7 @@ function Coulisses({
   onToggle: (id: string) => void;
   error: string;
   now: number;
+  mode: RevealMode;
 }) {
   const theme = useTheme();
   const done = toBook.filter((s) => booked.includes(s.id)).length;
@@ -257,15 +291,15 @@ function Coulisses({
         {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
       </View>
 
-      <PartnerScreen route={route} secretTitle={secretTitle} now={now} />
+      <PartnerScreen route={route} secretTitle={secretTitle} now={now} mode={mode} />
     </View>
   );
 }
 
 // A facsimile of the surprised partner's screen, framed in brushed gold: the clues they hold, as quotes.
-function PartnerScreen({ route, secretTitle, now }: { route: SoireeRoute; secretTitle: string; now: number }) {
+function PartnerScreen({ route, secretTitle, now, mode }: { route: SoireeRoute; secretTitle: string; now: number; mode: RevealMode }) {
   const theme = useTheme();
-  const clues = cluesFor(route);
+  const clues = cluesFor(route, mode);
   const shown = shownClues(clues, now);
   const next = nextClue(clues, now);
   return (

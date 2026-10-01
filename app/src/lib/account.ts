@@ -2,6 +2,7 @@
 // Row-level security scopes couple_profiles/soirees_choisies to the signed-in user.
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/api';
+import type { RevealMode } from '@/lib/clues';
 import { removePhotos } from '@/lib/souvenirs';
 
 export async function currentUser() {
@@ -54,6 +55,7 @@ export type EveningHistoryRow = {
   passager: string | null; // the one passager invited to this evening, once joined
   passager_email: string | null;
   invite_code: string; // the link's code, renewed when the passager is let go
+  reveal_mode?: string; // how its programme is lifted for the passager (lib/clues.ts RevealMode); absent before the migration
   page_name: string;
   route_index: number;
   title: string;
@@ -151,4 +153,11 @@ export async function keptEvening(pageName: string, routeIndex: number): Promise
     .order('chosen_at', { ascending: false }).limit(1);
   if (error) throw new Error(error.message);
   return (data?.[0] as EveningHistoryRow | undefined) ?? null;
+}
+
+// How the passager's programme is lifted (instigateur only, RLS: their own row).
+export async function saveRevealMode(id: string, mode: RevealMode) {
+  const { data, error } = await supabase.from('soirees_choisies').update({ reveal_mode: mode }).eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("Cette soirée n'est pas gardée sur votre compte.");
 }

@@ -12,7 +12,7 @@ import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
 import { getSoireeState, type Profile, type SoireeRoute } from '@/lib/api';
-import { dayHint } from '@/lib/clues';
+import { dayHint, revealMode } from '@/lib/clues';
 import { complicity, type Complicity } from '@/lib/complicity';
 import { isoDay } from '@/lib/dates';
 import { forgetProfile, rememberedProfile } from '@/lib/local-store';
@@ -109,7 +109,7 @@ function NextIntrigue({ row, route }: { row: EveningHistoryRow; route: SoireeRou
       {route ? (
         <ThemedText type="clue" themeColor="textSecondary" style={styles.center}>
           <ThemedText type="clue" themeColor="accentInk">✦ Indice du jour : </ThemedText>
-          {dayHint(route, now)}
+          {dayHint(route, now, revealMode(row.reveal_mode))}
         </ThemedText>
       ) : null}
       <ThemedText type="small" themeColor="textSecondary" style={styles.center}>Touchez la carte pour la révélation</ThemedText>

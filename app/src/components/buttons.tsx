@@ -1,6 +1,7 @@
 import { Link, type Href } from 'expo-router';
 import { Pressable, StyleSheet } from 'react-native';
 
+import { Spinner } from '@/components/spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -53,9 +54,10 @@ export function GhostButton({ onPress, children }: { onPress: () => void; childr
   );
 }
 
-export function TextButton({ onPress, children }: { onPress: () => void; children: string }) {
+export function TextButton({ onPress, children, busy }: { onPress: () => void; children: string; busy?: boolean }) {
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={busy ? undefined : onPress} style={busy ? { flexDirection: 'row', alignItems: 'center', gap: 8 } : undefined}>
+      {busy ? <Spinner size={12} /> : null}
       <ThemedText type="link" themeColor="textSecondary">{children}</ThemedText>
     </Pressable>
   );

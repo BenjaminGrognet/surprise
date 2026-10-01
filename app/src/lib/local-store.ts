@@ -33,3 +33,19 @@ export async function rememberedProfile(): Promise<RememberedProfile | null> {
     return null;
   }
 }
+
+// The steps of an evening the passager declared reaching (mode "sur place"), kept on this device.
+const arrivedKey = (evening: string) => `surprise.arrived.${evening}`;
+
+export async function arrivedSteps(evening: string): Promise<string[]> {
+  try {
+    return JSON.parse((await getItem(arrivedKey(evening))) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+export async function markArrived(evening: string, stepId: string) {
+  const done = await arrivedSteps(evening);
+  if (!done.includes(stepId)) await setItem(arrivedKey(evening), JSON.stringify([...done, stepId]));
+}
