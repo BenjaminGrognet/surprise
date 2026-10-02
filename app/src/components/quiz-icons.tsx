@@ -3,7 +3,7 @@ import { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 
 // The quiz's gold line icons (24×24, stroked by OptionCard), named by the server's `icon` (quiz.py).
 export const QUIZ_ICONS: Record<string, ReactNode> = {
-  // Votre histoire en est où ?
+  // Où en est votre histoire ?
   pousse: (
     <>
       <Path d="M7 20h10" />

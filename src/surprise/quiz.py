@@ -81,7 +81,7 @@ END_OPTIONS: list[dict[str, Any]] = [
 QUESTIONS: list[dict[str, Any]] = [
     {
         "id": "couple", "kind": "single",
-        "question": "Votre histoire en est où ?", "hint": "Pour viser juste dès la première soirée.",
+        "question": "Où en est votre histoire ?", "hint": "Pour viser juste dès la première soirée.",
         "options": [
             {"value": "debut", "label": "On se découvre", "desc": "Les premiers rendez-vous", "icon": "pousse", "emoji": "🌱",
              "vibes": {"rire": 1, "defi": 1}, "avoid": ["dans_le_noir"]},

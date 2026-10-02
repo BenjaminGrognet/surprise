@@ -156,7 +156,7 @@ export default function SoireeScreen() {
       <Screen>
         <PageCard
           badge={chosen ? shortDay(shown[0].day) : `${composed.routes.length} intrigue${composed.routes.length > 1 ? 's' : ''}`}
-          title={chosen ? 'Votre feuille de route' : composed.routes.length > 0 ? 'Gardez celle qui vous trouble' : 'Le hasard a fait chou blanc'}
+          title={chosen ? 'Votre feuille de route' : composed.routes.length > 0 ? 'Trois intrigues se murmurent au salon' : 'Le hasard a fait chou blanc'}
           text={composed.routes.length === 0
             ? "Élargissez les horaires, le budget ou les envies, et relancez l'intrigue."
             : chosen ? undefined : "Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, votre passager n'en verra que les indices."}>
@@ -277,10 +277,10 @@ export default function SoireeScreen() {
 
       <DayField label="Le jour J" value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />
 
-      {status === 'composing' ? <Waiting title="On trame votre soirée…" lines={COMPOSING_LINES} /> : null}
+      {status === 'composing' ? <Waiting title="La nuit ourdit ses secrets…" lines={COMPOSING_LINES} /> : null}
       {status === 'error' && <ThemedText themeColor="danger">L&apos;intrigue n&apos;a pas pu être tramée. Réessayez dans un instant.</ThemedText>}
       <PrimaryButton wide disabled={!ready || status === 'composing'} onPress={compose}>
-        {status === 'composing' ? `On trame votre soirée du ${longDay(night.day)}…` : night.diner === null ? 'Dîner ou pas ? Dites-le-nous' : 'Tramer nos intrigues'}
+        {status === 'composing' ? `Le ${longDay(night.day)} se trame en secret…` : night.diner === null ? 'Dîner ou pas ? Dites-le-nous' : 'Tramer nos intrigues'}
       </PrimaryButton>
     </Screen>
   );
@@ -306,9 +306,9 @@ const styles = StyleSheet.create({
 });
 
 const COMPOSING_LINES = [
-  'On épluche les lieux ouverts ce soir-là…',
-  'On vérifie les disponibilités en direct…',
-  'On compose des enchaînements qui se tiennent…',
-  'On cherche ce que vous n’auriez pas trouvé seuls…',
-  'Encore un instant : ça vaut le détour.',
+  'Les portes de la ville s’entrouvrent pour vous…',
+  'Quelques adresses chuchotent encore à cette heure…',
+  'Un détour secret se dessine entre deux ruelles…',
+  'Les rendez-vous se scellent à la cire, un à un…',
+  'La nuit garde le meilleur pour la fin.',
 ];
