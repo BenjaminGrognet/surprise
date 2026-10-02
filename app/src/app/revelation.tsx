@@ -3,13 +3,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Image, Linking, StyleSheet, View } from 'react-native';
 
 import { GhostButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
-import { Countdown, IntrigueCard } from '@/components/intrigue-card';
+import { Countdown, PageCard } from '@/components/intrigue-card';
 import { Organiser } from '@/components/organiser';
 import { imageUri, place } from '@/components/route-result';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Veil } from '@/components/veil';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { keptEvening, keptSecretTitle, type EveningHistoryRow } from '@/lib/account';
 import { PassagerInvite } from '@/components/passager-invite';
@@ -58,8 +58,7 @@ export default function RevelationScreen() {
   if (lost || route === null || route === 'missing') {
     return (
       <Screen>
-        <ThemedText type="title">Intrigue introuvable</ThemedText>
-        <ThemedText themeColor="textSecondary">Cette soirée n&apos;existe plus sur le serveur.</ThemedText>
+        <PageCard back title="Intrigue introuvable" text="Cette soirée n'existe plus sur le serveur." />
         <PrimaryLink href="/">Retour au tableau</PrimaryLink>
       </Screen>
     );
@@ -127,11 +126,10 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
 
   return (
     <>
-      <IntrigueCard>
-        <ThemedText type="eyebrow" style={styles.center}>La révélation · {longDay(route.day)}</ThemedText>
-        <ThemedText type="title" style={styles.center}>{secretTitle}</ThemedText>
+      <PageCard back badge="Passager" title={secretTitle}>
+        <ThemedText type="eyebrow">La révélation · {longDay(route.day)}</ThemedText>
         {now < start ? <Countdown to={start} now={now} /> : null}
-      </IntrigueCard>
+      </PageCard>
 
       <Clues clues={clues} now={now} title="Vos indices" />
 
@@ -177,7 +175,7 @@ function Clues({ clues, now, title }: { clues: ReturnType<typeof cluesFor>; now:
       <ThemedText type="eyebrow">{title}</ThemedText>
       {shown.map((c) => (
         <View key={c.text} style={styles.clue}>
-          <ThemedText type="clue" themeColor="accentInk">✦</ThemedText>
+          <ThemedText type="clue" themeColor="gold">✦</ThemedText>
           <ThemedText type="clue" style={styles.clueText}>{c.text}</ThemedText>
         </View>
       ))}
@@ -219,7 +217,7 @@ function VeiledStep({
         {open ? null : <ThemedText style={[styles.seal, { color: theme.cream }]}>?</ThemedText>}
       </View>
       <View style={styles.stepBody}>
-        <ThemedText type="eyebrow" themeColor={open ? 'accentInk' : 'textSecondary'}>
+        <ThemedText type="eyebrow" themeColor={open ? 'gold' : 'textSecondary'}>
           {step.role === 'nuit' ? 'La nuit' : `Étape ${number}`}{open ? ` · ${formatTime(step.start)}` : ''}
         </ThemedText>
         {open ? (
@@ -246,14 +244,13 @@ function VeiledStep({
 }
 
 const styles = StyleSheet.create({
-  center: { textAlign: 'center' },
   bookLink: { alignItems: 'center' },
   block: { gap: Spacing.three },
-  clues: { gap: Spacing.three, padding: Spacing.four, borderRadius: 22, borderWidth: 1 },
+  clues: { gap: Spacing.three, padding: Spacing.four, borderRadius: Radius.card, borderWidth: 1 },
   clue: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },
   clueText: { flex: 1, gap: Spacing.two },
-  step: { flexDirection: 'row', gap: Spacing.three, padding: Spacing.two + 2, borderRadius: 18, borderWidth: 1 },
-  thumb: { width: 84, height: 84, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  step: { flexDirection: 'row', gap: Spacing.three, padding: Spacing.two + 2, borderRadius: Radius.tile, borderWidth: 1 },
+  thumb: { width: 84, height: 84, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   thumbImg: { ...StyleSheet.absoluteFill },
   seal: { fontSize: 28, lineHeight: 34, opacity: 0.8 },
   stepBody: { flex: 1, gap: Spacing.one, justifyContent: 'center' },

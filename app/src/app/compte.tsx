@@ -5,14 +5,16 @@ import { router } from 'expo-router';
 
 import { AuthForm } from '@/components/auth-form';
 import { GhostButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { PageCard } from '@/components/intrigue-card';
 import { LogoSecretDate } from '@/components/logo-secretdate';
+import { PersonaCard } from '@/components/persona-card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Fonts, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, signOut, deleteMyAccount, type AccountProfile } from '@/lib/account';
-import { PERSONA_BANNERS, DEFAULT_BANNER } from '@/lib/persona-banners';
+import { getQuiz, type QuizData } from '@/lib/api';
 import { supabaseConfigured } from '@/lib/supabase';
 
 export default function CompteScreen() {
@@ -26,8 +28,7 @@ export default function CompteScreen() {
   if (!supabaseConfigured) {
     return (
       <Screen>
-        <ThemedText type="title">Mon compte</ThemedText>
-        <Notice>Les comptes ne sont pas encore configurés sur ce serveur.</Notice>
+        <PageCard title="Mon compte" text="Les comptes ne sont pas encore configurés sur ce serveur." />
       </Screen>
     );
   }
@@ -40,18 +41,18 @@ export default function CompteScreen() {
     );
   }
 
-  return <Screen bare={!user} gap={user ? undefined : Spacing.two}>{user ? <LoggedIn email={user.email} onSignOut={() => signOut().then(refresh)} /> : <LoggedOut onSignedIn={refresh} />}</Screen>;
+  return <Screen gap={user ? undefined : Spacing.two}>{user ? <LoggedIn email={user.email} onSignOut={() => signOut().then(refresh)} /> : <LoggedOut onSignedIn={refresh} />}</Screen>;
 }
 
 function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
   const theme = useTheme();
   return (
     <>
-      <View style={styles.logoContainer}>
+      <View style={[styles.logoContainer, { borderColor: theme.accentSoft }]}>
         <Image source={require('@/assets/images/bannieres/romantiques.jpg')} style={StyleSheet.absoluteFill} contentFit="cover" />
         <View style={[StyleSheet.absoluteFill, styles.veil]} />
         <LogoSecretDate size={64} />
-        <ThemedText style={[styles.appName, { color: theme.accent }]}>Secret Date</ThemedText>
+        <ThemedText style={[styles.appName, { color: theme.gold }]}>Secret Date</ThemedText>
       </View>
       <ThemedText type="subtitle">Ce soir, laissez-vous surprendre.</ThemedText>
       <ThemedText type="small" themeColor="textSecondary" style={styles.justify}>
@@ -81,18 +82,17 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
 
 function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
   const { role } = useCouple();
+  const who = email ? `Connecté·e en tant que ${email}.` : 'Connecté·e.';
   return (
     <>
-      <ThemedText type="eyebrow">{role === 'passager' ? 'Passager' : 'Instigateur'}</ThemedText>
-      <ThemedText type="title">Mon compte</ThemedText>
-      <ThemedText themeColor="textSecondary">Connecté·e en tant que {email}.</ThemedText>
-      {role === 'passager' ? (
-        <Notice>
-          Vous êtes passager : vous recevez les indices des soirées auxquelles on vous invite, le reste vous sera révélé le jour J.
-        </Notice>
-      ) : (
-        <CoupleProfile />
-      )}
+      <PageCard
+        badge={role === 'passager' ? 'Passager' : 'Instigateur'}
+        title="Mon compte"
+        text={role === 'passager'
+          ? `${who}\nVous recevez les indices des soirées auxquelles on vous invite, le reste vous sera révélé le jour J.`
+          : who}
+      />
+      {role === 'passager' ? null : <CoupleProfile />}
       <TextLink href="/historique">Mes soirées →</TextLink>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
       <DeleteAccount onDeleted={onSignOut} />
@@ -100,34 +100,35 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
   );
 }
 
-// The couple's profile, which only the instigateur makes (the quiz).
+// The couple's profile, which only the instigateur makes (the quiz), in full: it lives in the account.
 function CoupleProfile() {
-  const theme = useTheme();
   const [profile, setProfile] = useState<AccountProfile | null | 'loading' | 'error'>('loading');
+  const [quiz, setQuiz] = useState<QuizData | null>(null);
 
   useEffect(() => {
     accountProfile().then(setProfile).catch(() => setProfile('error'));
+    // The quiz names the vibes and the "never"; out of reach, the card goes without.
+    getQuiz().then(setQuiz).catch(() => {});
   }, []);
 
-  if (profile === 'loading') return <ThemedText themeColor="textSecondary">On retrouve votre profil…</ThemedText>;
-  if (profile === 'error') return <ThemedText themeColor="danger">Le profil n&apos;a pas pu être chargé.</ThemedText>;
-  const p = profile?.profile;
   return (
-    <>
-      {p ? (
-        <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
-          <Image source={PERSONA_BANNERS[p.persona.name] ?? DEFAULT_BANNER} style={styles.banner} contentFit="cover" />
-          <View style={styles.personaBody}>
-            <ThemedText type="eyebrow">{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
-            <ThemedText type="subtitle">{p.persona.name}</ThemedText>
-            <ThemedText themeColor="textSecondary">{p.persona.text}</ThemedText>
-          </View>
-        </View>
+    <View style={styles.section}>
+      <ThemedText type="eyebrow">Notre profil</ThemedText>
+      {profile === 'loading' ? (
+        <ThemedText themeColor="textSecondary">On retrouve votre profil…</ThemedText>
+      ) : profile === 'error' ? (
+        <ThemedText themeColor="danger">Le profil n&apos;a pas pu être chargé.</ThemedText>
+      ) : profile ? (
+        <PersonaCard profile={profile.profile} answers={profile.answers} quiz={quiz}>
+          <PrimaryLink href={{ pathname: '/profil', params: { modifier: '1' } }}>Modifier notre profil</PrimaryLink>
+        </PersonaCard>
       ) : (
-        <Notice>Vous n&apos;avez pas encore de profil : faites le quiz, il sera gardé sur votre compte.</Notice>
+        <>
+          <Notice>Vous n&apos;avez pas encore de profil : faites le quiz, il sera gardé sur votre compte.</Notice>
+          <PrimaryLink href="/profil">Faire notre profil</PrimaryLink>
+        </>
       )}
-      <PrimaryLink href="/profil">{p ? 'Modifier notre profil' : 'Faire notre profil'}</PrimaryLink>
-    </>
+    </View>
   );
 }
 
@@ -170,14 +171,12 @@ function Notice({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  logoContainer: { alignItems: 'center', justifyContent: 'center', gap: 2, height: 120, borderRadius: 16, overflow: 'hidden' },
-  veil: { backgroundColor: 'rgba(8, 42, 30, 0.62)' },
+  logoContainer: { alignItems: 'center', justifyContent: 'center', gap: 2, height: 132, borderRadius: Radius.card, borderWidth: 1, overflow: 'hidden' },
+  veil: { backgroundColor: 'rgba(4, 15, 10, 0.62)' },
   justify: { textAlign: 'justify' },
-  appName: { fontFamily: Fonts.headingBold, fontSize: 26, lineHeight: 32, textAlign: 'center' },
+  appName: { fontFamily: Fonts.headingBold, fontSize: 31, lineHeight: 36, letterSpacing: 0.4, textAlign: 'center' },
   points: { gap: 4 },
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
-  notice: { padding: Spacing.three, borderRadius: 16, borderWidth: 1 },
-  persona: { borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
-  banner: { width: '100%', height: 120, opacity: 0.85 },
-  personaBody: { padding: Spacing.four, gap: Spacing.two },
+  notice: { padding: Spacing.three, borderRadius: Radius.tile, borderWidth: 1 },
+  section: { gap: Spacing.three, marginVertical: Spacing.two },
 });

@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Animated, Easing, Modal, Platform, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-// A gold arc turning on a faint ring: "wait a moment", next to a link that was just pressed.
+// An emerald arc turning on a faint ring: "wait a moment", next to a link that was just pressed.
 export function Spinner({ size = 14 }: { size?: number }) {
   const theme = useTheme();
   const [turn] = useState(() => new Animated.Value(0));
@@ -51,7 +51,7 @@ export function Waiting({ title, lines }: { title: string; lines: string[] }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four, backgroundColor: 'rgba(5, 15, 14, 0.78)' },
-  card: { width: '100%', maxWidth: 360, alignItems: 'center', gap: Spacing.three, padding: Spacing.five, borderRadius: 24, borderWidth: 1 },
+  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four, backgroundColor: 'rgba(4, 15, 10, 0.82)' },
+  card: { width: '100%', maxWidth: 360, alignItems: 'center', gap: Spacing.three, padding: Spacing.five, borderRadius: Radius.card, borderWidth: 1 },
   center: { textAlign: 'center' },
 });

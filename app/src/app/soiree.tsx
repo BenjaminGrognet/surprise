@@ -4,19 +4,20 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
+import { PageCard } from '@/components/intrigue-card';
 import { OptionCard, OptionGrid } from '@/components/option-card';
 import { RouteResult } from '@/components/route-result';
 import { Screen } from '@/components/screen';
 import { Waiting } from '@/components/spinner';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { chooseEvening, currentUser, eveningsHistory } from '@/lib/account';
 import {
   composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart,
   type ComposedSoiree, type Night, type Profile, type SoireeData,
 } from '@/lib/api';
-import { isoDay, longDay, nextFriday } from '@/lib/dates';
+import { isoDay, longDay, nextFriday, shortDay } from '@/lib/dates';
 import { rememberedProfile } from '@/lib/local-store';
 
 // The mood cards, from "Tamisé & Intime" to "Aventureux & Insolite": each one is one of
@@ -153,22 +154,17 @@ export default function SoireeScreen() {
     const chosen = picked !== undefined && shown.length > 0;
     return (
       <Screen>
-        <TextButton onPress={() => (chosen ? router.back() : setComposed(null))}>{chosen ? '← Retour' : '← Changer nos envies'}</TextButton>
-        <ThemedText type="eyebrow">
-          {chosen ? longDay(shown[0].day) : composed.routes.length > 0 ? `${composed.routes.length} intrigues possibles` : 'Aucune intrigue ce soir-là'}
-        </ThemedText>
-        <ThemedText type="title">
-          {chosen ? 'Votre feuille de route' : composed.routes.length > 0 ? 'Gardez celle qui vous trouble' : 'Le hasard a fait chou blanc'}
-        </ThemedText>
-        {composed.routes.length === 0 ? (
-          <ThemedText themeColor="textSecondary">Élargissez les horaires, le budget ou les envies, et relancez l&apos;intrigue.</ThemedText>
-        ) : !chosen ? (
-          <ThemedText themeColor="textSecondary">
-            Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, votre passager n&apos;en verra que les indices.
-          </ThemedText>
-        ) : (
-          <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name, route: picked } }}>Ouvrir la révélation</PrimaryLink>
-        )}
+        <PageCard
+          badge={chosen ? shortDay(shown[0].day) : `${composed.routes.length} intrigue${composed.routes.length > 1 ? 's' : ''}`}
+          title={chosen ? 'Votre feuille de route' : composed.routes.length > 0 ? 'Gardez celle qui vous trouble' : 'Le hasard a fait chou blanc'}
+          text={composed.routes.length === 0
+            ? "Élargissez les horaires, le budget ou les envies, et relancez l'intrigue."
+            : chosen ? undefined : "Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, votre passager n'en verra que les indices."}>
+          {chosen ? (
+            <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name, route: picked } }}>Ouvrir la révélation</PrimaryLink>
+          ) : null}
+          <TextButton onPress={() => (chosen ? router.back() : setComposed(null))}>{chosen ? '← Retour' : '← Changer nos envies'}</TextButton>
+        </PageCard>
         {notice === 'signin' ? (
           <View style={styles.notice}>
             <ThemedText type="small" themeColor="textSecondary">Connectez-vous pour garder cette intrigue. </ThemedText>
@@ -200,16 +196,14 @@ export default function SoireeScreen() {
 
   return (
     <Screen gap={Spacing.two}>
-      <View style={styles.intro}>
-        <ThemedText type="eyebrow">Le filtre de vos envies</ThemedText>
-        <ThemedText type="title">Quelle intrigue vous tente ?</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {profile
-            ? `${profile.names ? `${profile.names} · ` : ''}${profile.persona.name} : vos « jamais », votre budget et vos goûts s'appliquent.`
-            : 'Sans profil, on trame avec des réglages par défaut.'}
-        </ThemedText>
+      <PageCard
+        badge={profile ? 'Votre profil' : 'Sans profil'}
+        title="Quelle intrigue vous tente ?"
+        text={profile
+          ? `${profile.names ? `${profile.names}, vos` : 'Vos'} « jamais », votre budget et vos goûts s'appliquent.`
+          : 'On trame avec des réglages par défaut.'}>
         <TextLink href="/profil">{profile ? 'Voir le profil →' : 'Faire le quiz →'}</TextLink>
-      </View>
+      </PageCard>
 
       <Section title="L'humeur du soir">
         <OptionGrid>
@@ -306,8 +300,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 }
 
 const styles = StyleSheet.create({
-  intro: { gap: Spacing.two },
-  section: { gap: Spacing.two, padding: Spacing.three, borderRadius: 18, borderWidth: 1 },
+  section: { gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.tile, borderWidth: 1 },
   sectionHead: { gap: 2 },
   notice: { padding: Spacing.three, borderRadius: 14 },
 });

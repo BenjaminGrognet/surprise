@@ -12,7 +12,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#082A1E",
+        "backgroundColor": "#040F0A",
         "foregroundImage": "./assets/images/logo-secretdate.png"
       },
       "predictiveBackGestureEnabled": false
@@ -34,7 +34,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#082A1E",
+          "backgroundColor": "#040F0A",
           "image": "./assets/images/splash-secretdate.png",
           "imageWidth": 540
         }

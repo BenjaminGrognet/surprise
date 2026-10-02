@@ -5,11 +5,12 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { PrimaryLink, TextLink } from '@/components/buttons';
+import { PageCard } from '@/components/intrigue-card';
 import { Screen } from '@/components/screen';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { Veil } from '@/components/veil';
-import { Fonts, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { isoDay, longDay } from '@/lib/dates';
@@ -40,10 +41,11 @@ export default function LivreScreen() {
   if (state === 'error' || state === null) {
     return (
       <Screen>
-        <ThemedText type="title">Livre introuvable</ThemedText>
-        <ThemedText themeColor="textSecondary">
-          {state === 'error' ? "Le livre n'a pas pu être ouvert." : "Cette soirée n'est pas gardée sur votre compte."}
-        </ThemedText>
+        <PageCard
+          back
+          title="Livre introuvable"
+          text={state === 'error' ? "Le livre n'a pas pu être ouvert." : "Cette soirée n'est pas gardée sur votre compte."}
+        />
         <PrimaryLink href="/">Retour au tableau</PrimaryLink>
       </Screen>
     );
@@ -89,24 +91,18 @@ function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed
   );
 }
 
+// The book's card, as on the home: sealed or still to seal, the evening it keeps and, until sealed, what it asks for.
 function Header({ sealed, title, day }: { sealed: boolean; title: string; day: string | null }) {
   const theme = useTheme();
   return (
-    <View style={[styles.header, { borderColor: theme.accentHair }]}>
-      <ThemedText type="eyebrow" style={[styles.center, styles.kicker]}>
-        {sealed ? 'Scellé à jamais' : "L'intrigue s'achève"}
-      </ThemedText>
-      <ThemedText style={[styles.title, { color: theme.accent }]}>Le Livre des Secrets</ThemedText>
-      <ThemedText type="small" style={[styles.center, { color: theme.creamSoft }]}>
-        « {title} »{day ? ` · ${longDay(day)}` : ''}
-      </ThemedText>
+    <PageCard back badge={sealed ? 'Scellé' : 'À sceller'} title="Le Livre des Secrets" text={`« ${title} »${day ? ` · ${longDay(day)}` : ''}`}>
       {sealed ? null : (
-        <ThemedText type="small" style={[styles.center, styles.intro, { color: theme.creamSoft }]}>
+        <ThemedText style={{ color: theme.creamSoft }}>
           Le rideau tombe sur votre soirée parisienne. Déposez vos éclats de souvenirs dans votre grimoire avant
           qu&apos;ils ne s&apos;évaporent.
         </ThemedText>
       )}
-    </View>
+    </PageCard>
   );
 }
 
@@ -181,12 +177,12 @@ function SealForm({ soireeId, onSealed }: { soireeId: string; onSealed: () => vo
         <Pressable
           disabled={busy || empty}
           onPress={seal}
-          style={[styles.seal, { backgroundColor: theme.satin }, (busy || empty) && styles.dim]}>
+          style={[styles.seal, { backgroundColor: theme.satin, boxShadow: busy || empty ? 'none' : `0 8px 22px ${theme.glow}` }, (busy || empty) && styles.dim]}>
           <ThemedText style={[styles.sealLabel, { color: theme.onAccent }]}>
             {busy ? 'Chiffrement du secret…' : 'Sceller dans le Grimoire'}
           </ThemedText>
         </Pressable>
-        <ThemedText style={[styles.whisper, styles.center, styles.italic, { color: theme.accent, opacity: 0.5 }]}>
+        <ThemedText style={[styles.whisper, styles.center, styles.italic, { color: theme.gold, opacity: 0.7 }]}>
           Une fois scellé, l&apos;itinéraire s&apos;efface. Seul ce souvenir subsistera.
         </ThemedText>
         {error ? <ThemedText type="small" themeColor="danger" style={styles.center}>{error}</ThemedText> : null}
@@ -226,23 +222,19 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   centerRow: { alignItems: 'center' },
   italic: { fontFamily: Fonts.headingItalic },
-  header: { alignItems: 'center', gap: Spacing.two, paddingBottom: Spacing.four, borderBottomWidth: 1 },
-  kicker: { fontSize: 10, letterSpacing: 3 },
-  title: { fontFamily: Fonts.heading, fontSize: 26, lineHeight: 34, textAlign: 'center', letterSpacing: 0.5 },
-  intro: { paddingHorizontal: Spacing.three, marginTop: Spacing.one, lineHeight: 21 },
   field: { gap: Spacing.two },
   label: { fontSize: 10, letterSpacing: 2.5 },
-  drop: { aspectRatio: 4 / 3, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', overflow: 'hidden', justifyContent: 'center' },
+  drop: { aspectRatio: 4 / 3, borderRadius: Radius.tile, borderWidth: 1.5, borderStyle: 'dashed', overflow: 'hidden', justifyContent: 'center' },
   dropInside: { alignItems: 'center', gap: Spacing.two, padding: Spacing.three },
   preview: { flex: 1, margin: Spacing.two, borderRadius: 12, borderWidth: 1 },
-  whisper: { fontFamily: Fonts.sans, fontSize: 11, lineHeight: 16 },
+  whisper: { fontFamily: Fonts.sans, fontSize: 12, lineHeight: 17 },
   note: {
-    fontFamily: Fonts.headingItalic, fontSize: 15, lineHeight: 22, minHeight: 96, padding: Spacing.three,
-    borderRadius: 16, textAlignVertical: 'top',
+    fontFamily: Fonts.headingItalic, fontSize: 18, lineHeight: 24, minHeight: 104, padding: Spacing.three,
+    borderRadius: Radius.field, textAlignVertical: 'top',
   },
-  seal: { borderRadius: 12, paddingVertical: Spacing.three, alignItems: 'center', boxShadow: '0 4px 20px rgba(217, 183, 113, 0.15)' },
-  sealLabel: { fontFamily: Fonts.headingBold, fontSize: 16, lineHeight: 22, letterSpacing: 0.4 },
+  seal: { borderRadius: Radius.pill, paddingVertical: Spacing.three - 2, alignItems: 'center' },
+  sealLabel: { fontFamily: Fonts.headingBold, fontSize: 20, lineHeight: 24, letterSpacing: 0.3 },
   dim: { opacity: 0.45 },
-  page: { gap: Spacing.three, padding: Spacing.three, borderRadius: 18, borderWidth: 1 },
-  photo: { width: '100%', aspectRatio: 4 / 3, borderRadius: 12, borderWidth: 1 },
+  page: { gap: Spacing.three, padding: Spacing.three, borderRadius: Radius.tile, borderWidth: 1 },
+  photo: { width: '100%', aspectRatio: 4 / 3, borderRadius: 16, borderWidth: 1 },
 });

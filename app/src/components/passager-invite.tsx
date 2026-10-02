@@ -3,7 +3,7 @@ import { Platform, Pressable, Share, StyleSheet, View } from 'react-native';
 
 import { GhostButton, PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { EveningHistoryRow } from '@/lib/account';
 import { invitationLink, resetPassager } from '@/lib/couple';
@@ -68,7 +68,7 @@ export function PassagerInvite({ evening, onChange }: { evening: EveningHistoryR
           <ThemedText themeColor="textSecondary">
             Envoyez ce lien à votre passager : il crée son propre compte et ne recevra que les indices.
           </ThemedText>
-          <Pressable onPress={() => share(link)} style={[styles.link, { borderColor: theme.accentFaint, backgroundColor: theme.glass }]}>
+          <Pressable onPress={() => share(link)} style={[styles.link, { borderColor: theme.line, backgroundColor: theme.background }]}>
             <ThemedText type="small" numberOfLines={1}>{link}</ThemedText>
           </Pressable>
           <PrimaryButton wide disabled={busy} onPress={() => share(link)}>
@@ -83,7 +83,7 @@ export function PassagerInvite({ evening, onChange }: { evening: EveningHistoryR
 }
 
 const styles = StyleSheet.create({
-  card: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.three },
+  card: { padding: Spacing.four, borderRadius: Radius.card, borderWidth: 1, gap: Spacing.three },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  link: { borderWidth: 1, borderRadius: 14, padding: 14 },
+  link: { borderWidth: 1, borderRadius: Radius.field, padding: 14 },
 });

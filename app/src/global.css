@@ -11,6 +11,6 @@
 /* The page behind the app, so an overscroll never flashes white. */
 html,
 body {
-  background-color: #082a1e;
+  background-color: #040f0a;
   color-scheme: dark;
 }

@@ -1,26 +1,27 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, PrimaryLink, TextButton } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
-import { OptionRow } from '@/components/option-button';
+import { PageCard } from '@/components/intrigue-card';
 import { OptionCard, OptionGrid } from '@/components/option-card';
+import { PersonaCard } from '@/components/persona-card';
 import { Screen } from '@/components/screen';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
-import { Fonts, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, currentUser, saveAccountProfile } from '@/lib/account';
 import { getQuiz, saveProfile, type Profile, type Question, type QuizData } from '@/lib/api';
-import { longDay, nextFriday } from '@/lib/dates';
+import { nextFriday } from '@/lib/dates';
 import { rememberedProfile, rememberProfile } from '@/lib/local-store';
-import { DEFAULT_BANNER, PERSONA_BANNERS } from '@/lib/persona-banners';
 
 type Phase = 'loading' | 'quiz' | 'saving' | 'error' | 'unreachable' | 'reveal';
 
 export default function ProfilScreen() {
-  const { new: isNew } = useLocalSearchParams<{ new?: string }>();
+  // ?new=1: a blank quiz. ?modifier=1 (from the account): the quiz again, with the couple's answers already in it.
+  const { new: isNew, modifier } = useLocalSearchParams<{ new?: string; modifier?: string }>();
   const theme = useTheme();
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [index, setIndex] = useState(0);
@@ -58,19 +59,21 @@ export default function ProfilScreen() {
         const remembered = await rememberedProfile();
         if (remembered) {
           setAnswers(remembered.answers);
-          setResult(remembered.profile);
-          setPhase('reveal');
-          return;
-        }
-        const user = await currentUser().catch(() => null);
-        if (user) {
-          const found = await accountProfile().catch(() => null);
-          if (found) return submit(found.answers);
+          if (!modifier) {
+            setResult(remembered.profile);
+            setPhase('reveal');
+            return;
+          }
+        } else {
+          const user = await currentUser().catch(() => null);
+          const found = user ? await accountProfile().catch(() => null) : null;
+          if (found && !modifier) return submit(found.answers);
+          if (found) setAnswers(found.answers);
         }
       }
       setPhase('quiz');
     })();
-  }, [isNew]);
+  }, [isNew, modifier]);
 
   if (phase === 'unreachable') {
     return (
@@ -103,7 +106,12 @@ export default function ProfilScreen() {
   if (phase === 'reveal' && result) {
     return (
       <Screen>
-        <Reveal quiz={quiz} answers={answers} profile={result} onRestart={() => { setIndex(0); setResult(null); setPhase('quiz'); }} />
+        <PersonaCard profile={result} answers={answers} quiz={quiz}>
+          <View style={styles.nav}>
+            <TextButton onPress={() => { setIndex(0); setResult(null); setPhase('quiz'); }}>Recommencer</TextButton>
+            <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink>
+          </View>
+        </PersonaCard>
       </Screen>
     );
   }
@@ -123,12 +131,11 @@ export default function ProfilScreen() {
 
   return (
     <Screen>
-      <ThemedText type="eyebrow">Votre profil · question {index + 1} sur {quiz.questions.length}</ThemedText>
-      <View style={[styles.progressTrack, { backgroundColor: theme.line }]}>
-        <View style={[styles.progressBar, { width: `${((index + 1) / quiz.questions.length) * 100}%`, backgroundColor: theme.accent }]} />
-      </View>
-      <ThemedText type="title">{q.question}</ThemedText>
-      {q.hint ? <ThemedText type="small" themeColor="textSecondary">{q.hint}</ThemedText> : null}
+      <PageCard back badge={`${index + 1} / ${quiz.questions.length}`} title={q.question} text={q.hint}>
+        <View style={[styles.progressTrack, { backgroundColor: theme.line }]}>
+          <View style={[styles.progressBar, { width: `${((index + 1) / quiz.questions.length) * 100}%`, backgroundColor: theme.accent }]} />
+        </View>
+      </PageCard>
       <QuestionBody
         question={q}
         value={answers[q.id]}
@@ -218,83 +225,8 @@ function QuestionBody({
   );
 }
 
-function Reveal({
-  quiz,
-  answers,
-  profile: p,
-  onRestart,
-}: {
-  quiz: QuizData;
-  answers: Record<string, unknown>;
-  profile: Profile;
-  onRestart: () => void;
-}) {
-  const theme = useTheme();
-  const eviter = quiz.questions.find((q) => q.id === 'eviter');
-  const chosen = (answers.eviter as string[] | undefined) ?? [];
-  const never = chosen.map((v) => eviter?.options?.find((o) => o.value === v)).filter((o): o is NonNullable<typeof o> => !!o);
-  const banner = PERSONA_BANNERS[p.persona.name] ?? DEFAULT_BANNER;
-  return (
-    <View style={[styles.persona, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
-      <Image source={banner} style={styles.banner} />
-      <View style={styles.personaBody}>
-        <ThemedText type="eyebrow">{p.names ? `${p.names}, vous êtes…` : 'Vous êtes…'}</ThemedText>
-        <ThemedText type="title">{p.persona.name}</ThemedText>
-        <ThemedText themeColor="textSecondary">{p.persona.text}</ThemedText>
-        <OptionRow>
-          {p.vibes.map((v) => (
-            <ThemedText key={v} type="small" themeColor="accentInk" style={[styles.tag, { borderColor: theme.accentSoft }]}>
-              {quiz.vibes[v] || v}
-            </ThemedText>
-          ))}
-        </OptionRow>
-        <View style={styles.facts}>
-          <Fact label="première sortie" value={p.first_day ? longDay(p.first_day) : 'Bientôt'} />
-          <Fact label="soirée type" value={p.budget >= 350 ? 'sans compter' : `≈ ${p.budget} €`} />
-          <View style={[styles.factItem, { borderColor: theme.line }]}>
-            <ThemedText style={styles.factValue}>{Math.round(p.audace * 100)} %</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">audace</ThemedText>
-            <View style={[styles.meterTrack, { backgroundColor: theme.line }]}>
-              <View style={[styles.meterBar, { width: `${p.audace * 100}%`, backgroundColor: theme.accent }]} />
-            </View>
-          </View>
-        </View>
-        {never.length > 0 && (
-          <ThemedText themeColor="textSecondary">
-            <ThemedText>Jamais : </ThemedText>
-            {never.map((o) => (o.label ?? '').toLowerCase()).join(', ')}
-          </ThemedText>
-        )}
-        <View style={styles.nav}>
-          <TextButton onPress={onRestart}>Recommencer</TextButton>
-          <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.factItem, { borderColor: theme.line }]}>
-      <ThemedText style={styles.factValue}>{value}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  banner: { width: '100%', height: 120, opacity: 0.85 },
-  progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden' },
+  progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden', marginTop: Spacing.two },
   progressBar: { height: '100%' },
   nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.one },
-  persona: { borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
-  personaBody: { gap: Spacing.two, padding: Spacing.three, paddingTop: Spacing.two },
-  tag: { borderRadius: 999, borderWidth: 1, paddingVertical: 2, paddingHorizontal: 10, overflow: 'hidden' },
-  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  factItem: { flex: 1, minWidth: 0, gap: 0, borderTopWidth: 1, paddingTop: Spacing.one },
-  factValue: { fontFamily: Fonts.heading, fontSize: 14, lineHeight: 18 },
-  meterTrack: { height: 3, borderRadius: 2, overflow: 'hidden', marginTop: Spacing.two },
-  meterBar: { height: '100%' },
 });

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { TextButton } from '@/components/buttons';
-import { Countdown, IntrigueCard } from '@/components/intrigue-card';
+import { CompassGuide } from '@/components/compass-guide';
+import { Countdown, PageCard } from '@/components/intrigue-card';
 import { formatPrice, imageUri, place } from '@/components/route-result';
 import { ThemedText } from '@/components/themed-text';
 import { busyStyle } from '@/components/spinner';
@@ -19,8 +20,9 @@ const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre
 
 type Tab = 'aventure' | 'coulisses';
 
-// The organiser's side of a kept evening: a quiet header (the countdown, the whole budget once), then
-// two tabs — the evening itself (L'Aventure) apart from the bookings and what the partner sees (Les Coulisses).
+// The organiser's side of a kept evening: a quiet header (the countdown, the whole budget once), the compass on the
+// day itself, then two tabs — the evening itself (L'Aventure) apart from the bookings and what the partner sees
+// (Les Coulisses).
 export function Organiser({
   route, pageName, secretTitle, mode, onRoute,
 }: { route: SoireeRoute; pageName: string; secretTitle: string; mode: RevealMode; onRoute: (route: SoireeRoute) => void }) {
@@ -74,12 +76,12 @@ export function Organiser({
 
   return (
     <>
-      <IntrigueCard>
-        <ThemedText type="eyebrow" style={styles.center}>Feuille de route · {longDay(route.day)}</ThemedText>
-        <ThemedText type="title" style={styles.center}>{secretTitle}</ThemedText>
+      <PageCard back badge={`${route.price_estimated ? '≈ ' : ''}${route.price.toFixed(0)} €`} title={secretTitle}>
+        <ThemedText type="eyebrow">Feuille de route · {longDay(route.day)}</ThemedText>
         {now < start ? <Countdown to={start} now={now} /> : <ThemedText type="subtitle">Le rideau est levé</ThemedText>}
-        <Badge>{`${route.price_estimated ? '≈ ' : ''}${route.price.toFixed(0)} € à deux`}</Badge>
-      </IntrigueCard>
+      </PageCard>
+
+      <CompassGuide route={route} />
 
       <Tabs tab={tab} onTab={setTab} pending={left} />
 
@@ -89,15 +91,6 @@ export function Organiser({
         <Coulisses route={route} secretTitle={secretTitle} toBook={toBook} booked={booked} onToggle={toggle} error={error} now={now} mode={mode} />
       )}
     </>
-  );
-}
-
-function Badge({ children }: { children: string }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.badge, { borderColor: theme.accentSoft }]}>
-      <ThemedText type="small" themeColor="accentInk">{children}</ThemedText>
-    </View>
   );
 }
 
@@ -174,7 +167,7 @@ function ThreadStep({ step, busy, onSwap }: { step: SoireeStep; busy: boolean; o
       <View style={styles.anchorBody}>
         <View style={styles.stepHead}>
           <View style={styles.stepHeadText}>
-            <ThemedText type="eyebrow">
+            <ThemedText type="eyebrow" themeColor="gold">
               {formatTime(step.start)} → {formatTime(step.end)} · {ROLE_LABELS[step.role]}
             </ThemedText>
             <ThemedText style={styles.stepTitle}>{step.title}</ThemedText>
@@ -303,9 +296,9 @@ function PartnerScreen({ route, secretTitle, now, mode }: { route: SoireeRoute; 
   const shown = shownClues(clues, now);
   const next = nextClue(clues, now);
   return (
-    <View style={[styles.frameOuter, { borderColor: theme.accent }]}>
-      <View style={[styles.frameInner, { borderColor: theme.accentFaint, backgroundColor: theme.backgroundElement }]}>
-        <ThemedText style={[styles.shadowTitle, { color: theme.accentInk }]}>Dans l&apos;ombre du Passager…</ThemedText>
+    <View style={[styles.frameOuter, { borderColor: theme.goldSoft }]}>
+      <View style={[styles.frameInner, { borderColor: theme.line, backgroundColor: theme.backgroundElement }]}>
+        <ThemedText style={[styles.shadowTitle, { color: theme.gold }]}>Dans l&apos;ombre du Passager…</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
           Ce que votre partenaire lit en ce moment. Vous seul voyez le reste.
         </ThemedText>
@@ -330,11 +323,10 @@ const ANCHOR = 15;
 
 const styles = StyleSheet.create({
   center: { textAlign: 'center' },
-  badge: { borderWidth: 1, borderRadius: 999, paddingVertical: 4, paddingHorizontal: Spacing.three },
   tabs: { flexDirection: 'row', borderBottomWidth: 1, marginTop: -Spacing.two },
   tab: { flex: 1, alignItems: 'center', paddingVertical: Spacing.two, borderBottomWidth: 1, marginBottom: -1, gap: 2 },
   tabTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  tabLabel: { fontFamily: Fonts.headingItalic, fontSize: 17, lineHeight: 22 },
+  tabLabel: { fontFamily: Fonts.headingItalic, fontSize: 21, lineHeight: 26 },
   tabDot: { width: 5, height: 5, borderRadius: 3 },
   tabSub: { fontSize: 11, lineHeight: 14, letterSpacing: 0.5 },
   section: { gap: Spacing.four },
@@ -343,11 +335,11 @@ const styles = StyleSheet.create({
   anchorRow: { flexDirection: 'row', gap: Spacing.three, paddingBottom: Spacing.two },
   anchor: {
     width: ANCHOR, height: ANCHOR, borderRadius: ANCHOR / 2, borderWidth: 1, marginTop: 2,
-    alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(217, 183, 113, 0.55)',
+    alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(61, 183, 135, 0.55)',
   },
   anchorCore: { width: 5, height: 5, borderRadius: 3 },
   anchorBody: { flex: 1, gap: Spacing.one },
-  stepTitle: { fontFamily: Fonts.heading, fontSize: 19, lineHeight: 25 },
+  stepTitle: { fontFamily: Fonts.heading, fontSize: 23, lineHeight: 28 },
   stepText: { marginTop: Spacing.one },
   stepHead: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },
   stepHeadText: { flex: 1, gap: Spacing.one },
@@ -359,15 +351,15 @@ const styles = StyleSheet.create({
   stepFoot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.one },
   links: { flexDirection: 'row', gap: Spacing.three },
   hop: { paddingLeft: ANCHOR + Spacing.three, paddingTop: Spacing.one, paddingBottom: Spacing.three },
-  hopText: { fontFamily: Fonts.headingItalic, fontSize: 13 },
+  hopText: { fontFamily: Fonts.headingItalic, fontSize: 16 },
   block: { gap: Spacing.three },
   blockHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   booking: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingBottom: Spacing.three, borderBottomWidth: 1 },
   bookingBody: { flex: 1, gap: 2 },
   box: { width: 22, height: 22, borderRadius: 5, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   boxMark: { fontSize: 13, lineHeight: 16 },
-  frameOuter: { borderWidth: 1, borderRadius: 26, padding: 5 },
-  frameInner: { borderWidth: 1, borderRadius: 21, padding: Spacing.four, gap: Spacing.three },
-  shadowTitle: { fontFamily: Fonts.headingItalic, fontSize: 22, lineHeight: 30, textAlign: 'center' },
+  frameOuter: { borderWidth: 1, borderRadius: 30, padding: 5 },
+  frameInner: { borderWidth: 1, borderRadius: 25, padding: Spacing.four, gap: Spacing.three },
+  shadowTitle: { fontFamily: Fonts.headingItalic, fontSize: 27, lineHeight: 32, textAlign: 'center' },
   quote: { borderLeftWidth: 1, paddingLeft: Spacing.three, gap: Spacing.one },
 });

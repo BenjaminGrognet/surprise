@@ -1,11 +1,15 @@
-import { Inter_200ExtraLight, Inter_300Light, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, useFonts } from '@expo-google-fonts/inter';
 import {
-  PlayfairDisplay_400Regular, PlayfairDisplay_400Regular_Italic, PlayfairDisplay_600SemiBold,
-} from '@expo-google-fonts/playfair-display';
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+  CormorantGaramond_500Medium, CormorantGaramond_500Medium_Italic, CormorantGaramond_600SemiBold,
+} from '@expo-google-fonts/cormorant-garamond';
+import {
+  Manrope_200ExtraLight, Manrope_300Light, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, useFonts,
+} from '@expo-google-fonts/manrope';
+import { DarkTheme, Stack, ThemeProvider, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
+import { TabBar, TabBarContext } from '@/components/tab-bar';
 import { Colors } from '@/constants/theme';
 import { CoupleContext } from '@/hooks/use-couple';
 import { myRole, type CoupleState } from '@/lib/couple';
@@ -23,15 +27,17 @@ const readCouple = () => myRole().catch((): CoupleState => ({ role: 'instigateur
 
 export default function RootLayout() {
   const [loaded] = useFonts({
-    Inter_200ExtraLight,
-    Inter_300Light,
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    PlayfairDisplay_400Regular,
-    PlayfairDisplay_400Regular_Italic,
-    PlayfairDisplay_600SemiBold,
+    Manrope_200ExtraLight,
+    Manrope_300Light,
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    CormorantGaramond_500Medium,
+    CormorantGaramond_500Medium_Italic,
+    CormorantGaramond_600SemiBold,
   });
+  const path = usePathname();
   // null while the stored session is read. Without accounts configured, everything stays locked.
   const [signedIn, setSignedIn] = useState<boolean | null>(supabaseConfigured ? null : false);
 
@@ -75,28 +81,39 @@ export default function RootLayout() {
 
   if (!loaded || signedIn === null || (signedIn && !booted)) return null;
   const instigateur = signedIn && couple?.role === 'instigateur';
+  // The floating bar, for a signed-in account; not on the invitation, where a passager is only on their way in.
+  const tabBar = signedIn && path !== '/invitation';
 
   return (
     <CoupleContext.Provider value={value}>
-      <ThemeProvider value={navTheme}>
-        <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false, title: 'Secret Date', contentStyle: { backgroundColor: Colors.dark.background } }}>
-          {/* The couple signs in or creates an account before anything else. */}
-          <Stack.Protected guard={signedIn}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="revelation" />
-            <Stack.Screen name="historique" />
-            <Stack.Screen name="livre" />
-            {/* The instigateur makes the profile and orders the evenings; the passager only gets the clues. */}
-            <Stack.Protected guard={instigateur}>
-              <Stack.Screen name="profil" />
-              <Stack.Screen name="soiree" />
-            </Stack.Protected>
-          </Stack.Protected>
-          <Stack.Screen name="compte" />
-          <Stack.Screen name="invitation" />
-        </Stack>
-      </ThemeProvider>
+      <TabBarContext.Provider value={tabBar}>
+        <ThemeProvider value={navTheme}>
+          <StatusBar style="light" />
+          <View style={styles.root}>
+            <Stack screenOptions={{ headerShown: false, title: 'Secret Date', contentStyle: { backgroundColor: Colors.dark.background } }}>
+              {/* The couple signs in or creates an account before anything else. */}
+              <Stack.Protected guard={signedIn}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="revelation" />
+                <Stack.Screen name="historique" />
+                <Stack.Screen name="livre" />
+                {/* The instigateur makes the profile and orders the evenings; the passager only gets the clues. */}
+                <Stack.Protected guard={instigateur}>
+                  <Stack.Screen name="profil" />
+                  <Stack.Screen name="soiree" />
+                </Stack.Protected>
+              </Stack.Protected>
+              <Stack.Screen name="compte" />
+              <Stack.Screen name="invitation" />
+            </Stack>
+            {tabBar ? <TabBar /> : null}
+          </View>
+        </ThemeProvider>
+      </TabBarContext.Provider>
     </CoupleContext.Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: Colors.dark.background },
+});

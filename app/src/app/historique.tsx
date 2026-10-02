@@ -4,9 +4,10 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { PageCard } from '@/components/intrigue-card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Fonts, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { deleteEvening, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
@@ -41,11 +42,11 @@ export default function ArchivesScreen() {
   const relics = rows.filter((r) => r.souvenirs?.length);
   return (
     <Screen gap={Spacing.four}>
-      <View style={[styles.header, { borderColor: theme.accentHair }]}>
-        <ThemedText type="eyebrow" style={styles.kicker}>Mémoire du duo</ThemedText>
-        <ThemedText style={[styles.title, { color: theme.accent }]}>Mes soirées</ThemedText>
-        <ThemedText style={[styles.tagline, { color: theme.creamSoft }]}>Le grimoire de vos échappées clandestines.</ThemedText>
-      </View>
+      <PageCard
+        badge={Array.isArray(state) ? `${relics.length} secret${relics.length > 1 ? 's' : ''}` : undefined}
+        title="Mes soirées"
+        text="Le grimoire de vos échappées clandestines."
+      />
 
       {state === 'loading' ? <ThemedText themeColor="textSecondary">On rouvre le grimoire…</ThemedText> : null}
       {state === 'error' ? (
@@ -72,9 +73,6 @@ export default function ArchivesScreen() {
         <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}>
           <ThemedText type="small" style={{ color: theme.creamSoft }}>← Le tableau</ThemedText>
         </Pressable>
-        <ThemedText type="eyebrow" style={styles.kicker}>
-          {relics.length} secret{relics.length > 1 ? 's' : ''} gardé{relics.length > 1 ? 's' : ''}
-        </ThemedText>
       </View>
     </Screen>
   );
@@ -102,7 +100,7 @@ function patina(age: number) {
     photoOpacity: 1 - 0.4 * t,
     text: 0.75 - 0.25 * t,
     card: 1 - 0.4 * t,
-    border: 0.12 - 0.06 * t,
+    border: 0.18 - 0.08 * t,
   };
 }
 
@@ -115,12 +113,12 @@ function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: n
   const open = () => router.push({ pathname: '/livre', params: { soiree: row.page_name, route: String(row.route_index) } });
   return (
     <Pressable onPress={open} style={styles.entry}>
-      <View style={[styles.dot, age === 0 ? { backgroundColor: theme.accent, boxShadow: `0 0 8px ${theme.accent}` } : styles.dimDot]} />
-      <ThemedText style={[styles.date, { color: theme.accent, opacity: age === 0 ? 1 : 0.6 }]}>
+      <View style={[styles.dot, age === 0 ? { backgroundColor: theme.gold, boxShadow: `0 0 8px ${theme.gold}` } : styles.dimDot]} />
+      <ThemedText style={[styles.date, { color: theme.gold, opacity: age === 0 ? 1 : 0.6 }]}>
         INTRIGUE SCELLÉE • {row.day ? monthYear(row.day) : 'DATE LIBRE'}
       </ThemedText>
       <ThemedText style={[styles.name, { color: theme.cream, opacity: age === 0 ? 1 : 0.8 }]}>{row.secret_title ?? row.title}</ThemedText>
-      <View style={[styles.card, { backgroundColor: `rgba(7, 22, 21, ${p.card})`, borderColor: `rgba(217, 183, 113, ${p.border})` }]}>
+      <View style={[styles.card, { backgroundColor: `rgba(8, 26, 19, ${p.card})`, borderColor: `rgba(219, 193, 140, ${p.border})` }]}>
         {photo ? (
           <View style={[styles.photo, { opacity: p.photoOpacity }]}>
             <View style={[StyleSheet.absoluteFill, { filter: p.photo }]}>
@@ -211,21 +209,17 @@ const DOT = 8;
 const LINE_X = 17;
 
 const styles = StyleSheet.create({
-  header: { alignItems: 'center', gap: Spacing.two, paddingBottom: Spacing.four, borderBottomWidth: 1 },
-  kicker: { fontSize: 10, letterSpacing: 2.5 },
-  title: { fontFamily: Fonts.heading, fontSize: 26, lineHeight: 34, textAlign: 'center', letterSpacing: 0.5 },
-  tagline: { fontFamily: Fonts.headingItalic, fontSize: 13, lineHeight: 18, textAlign: 'center' },
   thread: { gap: Spacing.five, paddingTop: Spacing.two },
-  line: { position: 'absolute', left: LINE_X, top: Spacing.three, bottom: Spacing.three, width: 1, backgroundColor: 'rgba(217, 183, 113, 0.2)' },
+  line: { position: 'absolute', left: LINE_X, top: Spacing.three, bottom: Spacing.three, width: 1, backgroundColor: 'rgba(219, 193, 140, 0.2)' },
   entry: { paddingLeft: 40 },
   dot: { position: 'absolute', left: LINE_X - DOT / 2 + 0.5, top: 5, width: DOT, height: DOT, borderRadius: DOT / 2, zIndex: 1 },
-  dimDot: { backgroundColor: 'rgba(217, 183, 113, 0.4)' },
+  dimDot: { backgroundColor: 'rgba(219, 193, 140, 0.4)' },
   hollow: { borderWidth: 1 },
-  date: { fontFamily: Fonts.headingBold, fontSize: 10, lineHeight: 16, letterSpacing: 1.2 },
-  name: { fontFamily: Fonts.heading, fontSize: 17, lineHeight: 24, marginTop: 2 },
-  card: { marginTop: Spacing.three, padding: Spacing.three, borderRadius: 16, borderWidth: 1, gap: Spacing.three },
-  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 183, 113, 0.05)' },
-  note: { fontFamily: Fonts.headingItalic, fontSize: 13, lineHeight: 20 },
+  date: { fontFamily: Fonts.sansBold, fontSize: 10, lineHeight: 16, letterSpacing: 1.6 },
+  name: { fontFamily: Fonts.heading, fontSize: 22, lineHeight: 27, marginTop: 2 },
+  card: { marginTop: Spacing.three, padding: Spacing.three, borderRadius: Radius.tile, borderWidth: 1, gap: Spacing.three },
+  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(219, 193, 140, 0.08)' },
+  note: { fontFamily: Fonts.headingItalic, fontSize: 17, lineHeight: 23 },
   delete: { marginTop: Spacing.two, gap: Spacing.one },
   deleteRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, paddingTop: Spacing.three },

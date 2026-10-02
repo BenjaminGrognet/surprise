@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { saveRevealMode, type EveningHistoryRow } from '@/lib/account';
 import { REVEAL_MODES, revealMode, type RevealMode } from '@/lib/clues';
@@ -34,7 +34,7 @@ export function RevealModePicker({ evening, onChange }: { evening: EveningHistor
           <Pressable
             key={m.key}
             onPress={() => pick(m.key)}
-            style={[styles.option, { borderColor: active ? theme.accent : theme.line, backgroundColor: active ? theme.glass : 'transparent' }]}>
+            style={[styles.option, { borderColor: active ? theme.accent : theme.line, backgroundColor: active ? theme.backgroundSelected : 'transparent' }]}>
             <ThemedText type="smallBold" themeColor={active ? 'accentInk' : 'text'}>{m.label}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">{m.hint}</ThemedText>
           </Pressable>
@@ -46,6 +46,6 @@ export function RevealModePicker({ evening, onChange }: { evening: EveningHistor
 }
 
 const styles = StyleSheet.create({
-  card: { padding: Spacing.four, borderRadius: 22, borderWidth: 1, gap: Spacing.three },
-  option: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 2 },
+  card: { padding: Spacing.four, borderRadius: Radius.card, borderWidth: 1, gap: Spacing.three },
+  option: { borderWidth: 1, borderRadius: Radius.field, padding: 14, gap: 2 },
 });

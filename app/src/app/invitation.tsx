@@ -1,10 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
 
 import { AuthForm } from '@/components/auth-form';
 import { PrimaryButton } from '@/components/buttons';
-import { IntrigueCard } from '@/components/intrigue-card';
+import { PageCard } from '@/components/intrigue-card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -41,13 +40,11 @@ export default function InvitationScreen() {
 
   return (
     <Screen gap={Spacing.four}>
-      <IntrigueCard>
-        <ThemedText type="eyebrow" style={styles.center}>Une invitation</ThemedText>
-        <ThemedText type="title" style={styles.center}>Quelqu&apos;un trame une soirée pour vous…</ThemedText>
-        <ThemedText themeColor="textSecondary" style={styles.center}>
-          Vous serez le passager : pas de programme, seulement des indices, dévoilés peu à peu jusqu&apos;au jour J.
-        </ThemedText>
-      </IntrigueCard>
+      <PageCard
+        badge="Invitation"
+        title="Quelqu'un trame une soirée pour vous…"
+        text="Vous serez le passager : pas de programme, seulement des indices, dévoilés peu à peu jusqu'au jour J."
+      />
 
       {!code ? (
         <ThemedText themeColor="danger">Ce lien d&apos;invitation est incomplet : demandez-le à nouveau.</ThemedText>
@@ -63,7 +60,3 @@ export default function InvitationScreen() {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { textAlign: 'center' },
-});

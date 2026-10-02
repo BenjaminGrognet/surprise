@@ -7,8 +7,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-// A small velvet card: gold line icon on the left, title and a word of description beside it;
-// a gold border, a soft glow and a gold dot once chosen. Two side by side, so a question fits on a screen.
+// A small tile of the night: emerald line icon on the left, title and a word of description beside it;
+// an emerald border, a soft halo and an emerald dot once chosen. Two side by side, so a question fits on a screen.
 export function OptionCard({
   label, desc, icon, emoji, selected, disabled, onPress,
 }: {
@@ -65,14 +65,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     paddingVertical: 6,
     paddingLeft: Spacing.two + 2,
     paddingRight: Spacing.three,
   },
   compact: { minHeight: 36, paddingVertical: 4 },
-  glow: { boxShadow: '0 2px 8px rgba(217, 183, 113, 0.3)' },
+  glow: { boxShadow: '0 4px 14px rgba(61, 183, 135, 0.25)' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.35 },
   icon: { width: 22, alignItems: 'center' },

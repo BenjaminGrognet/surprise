@@ -2,7 +2,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
-import { Fonts, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { isoDay } from '@/lib/dates';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -20,8 +20,8 @@ export function DayField({ value, onChange, label = 'Le jour' }: { value: string
           min={isoDay(new Date())}
           onChange={(e: { target: { value: string } }) => onChange(e.target.value)}
           style={{
-            fontFamily: Fonts.sans, fontSize: 16, padding: 14, borderRadius: 14, border: `1px solid ${theme.accentFaint}`,
-            background: theme.glass, color: theme.text, width: '100%', boxSizing: 'border-box', colorScheme: 'dark',
+            fontFamily: Fonts.sans, fontSize: 15, padding: 15, borderRadius: Radius.field, border: `1px solid ${theme.line}`,
+            background: theme.backgroundElement, color: theme.text, width: '100%', boxSizing: 'border-box', colorScheme: 'dark',
           }}
         />
       ) : (

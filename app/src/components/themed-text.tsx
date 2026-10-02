@@ -8,13 +8,16 @@ export type ThemedTextProps = TextProps & {
   themeColor?: ThemeColor;
 };
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
+// French typography: a no-break space before ? ! : ; » and after «, so a sign never wraps alone onto a line.
+const keepTogether = (text: string) => text.replace(/ ([?!:;»])/g, '\u00a0$1').replace(/« /g, '«\u00a0');
+
+export function ThemedText({ style, type = 'default', themeColor, children, ...rest }: ThemedTextProps) {
   const theme = useTheme();
 
   return (
     <Text
       style={[
-        { color: theme[themeColor ?? (type === 'eyebrow' ? 'accentInk' : 'text')] },
+        { color: theme[themeColor ?? (type === 'eyebrow' ? 'textSecondary' : 'text')] },
         type === 'default' && styles.default,
         type === 'title' && styles.title,
         type === 'small' && styles.small,
@@ -27,8 +30,9 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         type === 'code' && styles.code,
         style,
       ]}
-      {...rest}
-    />
+      {...rest}>
+      {typeof children === 'string' ? keepTogether(children) : children}
+    </Text>
   );
 }
 
@@ -37,52 +41,52 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
 const styles = StyleSheet.create({
   small: {
     fontFamily: Fonts.sans,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
   },
   smallBold: {
-    fontFamily: Fonts.sansMedium,
-    fontSize: 14,
-    lineHeight: 20,
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 13,
+    lineHeight: 19,
   },
   default: {
     fontFamily: Fonts.sans,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 23,
   },
   title: {
     fontFamily: Fonts.heading,
-    fontSize: 32,
+    fontSize: 34,
     lineHeight: 40,
   },
   subtitle: {
     fontFamily: Fonts.heading,
-    fontSize: 22,
-    lineHeight: 30,
+    fontSize: 25,
+    lineHeight: 31,
   },
-  // Small spaced capitals in gold, above a title: "VOTRE PROCHAINE INTRIGUE".
+  // Small spaced capitals in sage, above a title or a row: "VOTRE PROCHAINE INTRIGUE".
   eyebrow: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 2.5,
+    fontSize: 11,
+    lineHeight: 15,
+    letterSpacing: 2.4,
     textTransform: 'uppercase',
   },
   // A hint for the partner to surprise: an italic serif, like a handwritten note.
   clue: {
     fontFamily: Fonts.headingItalic,
-    fontSize: 17,
-    lineHeight: 25,
+    fontSize: 19,
+    lineHeight: 26,
   },
   link: {
-    fontFamily: Fonts.sans,
-    lineHeight: 30,
-    fontSize: 14,
-  },
-  linkPrimary: {
     fontFamily: Fonts.sansMedium,
     lineHeight: 30,
-    fontSize: 14,
+    fontSize: 13,
+  },
+  linkPrimary: {
+    fontFamily: Fonts.sansSemiBold,
+    lineHeight: 30,
+    fontSize: 13,
   },
   code: {
     fontFamily: Fonts.mono,

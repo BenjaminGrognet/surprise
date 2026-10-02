@@ -3,7 +3,7 @@ import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing } from '@/constants/theme';
 import { Spinner, busyStyle } from '@/components/spinner';
 import { useTheme } from '@/hooks/use-theme';
 import { API_URL, type SoireeRoute, type SoireeStep } from '@/lib/api';
@@ -15,7 +15,8 @@ const BOOKING_LABELS: Record<SoireeStep['booking_action'], string> = { voir_lieu
 const PAPER = Colors.dark.background;
 const INK = Colors.dark.text;
 const INK_SOFT = Colors.dark.textSecondary;
-const GOLD_INK = Colors.dark.accentInk;
+const GOLD_INK = Colors.dark.gold;
+const LINK_INK = Colors.dark.accentInk;
 const BADGE_INK = { ok: Colors.dark.ok, info: Colors.dark.info, warn: Colors.dark.warn } as const;
 const BADGE_KIND: Record<SoireeStep['kind'], 'ok' | 'info' | 'warn'> = { verifie: 'ok', seance: 'ok', gratuit: 'info', sans_resa: 'warn', nuit: 'warn' };
 
@@ -128,7 +129,7 @@ function StepRow({
         {step.text ? <ThemedText type="small" style={{ color: INK }} numberOfLines={open ? undefined : 1}>{step.text}</ThemedText> : null}
         {long ? (
           <Pressable onPress={() => setOpen(!open)}>
-            <ThemedText type="small" style={{ color: GOLD_INK }}>{open ? '− Réduire' : '+ Lire la suite'}</ThemedText>
+            <ThemedText type="small" style={{ color: LINK_INK }}>{open ? '− Réduire' : '+ Lire la suite'}</ThemedText>
           </Pressable>
         ) : null}
         <ThemedText type="small" style={{ color: BADGE_INK[BADGE_KIND[step.kind]] }} numberOfLines={1}>{step.basis}</ThemedText>
@@ -137,8 +138,8 @@ function StepRow({
           {step.booking_url ? (
             <Pressable
               onPress={() => Linking.openURL(step.booking_url!)}
-              style={[styles.book, step.booking_action === 'reserver' ? { backgroundColor: theme.satin } : { borderColor: theme.accentSoft, borderWidth: 1 }]}>
-              <ThemedText type="smallBold" style={{ color: step.booking_action === 'reserver' ? theme.onAccent : GOLD_INK }}>
+              style={[styles.book, step.booking_action === 'reserver' ? { backgroundColor: theme.satin } : { borderColor: theme.accentFaint, borderWidth: 1 }]}>
+              <ThemedText type="smallBold" style={{ color: step.booking_action === 'reserver' ? theme.onAccent : LINK_INK }}>
                 {BOOKING_LABELS[step.booking_action]} ↗
               </ThemedText>
             </Pressable>
@@ -151,12 +152,12 @@ function StepRow({
 
 const styles = StyleSheet.create({
   redoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  route: { gap: Spacing.one, padding: Spacing.two + 2, borderRadius: 18, borderWidth: 1, marginTop: Spacing.one },
+  route: { gap: Spacing.one, padding: Spacing.two + 4, borderRadius: Radius.tile, borderWidth: 1, marginTop: Spacing.one },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
   eyebrow: { flexShrink: 1 },
   steps: { gap: 2, marginVertical: 2 },
   hop: { paddingLeft: Spacing.two, paddingVertical: 0 },
-  card: { flexDirection: 'row', gap: Spacing.two + 2, borderWidth: 1, borderRadius: 14, padding: Spacing.two },
+  card: { flexDirection: 'row', gap: Spacing.two + 2, borderWidth: 1, borderRadius: 16, padding: Spacing.two },
   thumb: { width: 72, height: 72, borderRadius: 12, overflow: 'hidden' },
   thumbImg: { width: '100%', height: '100%' },
   body: { flex: 1, gap: 1 },
