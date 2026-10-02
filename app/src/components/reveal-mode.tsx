@@ -27,7 +27,11 @@ export function RevealModePicker({ evening, onChange }: { evening: EveningHistor
 
   return (
     <View style={[styles.card, { borderColor: theme.accentSoft, backgroundColor: theme.backgroundElement }]}>
-      <ThemedText type="eyebrow">Comment le mystère se lève</ThemedText>
+      <ThemedText type="eyebrow">Ce que découvre votre passager</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        Vous gardez toute la feuille de route. Les jours d’avant, votre passager reçoit des indices : l’heure, la
+        tenue, le budget, l’ambiance… Puis le programme lui est dévoilé, au rythme que vous choisissez :
+      </ThemedText>
       {REVEAL_MODES.map((m) => {
         const active = m.key === mode;
         return (

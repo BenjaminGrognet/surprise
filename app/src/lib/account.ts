@@ -76,10 +76,15 @@ export async function eveningsHistory(): Promise<EveningHistoryRow[]> {
 
 // The next evening the couple chose, until its day is over.
 export async function upcomingEvening(today: string): Promise<EveningHistoryRow | null> {
+  return (await upcomingEvenings(today, 1))[0] ?? null;
+}
+
+// The evenings still to come, the nearest first: the compass leafs through them.
+export async function upcomingEvenings(today: string, limit = 20): Promise<EveningHistoryRow[]> {
   const { data, error } = await supabase
-    .from('soirees_choisies').select('*, souvenirs(author,note,photo)').gte('day', today).order('day').order('chosen_at', { ascending: false }).limit(1);
+    .from('soirees_choisies').select('*, souvenirs(author,note,photo)').gte('day', today).order('day').order('chosen_at', { ascending: false }).limit(limit);
   if (error) throw new Error(error.message);
-  return (data?.[0] as EveningHistoryRow) ?? null;
+  return (data ?? []) as EveningHistoryRow[];
 }
 
 // One evening kept in the couple's history: the route they actually picked, among the ones proposed.

@@ -9,9 +9,9 @@ export type Clue = { text: string; at: number }; // at: epoch ms when it shows (
 // How the programme is lifted for the passager, chosen by the instigateur (soirees_choisies.reveal_mode).
 export type RevealMode = 'etapes' | 'veille' | 'arrivee';
 export const REVEAL_MODES: { key: RevealMode; label: string; hint: string }[] = [
-  { key: 'etapes', label: 'Étape par étape', hint: 'Chaque étape se dévoile un quart d’heure avant son heure.' },
-  { key: 'veille', label: 'La veille', hint: 'Des indices pendant des jours, puis tout le programme la veille.' },
-  { key: 'arrivee', label: 'Sur place', hint: 'Chaque étape reste scellée jusqu’à l’arrivée du passager.' },
+  { key: 'etapes', label: 'Étape par étape', hint: 'Chaque étape, un quart d’heure avant son heure.' },
+  { key: 'veille', label: 'La veille', hint: 'Tout le programme d’un coup, 24 h avant le début.' },
+  { key: 'arrivee', label: 'Sur place', hint: 'Chaque étape à son heure, ou dès qu’il signale être arrivé.' },
 ];
 export const revealMode = (value: string | null | undefined): RevealMode =>
   value === 'veille' || value === 'arrivee' ? value : 'etapes';

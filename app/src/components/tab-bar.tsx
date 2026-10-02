@@ -8,7 +8,7 @@ import { Icon } from '@/components/ui-icons';
 import { Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
-import { upcomingEvening, type EveningHistoryRow } from '@/lib/account';
+import { upcomingEvenings, type EveningHistoryRow } from '@/lib/account';
 import { eveningDay } from '@/lib/dates';
 
 const BAR_HEIGHT = 68;
@@ -31,16 +31,18 @@ export function TabBar() {
   const path = usePathname();
   const params = useGlobalSearchParams<{ soiree?: string; route?: string }>();
   const { role } = useCouple();
-  const [next, setNext] = useState<EveningHistoryRow | null>(null);
+  const [upcoming, setUpcoming] = useState<EveningHistoryRow[]>([]);
+  const next = upcoming[0] ?? null;
 
   // The next evening, behind the compass and the passager's jewel: looked up again on each move, one may just have
   // been kept. Past midnight, the evening under way is still the one.
   useEffect(() => {
-    upcomingEvening(eveningDay(new Date())).then(setNext).catch(() => {});
+    upcomingEvenings(eveningDay(new Date())).then(setUpcoming).catch(() => {});
   }, [role, path]);
 
   const evening: Href | null = next ? { pathname: '/revelation', params: { soiree: next.page_name, route: String(next.route_index) } } : null;
-  const onEvening = path === '/revelation' && !!next && params.soiree === next.page_name && params.route === String(next.route_index);
+  // Lit on any evening still to come: the compass leafs through them (EveningsNav).
+  const onEvening = path === '/revelation' && upcoming.some((e) => params.soiree === e.page_name && params.route === String(e.route_index));
   const items: Item[] = role === 'passager'
     ? [
       { icon: 'maison', label: 'Accueil', href: '/', active: path === '/' },

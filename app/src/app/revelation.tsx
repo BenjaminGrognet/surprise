@@ -2,7 +2,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Linking, StyleSheet, View } from 'react-native';
 
-import { GhostButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { GhostButton, PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { EveningsNav } from '@/components/evenings-nav';
 import { Countdown, PageCard } from '@/components/intrigue-card';
 import { Organiser } from '@/components/organiser';
 import { imageUri, place } from '@/components/route-result';
@@ -28,7 +29,8 @@ import { curtainFalls } from '@/lib/souvenirs';
 // roadmap; the passager only gets riddles, and a veiled programme that lifts step by step.
 export default function RevelationScreen() {
   const { soiree, route: index } = useLocalSearchParams<{ soiree?: string; route?: string }>();
-  const [route, setRoute] = useState<SoireeRoute | null | 'missing'>(null);
+  const [route, setRoute] = useState<SoireeRoute | null | 'missing' | 'offline'>(null);
+  const [attempt, setAttempt] = useState(0);
   const [kept, setKept] = useState<string | null>(null);
   const { role } = useCouple();
   const [evening, setEvening] = useState<EveningHistoryRow | null>(null);
@@ -40,18 +42,31 @@ export default function RevelationScreen() {
 
   useEffect(() => {
     if (!soiree || index === undefined) return;
+    // Leafing to another evening: the previous one's roadmap goes before the next is unsealed.
+    setRoute(null);
+    setKept(null);
+    setEvening(null);
     getSoireeState(soiree)
       .then((s) => setRoute(s.routes.find((r) => String(r.index) === index) ?? 'missing'))
-      .catch(() => setRoute('missing'));
+      // Only a 404 means the evening is gone; anything else is the server not answering, worth another try.
+      .catch((e: Error) => setRoute(e.message.endsWith(': 404') ? 'missing' : 'offline'));
     // The name fixed when it was kept; the one the server would give its steps today, for older evenings.
     keptSecretTitle(soiree, Number(index)).then(setKept).catch(() => {});
     loadEvening();
-  }, [soiree, index, loadEvening]);
+  }, [soiree, index, loadEvening, attempt]);
 
   if (!lost && route === null) {
     return (
       <Screen>
         <ThemedText themeColor="textSecondary">On décachette l&apos;enveloppe…</ThemedText>
+      </Screen>
+    );
+  }
+  if (route === 'offline') {
+    return (
+      <Screen>
+        <PageCard back title="L'enveloppe reste close" text="Le serveur ne répond pas pour l'instant. Votre soirée est bien gardée." />
+        <PrimaryButton wide onPress={() => { setRoute(null); setAttempt((n) => n + 1); }}>Réessayer</PrimaryButton>
       </Screen>
     );
   }
@@ -68,6 +83,7 @@ export default function RevelationScreen() {
   const mode = revealMode(evening?.reveal_mode);
   return (
     <Screen gap={Spacing.four}>
+      <EveningsNav soiree={soiree!} route={route.index} />
       {role === 'instigateur' ? (
         <>
           <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} mode={mode} onRoute={setRoute} />
