@@ -6,7 +6,6 @@ import { router } from 'expo-router';
 import { AuthForm } from '@/components/auth-form';
 import { GhostButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { PageCard } from '@/components/intrigue-card';
-import { LogoSecretDate } from '@/components/logo-secretdate';
 import { PersonaCard } from '@/components/persona-card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -44,30 +43,25 @@ export default function CompteScreen() {
   return <Screen gap={user ? undefined : Spacing.two}>{user ? <LoggedIn email={user.email} onSignOut={() => signOut().then(refresh)} /> : <LoggedOut onSignedIn={refresh} />}</Screen>;
 }
 
+// Signing in: the same emerald card as every page's head, then the couple's photo above the form.
 function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
   const theme = useTheme();
   return (
     <>
-      <View style={[styles.logoContainer, { borderColor: theme.accentSoft }]}>
+      <PageCard
+        badge="Accès privé"
+        title="Laissez la routine derrière vous."
+        text={
+          'Secret Date imagine des soirées surprises à Paris pour celles et ceux qui aiment ne pas savoir ce qui les attend.\n\n' +
+          'D’un côté, l’Instigateur : celui qui choisit, orchestre et garde le secret.\n' +
+          'De l’autre, son invité·e : une aventure à découvrir, indice après indice, jusqu’au jour J.\n\n' +
+          'Deux espaces, une même aventure — chacun découvre l’expérience de son côté.'
+        }
+      />
+      <View style={[styles.photo, { borderColor: theme.line }]}>
         <Image source={require('@/assets/images/bannieres/romantiques.jpg')} style={StyleSheet.absoluteFill} contentFit="cover" />
         <View style={[StyleSheet.absoluteFill, styles.veil]} />
-        <LogoSecretDate size={64} />
-        <ThemedText style={[styles.appName, { color: theme.gold }]}>Secret Date</ThemedText>
-      </View>
-      <ThemedText type="subtitle">Ce soir, laissez-vous surprendre.</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.justify}>
-        Secret Date organise des soirées surprises pour les couples à Paris. Une personne planifie l&apos;événement tandis que
-        son partenaire reçoit uniquement des indices jusqu&apos;au jour J.
-      </ThemedText>
-      <View style={styles.points}>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.justify}>
-          <ThemedText type="smallBold" themeColor="textSecondary">Création de compte : </ThemedText>
-          chaque partenaire possède son propre profil.
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.justify}>
-          <ThemedText type="smallBold" themeColor="textSecondary">Invitation : </ThemedText>
-          l&apos;organisateur envoie un lien secret pour intégrer son partenaire à l&apos;aventure.
-        </ThemedText>
+        <ThemedText style={[styles.motto, { color: theme.gold }]}>Le mystère commence.</ThemedText>
       </View>
       <AuthForm
         compact
@@ -171,11 +165,9 @@ function Notice({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  logoContainer: { alignItems: 'center', justifyContent: 'center', gap: 2, height: 132, borderRadius: Radius.card, borderWidth: 1, overflow: 'hidden' },
-  veil: { backgroundColor: 'rgba(4, 15, 10, 0.62)' },
-  justify: { textAlign: 'justify' },
-  appName: { fontFamily: Fonts.headingBold, fontSize: 31, lineHeight: 36, letterSpacing: 0.4, textAlign: 'center' },
-  points: { gap: 4 },
+  photo: { height: 104, borderRadius: Radius.card, borderWidth: 1, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  veil: { backgroundColor: 'rgba(4, 15, 10, 0.45)' },
+  motto: { fontFamily: Fonts.headingItalic, fontSize: 26, lineHeight: 32 },
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
   notice: { padding: Spacing.three, borderRadius: Radius.tile, borderWidth: 1 },
   section: { gap: Spacing.three, marginVertical: Spacing.two },
