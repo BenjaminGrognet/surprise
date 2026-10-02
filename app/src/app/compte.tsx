@@ -53,7 +53,7 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
         <LogoSecretDate size={64} />
         <ThemedText style={[styles.appName, { color: theme.accent }]}>Secret Date</ThemedText>
       </View>
-      <ThemedText type="subtitle">Les soirées qu&apos;on ne voit pas venir.</ThemedText>
+      <ThemedText type="subtitle">Ce soir, laissez-vous surprendre.</ThemedText>
       <ThemedText type="small" themeColor="textSecondary" style={styles.justify}>
         Secret Date organise des soirées surprises pour les couples à Paris. Une personne planifie l&apos;événement tandis que
         son partenaire reçoit uniquement des indices jusqu&apos;au jour J.

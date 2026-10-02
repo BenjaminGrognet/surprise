@@ -21,6 +21,20 @@ export async function rememberProfile(answers: Record<string, unknown>, profile:
   await setItem(KEY, JSON.stringify({ answers, profile }));
 }
 
+// Everything this device keeps belongs to one account: on sign-out or another account's sign-in, it all goes.
+const OWNER = 'surprise.owner';
+
+export async function claimDevice(userId: string | null) {
+  if (userId && (await getItem(OWNER)) === userId) return;
+  if (Platform.OS === 'web') {
+    Object.keys(localStorage).filter((k) => k.startsWith('surprise.')).forEach((k) => localStorage.removeItem(k));
+  } else {
+    const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith('surprise.'));
+    await Promise.all(keys.map((k) => AsyncStorage.removeItem(k)));
+  }
+  if (userId) await setItem(OWNER, userId);
+}
+
 export async function forgetProfile() {
   if (Platform.OS === 'web') return localStorage.removeItem(KEY);
   await AsyncStorage.removeItem(KEY);

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Colors } from '@/constants/theme';
 import { CoupleContext } from '@/hooks/use-couple';
 import { myRole, type CoupleState } from '@/lib/couple';
+import { claimDevice } from '@/lib/local-store';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 
 // The navigator's own surfaces (between screens, behind a transition) in the brand's night.
@@ -41,11 +42,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!supabaseConfigured) return;
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      await claimDevice(data.session?.user.id ?? null);
       setSignedIn(!!data.session);
       if (!data.session) setBooted(true); // nothing to read: the app opens on /compte
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      void claimDevice(session?.user.id ?? null);
       setSignedIn(!!session);
       if (!session) setCouple(null);
     });

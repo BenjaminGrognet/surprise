@@ -1,5 +1,5 @@
-import { type ReactNode, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { type ReactNode, useRef, useState } from 'react';
+import { Pressable, TextInput, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/buttons';
 import { TextField } from '@/components/text-field';
@@ -22,6 +22,8 @@ export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer n
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const emailRef = useRef<TextInput>(null);
+  const pick = (key: TabKey) => { setTab(key); emailRef.current?.focus(); };
 
   async function submit() {
     setError('');
@@ -37,12 +39,12 @@ export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer n
   return (
     <>
       <View style={[styles.tabs, compact && styles.tabsCompact, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
-        <Tab label="Se connecter" active={tab === 'in'} onPress={() => setTab('in')} />
-        <Tab label="Créer un compte" active={tab === 'up'} onPress={() => setTab('up')} />
+        <Tab label="Se connecter" active={tab === 'in'} onPress={() => pick('in')} />
+        <Tab label="Créer un compte" active={tab === 'up'} onPress={() => pick('up')} />
       </View>
       <View style={[styles.form, compact && styles.formCompact]}>
         <Field label="Email" compact={compact}>
-          <TextField style={compact ? styles.inputCompact : undefined} placeholder={compact ? "Email" : undefined} accessibilityLabel="Email" value={email} onChangeText={setEmail} autoComplete="email" keyboardType="email-address" autoCapitalize="none" />
+          <TextField ref={emailRef} style={compact ? styles.inputCompact : undefined} placeholder={compact ? "Email" : undefined} accessibilityLabel="Email" value={email} onChangeText={setEmail} autoComplete="email" keyboardType="email-address" autoCapitalize="none" />
         </Field>
         <Field label="Mot de passe" compact={compact}>
           <TextField
@@ -52,6 +54,8 @@ export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer n
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            returnKeyType="go"
+            onSubmitEditing={submit}
             autoComplete={tab === 'in' ? 'current-password' : 'new-password'}
           />
         </Field>

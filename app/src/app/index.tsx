@@ -32,11 +32,10 @@ export default function AccueilScreen() {
 
   useEffect(() => {
     (async () => {
-      const remembered = await rememberedProfile();
-      let known = remembered?.profile ?? null;
-      if (!known && supabaseConfigured) {
-        known = (await accountProfile().catch(() => null))?.profile ?? null;
-      }
+      // Signed in, only the account's own profile counts: never one left on this device by someone else.
+      const known = supabaseConfigured
+        ? (await accountProfile().catch(() => null))?.profile ?? null
+        : (await rememberedProfile())?.profile ?? null;
       setProfile(known);
       if (supabaseConfigured) {
         const today = isoDay(new Date());
@@ -135,11 +134,13 @@ function BookCall({ row }: { row: EveningHistoryRow }) {
 function NoIntrigue() {
   return (
     <IntrigueCard>
-      <ThemedText type="eyebrow" style={styles.center}>Aucune intrigue en cours</ThemedText>
-      <ThemedText type="title" style={styles.center}>Le prochain secret reste à écrire…</ThemedText>
+      <ThemedText type="title" style={styles.center}>Le prochain secret reste encore à écrire…</ThemedText>
       <ThemedText themeColor="textSecondary" style={styles.center}>
-        Dites-nous votre humeur : on trame trois soirées dans Paris, vous en gardez une, et vous seul en gardez le secret ; votre
-        passager ne reçoit que des indices jusqu&apos;au jour J.
+        Dites-nous votre humeur.{'\n'}
+        Nous imaginons trois soirées à Paris, pensées pour vous surprendre. Vous en choisissez une.{'\n'}
+        Puis, le secret vous appartient.{'\n'}
+        Votre passager ne recevra que quelques indices savamment distillés, jusqu&apos;au jour J.{'\n'}
+        À vous de garder le mystère. À nous de créer la surprise.
       </ThemedText>
     </IntrigueCard>
   );
