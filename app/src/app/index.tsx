@@ -97,8 +97,8 @@ export default function AccueilScreen() {
 
 // The next evening as the couple's card: its secret name in italics and the account's tier, the clue of the
 // day, then the day on the left and, in gold on the right, the time left.
-// `plain`: under the passager's own card, a lighter one — the night's surface and its hairline, no emblem nor badge,
-// the evening's name under a spaced label.
+// `plain`: under the passager's own card, a lighter one — the night's surface framed by a double gold filigree, no
+// emblem nor badge, the evening's name under a spaced label.
 function NextIntrigue({
   row, route, role, plain,
 }: { row: EveningHistoryRow; route: SoireeRoute | null; role: AccountRole; plain?: boolean }) {
@@ -146,7 +146,13 @@ function NextIntrigue({
         onPress={open}
         accessibilityRole="button"
         accessibilityLabel="Ouvrir la révélation"
-        style={({ pressed }) => [styles.plainCard, { backgroundColor: theme.backgroundElement, borderColor: theme.line }, pressed && styles.pressed]}>
+        style={({ pressed }) => [
+          styles.plainCard,
+          { backgroundColor: theme.backgroundElement, borderColor: theme.goldSoft, boxShadow: `0 0 22px -6px ${theme.accentSoft}` },
+          pressed && styles.pressed,
+        ]}>
+        {/* The gold filigree: a second hairline just inside the first, like a frame's fillet. */}
+        <View pointerEvents="none" style={[styles.filigree, { borderColor: theme.accentSoft }]} />
         {body}
       </Pressable>
     );
@@ -358,6 +364,7 @@ const styles = StyleSheet.create({
   cardBlock: { gap: Spacing.three },
   member: { minHeight: 196, justifyContent: 'space-between', gap: Spacing.three },
   plainCard: { borderRadius: Radius.card, borderWidth: 1 },
+  filigree: { position: 'absolute', top: 4, left: 4, right: 4, bottom: 4, borderRadius: Radius.card - 4, borderWidth: 1 },
   plainBody: { padding: Spacing.three + 2, gap: Spacing.three },
   plainHead: { gap: Spacing.one },
   plainTitle: { fontFamily: Fonts.headingItalic, fontSize: 26, lineHeight: 31 },
