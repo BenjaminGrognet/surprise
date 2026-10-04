@@ -66,6 +66,9 @@ CHECK_WORKERS = 8  # booking engines asked at once
 # spread over the engines, they run side by side. Come to Paris asks its site 3 or 4 times a check.
 PER_ENGINE = 5
 _PER_ENGINE_OF = {"come_to_paris": 2}
+# Rounds of live checks a redraw may take when every activity kept was proposed already, each one asking the
+# engines for activities not yet checked that evening.
+SEARCH_ROUNDS = 3
 WALK_KM = 1.3  # about 20 minutes on foot
 DEFAULT_MODEL = "claude-opus-5-5"
 
@@ -529,10 +532,11 @@ def check_engines(store: LocalStore, items: list[dict[str, Any]], request: Reque
         (item for item in items if needs_check(item) and (item["source_id"], item["external_id"]) not in cached),
         key=lambda item: -prescore.get((item["source_id"], item["external_id"]), 0),
     ))
-    # Half of the checks for dinners, the rarest step to confirm; none when the couple will have eaten.
+    # Half of the checks for dinners at least, the rarest step to confirm (all of them when dinners alone are asked);
+    # none when the couple will have eaten.
     dinners = [item for item in todo if role(item["activity"], describe(item["activity"])["tags"], request.no_dinner) == "repas"]
     others = [item for item in todo if item not in dinners]
-    taken = 0 if request.no_dinner else min(len(dinners), limit // 2)
+    taken = 0 if request.no_dinner else min(len(dinners), max(limit // 2, limit - len(others)))
     todo = dinners[:taken] + others[: limit - taken]
     if todo:
         print(f"Vérification de {len(todo)} disponibilités (moteurs de réservation)…")
@@ -1414,13 +1418,43 @@ def candidates_for(store: LocalStore, base: Base, request: Request, checks: int 
     """The activities that can be a step that evening, scored without luck (`lucky` draws it); the activities
     checked for it get a draw of luck (VARIETY), so that two compositions of the same evening check others."""
     items = base.items
-    prescore = {
+    checked = check_engines(store, items, request, checks, _prescore(items, request, base)) if checks else store.cached_availability(
+        request.day.isoformat(), request.party, CACHE_HOURS
+    )
+    candidates = _scored(items, request, checked, base)
+    kinds = Counter(c.kind for c in candidates)
+    print(
+        f"{len(candidates)} étapes possibles ce soir-là : {kinds['seance']} séances, {kinds['verifie']} créneaux vérifiés, "
+        f"{kinds['gratuit']} gratuites, {kinds['sans_resa']} sans réservation"
+    )
+    return candidates
+
+
+def more_candidates(
+    store: LocalStore, base: Base, request: Request, known: set, checks: int, role_: str | None = None,
+) -> list[Candidate]:
+    """Steps of the evening besides the `known` activities: the booking engines asked for `checks` activities not yet
+    checked that evening (`role_`: only those that would play this part), the answers other compositions got since
+    read too. Those with dated sessions or walked into are all among the candidates already."""
+    items = [
+        item for item in base.items
+        if needs_check(item) and (item["source_id"], item["external_id"]) not in known
+        and (role_ is None or role(item["activity"], describe(item["activity"])["tags"], request.no_dinner) == role_)
+    ]
+    checked = check_engines(store, items, request, checks, _prescore(items, request, base))
+    return _scored([item for item in items if (item["source_id"], item["external_id"]) in checked], request, checked, base)
+
+
+def _prescore(items: list[dict[str, Any]], request: Request, base: Base) -> dict:
+    """The activities' rank for the live checks, with a draw of luck (VARIETY) so that two compositions check others."""
+    return {
         key: quick_score(i, request, base.originality[key]) + random.uniform(0, VARIETY)
         for i in items if (key := (i["source_id"], i["external_id"]))
     }
-    checked = check_engines(store, items, request, checks, prescore) if checks else store.cached_availability(
-        request.day.isoformat(), request.party, CACHE_HOURS
-    )
+
+
+def _scored(items: list[dict[str, Any]], request: Request, checked: dict, base: Base) -> list[Candidate]:
+    """These activities as steps of the evening, scored without luck: those that cannot be one, or done already, left out."""
     candidates = []
     for item in items:
         key = (item["source_id"], item["external_id"])
@@ -1431,11 +1465,6 @@ def candidates_for(store: LocalStore, base: Base, request: Request, checks: int 
             candidate.score = score(candidate, request)
             if candidate.score > -math.inf:
                 candidates.append(candidate)
-    kinds = Counter(c.kind for c in candidates)
-    print(
-        f"{len(candidates)} étapes possibles ce soir-là : {kinds['seance']} séances, {kinds['verifie']} créneaux vérifiés, "
-        f"{kinds['gratuit']} gratuites, {kinds['sans_resa']} sans réservation"
-    )
     return candidates
 
 
@@ -1709,13 +1738,40 @@ def choose(name: str, index: int, store: LocalStore | None = None) -> str | None
 
 def _candidates(store: LocalStore, base: Base, name: str, state: dict[str, Any], request: Request, checks: int) -> list[Candidate]:
     """The candidates of the evening asked: kept since its composition, or found anew and kept until a route is chosen."""
-    at = state["requests"].index(request) if request in state["requests"] else 0
+    at = _asked(state, request)
     if not state["chosen"] and (kept := store.soiree_candidates(name, at, CACHE_HOURS)) is not None:
         return _candidates_from(kept, base)
     found = candidates_for(store, base, request, checks)
     if not state["chosen"]:
         store.save_candidates(name, {at: _candidates_json(found)}, CACHE_HOURS)
     return found
+
+
+def _asked(state: dict[str, Any], request: Request) -> int:
+    return state["requests"].index(request) if request in state["requests"] else 0
+
+
+def _search(
+    store: LocalStore, base: Base, name: str, state: dict[str, Any], request: Request, pool: list[Candidate], checks: int,
+    role_: str | None = None,
+) -> list[Candidate]:
+    """`more_candidates` for a redraw, added to the evening's `pool` and kept with it until a route is chosen."""
+    more = more_candidates(store, base, request, {c.key for c in pool}, checks, role_)
+    pool += more
+    if more and not state["chosen"]:
+        store.save_candidates(name, {_asked(state, request): _candidates_json(pool)}, CACHE_HOURS)
+    return more
+
+
+def _replace_shown(route: Route, position: int, candidates: list[Candidate], request: Request, excluded: set) -> list[Step] | None:
+    """`replace_step`, past the activities whose image a page cannot show."""
+    unshown_keys: set = set()
+    for _ in range(5):
+        steps = replace_step(route, position, candidates, request, excluded | unshown_keys)
+        if not steps or not (found := unshown([steps[position]])):
+            return steps
+        unshown_keys |= found
+    return None
 
 
 def remove(name: str, index: int, position: int) -> str | None:
@@ -1743,34 +1799,61 @@ def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: 
         return "étape inconnue"
     route = routes[index]
     request = route.request or state["requests"][0]
-    candidates = lucky(_candidates(store, base, name, state, request, checks))
+    pool = _candidates(store, base, name, state, request, checks)
+    candidates = lucky(pool)
     on_page = {s.candidate.key for r in routes for s in r.steps}
+    # Once every activity kept that would do was proposed, others are looked for (`_search`) rather than going round
+    # the ones shown already: a step redrawn never brings back an activity the page had, a route only when none all
+    # new is found.
     if position is None:
         # None of the route's activities again, under the same listing or another one.
         keys, titles = {s.candidate.key for s in route.steps}, {_same(s.candidate.title) for s in route.steps}
         venues = {s.candidate.venue.lower() for s in route.steps} - {""}
-        found = compose([c for c in candidates if c.key not in keys and _same(c.title) not in titles and c.venue.lower() not in venues], request)
         # As many steps as the route had when composed, the ones the couple took out included, if such routes exist.
         size = max(len(route.steps), state["sizes"].get(index, 0))
-        found = [r for r in found if len(r.steps) >= size] or found
         others = [r for r in routes if r is not route]
-        fresh = [r for r in found if not {s.candidate.key for s in r.steps} & state["seen"]]
-        chosen = pick_shown(fresh, 1, others) or pick_shown(found, 1, others)
+
+        def drawn(candidates: list[Candidate]) -> list[Route]:
+            found = compose([c for c in candidates if c.key not in keys and _same(c.title) not in titles and c.venue.lower() not in venues], request)
+            return [r for r in found if len(r.steps) >= size] or found
+
+        def shown_before(drawn_route: Route) -> int:
+            return len({s.candidate.key for s in drawn_route.steps} & state["seen"])
+
+        found = drawn(candidates)
+        chosen = pick_shown([r for r in found if not shown_before(r)], 1, others)
+        for _ in range(SEARCH_ROUNDS):
+            if chosen:
+                break
+            if more := _search(store, base, name, state, request, pool, checks):
+                candidates += lucky(more)
+                found = drawn(candidates)
+                chosen = pick_shown([r for r in found if not shown_before(r)], 1, others)
+        # No route all new: the one with the fewest activities shown already, rather than a route shown before.
+        for count in sorted({shown_before(r) for r in found}):
+            if chosen:
+                break
+            chosen = pick_shown([r for r in found if shown_before(r) == count], 1, others)
         if not chosen:
             return "aucun autre parcours complet ce soir-là"
         new = chosen[0]
     else:
-        unshown_keys: set = set()
-        for _ in range(5):
-            steps = replace_step(route, position, candidates, request, state["seen"] | on_page | unshown_keys) or replace_step(
-                route, position, candidates, request, on_page | unshown_keys
-            )
-            if not steps or not (found := unshown([steps[position]])):
+        excluded = state["seen"] | on_page
+        # Nor one of them under another listing (a show sold on two platforms).
+        titles = {_same(c.title) for c in pool if c.key in excluded} | {_same(s.candidate.title) for r in routes for s in r.steps}
+
+        def unseen(found: list[Candidate]) -> list[Candidate]:
+            return [c for c in found if _same(c.title) not in titles]
+
+        steps = _replace_shown(route, position, unseen(candidates), request, excluded)
+        for _ in range(SEARCH_ROUNDS):
+            if steps:
                 break
-            unshown_keys |= found
-            steps = None
+            # Only activities that would play the same part are checked: a dinner for a dinner.
+            if more := _search(store, base, name, state, request, pool, checks, route.steps[position].candidate.role):
+                steps = _replace_shown(route, position, unseen(lucky(more)), request, excluded)
         if not steps:
-            return "aucune autre activité ne s'enchaîne à cette étape"
+            return "plus d'autre activité qui s'enchaîne à cette étape ce soir-là"
         new = Route(steps, _route_score(steps, request))
     new.request = request
     if request.overnight:

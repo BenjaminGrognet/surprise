@@ -271,10 +271,15 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
 - Régénérer : l'app propose
   « ↻ Tout le parcours » (une autre soirée, différente des deux autres) et « ↻ Changer » sur chaque étape (une autre
   activité du même rôle ou de la même étape de la trame, qui s'enchaîne avec ses voisines ; un bar voisin est écourté
-  ou prolongé). Les activités déjà proposées ne reviennent pas tant que d'autres conviennent ; celle qu'on change ne revient jamais,
-  même vendue sous une autre fiche (même lieu ou même titre). Tant qu'aucun parcours n'est choisi, la régénération
+  ou prolongé). Une étape changée ne ramène jamais une activité déjà proposée sur la page, même vendue sous une autre
+  fiche (même titre) : quand les candidats gardés sont épuisés, le serveur en cherche d'autres (`more_candidates` :
+  les moteurs de réservation interrogés pour des activités du même rôle pas encore vérifiées ce soir-là, jusqu'à
+  `SEARCH_ROUNDS` tours), puis répond « plus d'autre activité qui s'enchaîne à cette étape ce soir-là » (409, affiché
+  par l'app) plutôt que de tourner en rond. Un parcours redessiné cherche de même, puis se rabat sur celui qui reprend le
+  moins d'activités déjà vues. Tant qu'aucun parcours n'est choisi, la régénération
   part des candidats gardés à la composition (`pipeline.soiree_candidates`, 6 h au plus, un nouveau tirage de hasard
-  à chaque fois) : ni relecture de la base, ni vérification en direct. Une fois un parcours gardé
+  à chaque fois, ceux trouvés en cherchant ajoutés) : ni relecture de la base, ni vérification en direct tant qu'ils
+  suffisent. Une fois un parcours gardé
   (`POST /api/parcours/<nom>/routes/<i>/choose`), la soirée n'a plus que lui (route 0, les autres et les candidats
   effacés) et son nom suffit à la retrouver (`/revelation?soiree=<nom>`) ; changer une étape ensuite revérifie en
   direct. Les parcours sont gardés

@@ -12,7 +12,7 @@ import { Fonts, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { bookedSteps, saveBookedSteps } from '@/lib/account';
-import { redoPart, type SoireeRoute, type SoireeStep } from '@/lib/api';
+import { redoPart, refusal, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { cluesFor, inTime, nextClue, shownClues, type RevealMode } from '@/lib/clues';
 import { formatTime, longDay } from '@/lib/dates';
 
@@ -56,8 +56,8 @@ export function Organiser({
       }
       onRoute(next);
       setSwapNotice('Plan B en place. Pensez à refaire la réservation si besoin.');
-    } catch {
-      setSwapNotice("Pas d'autre activité qui s'enchaîne à cette étape : réessayez dans un instant.");
+    } catch (error) {
+      setSwapNotice(refusal(error) ?? 'Pas de plan B pour le moment : réessayez dans un instant.');
     } finally {
       setSwapping(null);
     }

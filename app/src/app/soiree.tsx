@@ -15,7 +15,7 @@ import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { chooseEvening, currentUser, eveningsHistory, keptEvening } from '@/lib/account';
 import {
-  chooseRoute, composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart,
+  chooseRoute, composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart, refusal,
   type ComposedSoiree, type Night, type Profile, type SoireeData,
 } from '@/lib/api';
 import { isoDay, longDay, nextFriday, shortDay } from '@/lib/dates';
@@ -133,8 +133,8 @@ export default function SoireeScreen() {
     setNotice(null);
     try {
       setComposed(await redoPart(composed.name, redoPath));
-    } catch {
-      setNotice(redoPath.endsWith('/remove') ? 'Étape non retirée : réessayez dans un instant.' : 'Pas de nouvelle proposition : réessayez dans un instant.');
+    } catch (error) {
+      setNotice(refusal(error) ?? (redoPath.endsWith('/remove') ? 'Étape non retirée : réessayez dans un instant.' : 'Pas de nouvelle proposition : réessayez dans un instant.'));
     } finally {
       setBusyRedo(null);
     }

@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from surprise import parcours
+from surprise import availability, parcours
 from surprise.local_store import open_store
 from surprise.parcours import PARIS, Request
 
@@ -245,6 +245,35 @@ def test_regenerate_rewrites_the_saved_state(tmp_path, monkeypatch):
     base = parcours.Base([c.item for c in candidates], {c.key: 35 for c in candidates})
     assert parcours.regenerate(None, base, "essai", 0, claude=False) == "aucun autre parcours complet ce soir-là"
     assert parcours.regenerate(None, base, "absent", 0, claude=False) == "parcours introuvable : relancez la composition"
+
+
+def test_a_step_changed_again_is_looked_for_on_the_server(tmp_path, monkeypatch):
+    """Every activity kept that would do was proposed: the engines are asked for others, rather than going round."""
+    req, candidates, route = _night()
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
+    route.request = req
+    parcours.save("essai", {"routes": [route], "requests": [req], "seen": set()}, candidates=[candidates])
+    workshop = item("atelier", "Atelier secret", ["lieu_insolite"], kind="permanent", lat=48.8612, venue="Atelier")
+    workshop["activity"]["booking"] = {"check": "wecandoo:atelier"}
+    base = parcours.Base([c.item for c in candidates] + [workshop], {**{c.key: 35 for c in candidates}, ("test", "atelier"): 35})
+    asked = []
+
+    def check(client, entry, day, party):
+        asked.append(entry["external_id"])
+        return "wecandoo", availability.Availability(True, ["21:00-22:15"])
+
+    monkeypatch.setattr(parcours.availability, "check", check)
+    assert parcours.regenerate(None, base, "essai", 0, 1, claude=False) is None
+    assert parcours.load("essai")["routes"][0].steps[1].candidate.key == ("test", "autre") and asked == []
+    # Both nearby experiences shown: the workshop, checked now, rather than the first one again.
+    assert parcours.regenerate(None, base, "essai", 0, 1, claude=False) is None
+    assert parcours.load("essai")["routes"][0].steps[1].candidate.key == ("test", "atelier") and asked == ["atelier"]
+    with open_store(tmp_path / "s.db") as store:
+        kept = store.soiree_candidates("essai", 0, parcours.CACHE_HOURS)
+    assert ("test", "atelier") in {c.key for c in parcours._candidates_from(kept, base)}
+    # Nothing left to check: no activity shown before comes back.
+    assert parcours.regenerate(None, base, "essai", 0, 1, claude=False) == "plus d'autre activité qui s'enchaîne à cette étape ce soir-là"
+    assert asked == ["atelier"]
 
 
 def _three_routes(tmp_path, monkeypatch):
@@ -493,7 +522,8 @@ def test_a_route_drawn_again_has_its_steps_back_after_some_were_taken_out(tmp_pa
     # The best draw has two steps; the route was composed with three.
     short, full = parcours.Route(route.steps[:2], 10.0), parcours.Route(route.steps, 1.0)
     monkeypatch.setattr(parcours, "compose", lambda found, request: [short, full])
-    assert parcours.regenerate(None, None, "essai", 0, claude=False) is None
+    base = parcours.Base([c.item for c in candidates], {c.key: 35 for c in candidates})
+    assert parcours.regenerate(None, base, "essai", 0, claude=False) is None
     assert len(parcours.load("essai")["routes"][0].steps) == 3
 
 

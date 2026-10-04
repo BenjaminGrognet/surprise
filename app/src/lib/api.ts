@@ -7,13 +7,30 @@ import { Platform } from 'react-native';
 export const API_URL =
   Platform.OS === 'web' && !__DEV__ ? '' : (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8001');
 
+// A failed call, with the server's reason when it gives one ({"error": …}).
+export class ApiError extends Error {
+  status: number;
+  reason: string | null;
+  constructor(path: string, status: number, reason: string | null) {
+    super(`${path}: ${status}`);
+    this.status = status;
+    this.reason = reason;
+  }
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
-  if (!r.ok) throw new Error(`${path}: ${r.status}`);
+  if (!r.ok) throw new ApiError(path, r.status, await r.json().then((body) => body?.error ?? null, () => null));
   return r.json();
+}
+
+// The server's refusal (409: no other activity for that step…) as a sentence for the page; null for any other failure.
+export function refusal(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 409 || !error.reason) return null;
+  return `${error.reason[0].toUpperCase()}${error.reason.slice(1)}.`;
 }
 
 export type Persona = { name: string; text: string };
