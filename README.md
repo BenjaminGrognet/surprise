@@ -123,7 +123,9 @@ spectacle ; sa billetterie est suivie de là.
 
 Chaque fiche gardée dit comment elle se réserve (`activity.booking`, badge en modération) : `gratuit`, `creneau`
 (un moteur donne les créneaux d'une date : Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms, 4escape ; avec
-l'identifiant du lieu chez lui, `check` = « zenchef:351778 », trouvé dans le lien, la page ou sa page « Réserver »),
+l'identifiant du lieu chez lui, `check` = « zenchef:351778 », trouvé dans le lien, la page ou sa page « Réserver » ;
+pour Funbooker, l'identifiant et les formules de l'annonce, lus une fois sur son API et gardés un mois avec les
+vérifications de pages : une soirée ne demande que les créneaux, pour 2 comme pour un groupe),
 `billetterie` (réservable en ligne, créneaux non vérifiables) ou `sans_resa` (bar, club, restaurant sans réservation
 en ligne). Les soirées ne vérifient en direct que les `creneau`, sans relire le site du lieu. Rattrapage des fiches
 collectées avant (relit une fois les pages Zenchef, SevenRooms et 4escape, pour leur identifiant) :
@@ -236,7 +238,10 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
 
 - Étapes retenues : séance datée ce soir-là avec billetterie (séances concerts.paris, Que Faire à Paris, Shotgun…),
   créneau libre pour 2 vérifié en direct (Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms, 4escape ; réponses
-  gardées 6 h), lieu gratuit ouvert à cette heure, ou bar / club sans réservation (marqué comme tel, `--strict` les
+  gardées 6 h, enregistrées en une écriture ; au plus 5 vérifications par moteur et par soirée, les meilleures, 2 pour
+  Come to Paris qui interroge son site 3 ou 4 fois par vérification, chacune dans sa session : un moteur est interrogé
+  toutes les demi-secondes, ses vérifications se suivent, alors que celles de moteurs différents vont ensemble),
+  lieu gratuit ouvert à cette heure, ou bar / club sans réservation (marqué comme tel, `--strict` les
   exclut). Un dîner n'est proposé qu'avec une table confirmée ; une pièce « jusqu'en décembre » sans ses dates, jamais.
 - Choix : envies demandées, romantisme, originalité (sources de curation, lieux insolites), photo ; une pièce ou un
   stand-up ordinaire (originalité < 45) passe après l'insolite, d'autant plus que le couple est audacieux (sauf le

@@ -184,8 +184,10 @@ def test_activities_rejected_at_collection_are_listed_apart(tmp_path):
 
 def test_availability_cache(tmp_path):
     with LocalStore(tmp_path / "s.db") as store:
-        store.save_availability("wecandoo", "a", "2026-10-09", 2, "Wecandoo", True, ["19:00-21:00"], "")
-        store.save_availability("fever", "b", "2026-10-09", 2, None, None, [], "sans moteur")
+        store.save_availabilities([
+            ("wecandoo", "a", "2026-10-09", 2, "Wecandoo", True, ["19:00-21:00"], ""),
+            ("fever", "b", "2026-10-09", 2, None, None, [], "sans moteur"),
+        ])
         cached = store.cached_availability("2026-10-09", 2, max_age_hours=6)
         assert cached[("wecandoo", "a")] == {"engine": "Wecandoo", "available": True, "slots": ["19:00-21:00"], "detail": ""}
         assert cached[("fever", "b")]["engine"] is None

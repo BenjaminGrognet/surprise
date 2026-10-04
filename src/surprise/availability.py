@@ -2,8 +2,9 @@
 
 - Funbooker: the listing's JSON API gives its items (per person or per plan)
   and the day's slots for the chosen quantities, without an account. The
-  items that seat two are tried in turn: a per-person item for 2, or a plan
-  for 2 people ("Formule duo", "2 joueurs").
+  items that seat the party are tried in turn: a per-person item for 2, or a
+  plan for 2 people ("Formule duo", "2 joueurs"). The listing's id and items
+  are read at collection (known_check): an evening asks only for the slots.
 - Wecandoo: the workshop's id is in its page, its public API lists the
   day's sessions with their seats taken.
 - Come to Paris: the page lists the formulas; the booking form keeps its state
@@ -23,7 +24,9 @@ Bookeo is not checked: its booking pages sit behind a captcha.
 
 import argparse
 import html
+import json
 import re
+import threading
 import time as clock
 from collections import Counter
 from dataclasses import dataclass, field
@@ -33,6 +36,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from surprise.booking import PageChecks, Verdict
 from surprise.collectors import come_to_paris, funbooker
 from surprise.local_store import open_store
 
@@ -69,19 +73,24 @@ class Availability:
     detail: str = ""  # the item or formula booked, or why it is not available
 
 
-def check_funbooker(client: httpx.Client, slug: str, day: date, party: int = 2) -> Availability:
-    response = client.get(f"{FUNBOOKER_API}/listing/{slug}", params={"locale": "fr"})
-    response.raise_for_status()
-    listing = response.json()
-    candidates = _funbooker_capacities(listing.get("listingItems") or [], party)
+def check_funbooker(client: httpx.Client, listing: str, day: date, party: int = 2) -> Availability:
+    """`listing`: its slug, or its slug, id and items read at collection (known_check): then only the slots are asked."""
+    known = json.loads(listing) if listing.startswith("{") else None
+    if known is None:
+        response = client.get(f"{FUNBOOKER_API}/listing/{listing}", params={"locale": "fr"})
+        response.raise_for_status()
+        known = _funbooker_known(listing, response.json())
+    candidates = _funbooker_capacities(known["items"], party)
     if not candidates:
         return Availability(False, detail=f"aucune formule pour {party}")
+    refused = 0
     for label, capacities in candidates:
         response = client.post(
             f"{FUNBOOKER_API}/availabilities",
-            json={"listingId": listing["id"], "capacities": capacities, "day": day.isoformat(), "includeAllFutureDates": False},
+            json={"listingId": known["listing"], "capacities": capacities, "day": day.isoformat(), "includeAllFutureDates": False},
         )
         if response.status_code == 400:  # quantities refused by the listing
+            refused += 1
             continue
         response.raise_for_status()
         slots = [
@@ -91,7 +100,55 @@ def check_funbooker(client: httpx.Client, slug: str, day: date, party: int = 2) 
         ]
         if slots:
             return Availability(True, slots, label)
+    if refused == len(candidates) and listing.startswith("{"):
+        # Items changed since the collection: the listing tells today's.
+        return check_funbooker(client, known["slug"], day, party)
     return Availability(False, detail="complet ou fermé")
+
+
+# Funbooker's site challenges a client past about 60 requests in a few seconds (Cloudflare): at collection, its
+# listings are read one per second, as its pages are.
+FUNBOOKER_LISTING_DELAY = 1.0
+_funbooker_lock = threading.Lock()
+_funbooker_next = 0.0
+# What an item needs to tell whether it seats the party (_funbooker_capacities).
+_FUNBOOKER_ITEM = ("id", "label", "priceType", "minCapacity", "maxCapacity", "numberOfPersons")
+
+
+def _funbooker_known(slug: str, listing: dict[str, Any]) -> dict[str, Any]:
+    """A listing's slug, id and bookable items: what a check asks the slots with, for any party."""
+    items = [
+        {key: item.get(key) for key in _FUNBOOKER_ITEM}
+        for item in listing.get("listingItems") or [] if not item.get("isOption") and not item.get("isDisabled")
+    ]
+    return {"slug": slug, "listing": listing["id"], "items": items}
+
+
+def _funbooker_listing(client: httpx.Client, url: str) -> Verdict | None:
+    """A Funbooker listing's API read as a page's verdict (surprise.booking.PageChecks), kept a month: its slot check
+    with the listing's id and items. None when it does not answer (asked again at the next collection)."""
+    global _funbooker_next
+    # The lock only books the next slot: the request runs outside it.
+    with _funbooker_lock:
+        clock.sleep(max(0.0, _funbooker_next - clock.monotonic()))
+        _funbooker_next = clock.monotonic() + FUNBOOKER_LISTING_DELAY
+    try:
+        response = client.get(url, params={"locale": "fr"})
+    except httpx.HTTPError:
+        return None
+    if not response.is_success:
+        return None
+    known = _funbooker_known(url.rsplit("/", 1)[1], response.json())
+    return "Funbooker", False, "funbooker:" + json.dumps(known, ensure_ascii=False, separators=(",", ":"))
+
+
+def known_check(client: httpx.Client, check: str | None, checks: PageChecks) -> str | None:
+    """A slot check with what its engine needs, found at collection: a Funbooker listing's id and items, so that an
+    evening asks only for the slots."""
+    if not check or not check.startswith("funbooker:") or check.startswith("funbooker:{"):
+        return check
+    verdict = checks.get(client, f"{FUNBOOKER_API}/listing/{check.split(':', 1)[1]}", read=_funbooker_listing)
+    return verdict[2] if verdict and verdict[2] else check
 
 
 def _funbooker_capacities(items: list[dict[str, Any]], party: int) -> list[tuple[str, dict[str, int]]]:
@@ -139,6 +196,14 @@ def check_wecandoo(client: httpx.Client, workshop: str, day: date, party: int = 
 
 
 def check_come_to_paris(client: httpx.Client, url: str, day: date, party: int = 2) -> Availability:
+    # The form's state is in the session (cookie): each check its own, the others may run meanwhile.
+    with httpx.Client(
+        timeout=client.timeout, follow_redirects=client.follow_redirects, headers=client.headers, event_hooks=client.event_hooks,
+    ) as session:
+        return _check_come_to_paris(session, url, day, party)
+
+
+def _check_come_to_paris(client: httpx.Client, url: str, day: date, party: int) -> Availability:
     page = client.get(url)
     page.raise_for_status()
     grouping = _LAYOUT_GROUPING.search(page.text)

@@ -103,7 +103,10 @@ def require_booking(client: httpx.Client, result: Normalized, checks: PageChecks
         return Normalized(result.raw, activity.model_copy(update={"booking": Booking(mode=BookingMode.FREE)}))
     checks = checks or PageChecks()
     if found := booking_found(client, booking_urls(activity), checks):
-        engine, check = found
+        # Imported here: the availability imports the collectors.
+        from surprise.availability import known_check
+
+        engine, check = found[0], known_check(client, found[1], checks)
         booking = Booking(mode=BookingMode.SLOT if check else BookingMode.TICKETING, engine=engine, check=check)
         return Normalized(result.raw, activity.model_copy(update={"booking": booking}))
     if is_walk_in(activity):

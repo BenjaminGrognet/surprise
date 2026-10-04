@@ -5,6 +5,7 @@ import httpx
 import respx
 
 from surprise import availability
+from surprise.booking import PageChecks
 
 DAY = date(2026, 10, 9)
 FUNBOOKER_LISTING = f"{availability.FUNBOOKER_API}/listing/escape-game-a-paris-2eme"
@@ -48,6 +49,53 @@ def test_funbooker_tries_each_item_for_two():
     assert json.loads(slots.calls[0].request.content) == {
         "listingId": 24, "capacities": {"10": 1}, "day": "2026-10-09", "includeAllFutureDates": False,
     }
+
+
+KNOWN = "funbooker:" + json.dumps({
+    "slug": "escape-game-a-paris-2eme", "listing": 24, "items": [item(10, "plan", persons=2), item(12, "per_person", low=4, high=6)],
+})
+
+
+@respx.mock
+def test_funbooker_items_known_at_collection_ask_only_the_slots():
+    listing = respx.get(FUNBOOKER_LISTING)
+    slots = respx.post(FUNBOOKER_SLOTS).mock(return_value=httpx.Response(200, json={"availabilities": [slot("20:00")]}))
+    workshop = {"activity": {"booking": {"mode": "creneau", "check": KNOWN}}}
+    with httpx.Client() as client:
+        assert availability.check(client, workshop, DAY, 2) == ("Funbooker", availability.Availability(True, ["20:00"], "formule 10"))
+        # A group asks the items that seat it, known as well.
+        assert availability.check(client, workshop, DAY, 5)[1].detail == "formule 12"
+    assert listing.call_count == 0
+    assert [json.loads(call.request.content)["capacities"] for call in slots.calls] == [{"10": 1}, {"12": 5}]
+
+
+@respx.mock
+def test_funbooker_items_changed_since_the_collection_are_read_again():
+    listing = respx.get(FUNBOOKER_LISTING).mock(return_value=httpx.Response(200, json={"id": 24, "listingItems": [item(13, "per_person")]}))
+    respx.post(FUNBOOKER_SLOTS).mock(side_effect=lambda request: httpx.Response(
+        200 if "13" in json.loads(request.content)["capacities"] else 400, json={"availabilities": [slot("21:00")]},
+    ))
+    with httpx.Client() as client:
+        result = availability.check_funbooker(client, KNOWN.removeprefix("funbooker:"), DAY)
+    assert (result.available, result.detail, listing.call_count) == (True, "formule 13", 1)
+
+
+@respx.mock
+def test_funbooker_listing_read_once_at_collection():
+    listing = respx.get(FUNBOOKER_LISTING).mock(side_effect=[
+        httpx.Response(503), httpx.Response(200, json={"id": 24, "listingItems": [item(10, "plan", persons=2)]}),
+    ])
+    with httpx.Client() as client:
+        # Not answering: the slug is kept, the listing will be read at the evening's check.
+        assert availability.known_check(client, "funbooker:escape-game-a-paris-2eme", PageChecks()) == "funbooker:escape-game-a-paris-2eme"
+        checks = PageChecks()
+        found = availability.known_check(client, "funbooker:escape-game-a-paris-2eme", checks)
+        assert json.loads(found.removeprefix("funbooker:"))["listing"] == 24
+        # Once per run, then kept with the page verdicts (page_checks).
+        assert availability.known_check(client, "funbooker:escape-game-a-paris-2eme", checks) == found
+        assert list(checks.new.values()) == [("Funbooker", False, found)]
+        assert availability.known_check(client, "zenchef:351778", checks) == "zenchef:351778"
+    assert listing.call_count == 2
 
 
 @respx.mock
@@ -128,6 +176,17 @@ def test_come_to_paris_product_off_sale():
     with httpx.Client() as client:
         result = availability.check_come_to_paris(client, CTP_URL, DAY)
     assert (result.available, result.detail) == (False, "plus en vente")
+
+
+@respx.mock
+def test_come_to_paris_checks_keep_their_own_session():
+    # The form's state is in the session: two checks at once must not share it.
+    page = respx.get(CTP_URL).mock(return_value=httpx.Response(200, text="<h2>Indisponible</h2>", headers={"Set-Cookie": "PHPSESSID=a; Path=/"}))
+    with httpx.Client() as client:
+        availability.check_come_to_paris(client, CTP_URL, DAY)
+        availability.check_come_to_paris(client, CTP_URL, DAY)
+        assert not client.cookies
+    assert "cookie" not in page.calls[1].request.headers
 
 
 @respx.mock

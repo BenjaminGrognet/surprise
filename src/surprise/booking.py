@@ -13,7 +13,7 @@ import json
 import re
 import threading
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from urllib.parse import urlsplit
 
 import httpx
@@ -209,13 +209,14 @@ class PageChecks:
         self._lock = threading.Lock()
         self._hosts: dict[str, threading.Lock] = defaultdict(threading.Lock)
 
-    def get(self, client: httpx.Client, url: str) -> Verdict | None:
+    def get(self, client: httpx.Client, url: str, read: Callable[[httpx.Client, str], Verdict | None] = page_verdict) -> Verdict | None:
+        """The url's verdict, `read` once (a page, by default; an engine's API too)."""
         if url not in self.verdicts:
             with self._lock:
                 host = self._hosts[urlsplit(url).hostname or ""]
             with host:
                 if url not in self.verdicts:
-                    verdict = self.verdicts[url] = page_verdict(client, url)
+                    verdict = self.verdicts[url] = read(client, url)
                     if verdict is not None:
                         with self._lock:
                             self.new[url] = verdict

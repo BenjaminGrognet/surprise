@@ -600,18 +600,18 @@ class LocalStore:
             for source_id, external_id, engine, available, slots, detail in rows
         }
 
-    def save_availability(
-        self, source_id: str, external_id: str, day: str, party: int,
-        engine: str | None, available: bool | None, slots: list[str], detail: str,
+    def save_availabilities(
+        self, answers: Sequence[tuple[str, str, str, int, str | None, bool | None, list[str], str]],
     ) -> None:
+        """Engine answers (source, id, day, party, engine, available, slots, detail), in one write."""
         with self._transaction():
-            self._run(
+            self._run_many(
                 "insert into availability (source_id, external_id, day, party, engine, available, slots, detail)"
                 " values (?, ?, ?, ?, ?, ?, ?, ?)"
                 " on conflict (source_id, external_id, day, party) do update set engine = excluded.engine,"
                 " available = excluded.available, slots = excluded.slots, detail = excluded.detail,"
                 " checked_at = current_timestamp",
-                (source_id, external_id, day, party, engine, available, json.dumps(slots), detail),
+                [(*answer[:6], json.dumps(answer[6]), answer[7]) for answer in answers],
             )
 
 

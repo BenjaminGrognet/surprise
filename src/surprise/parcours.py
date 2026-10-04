@@ -62,6 +62,10 @@ PARIS = ZoneInfo("Europe/Paris")
 DB: Path | str | None = None
 CACHE_HOURS = 6
 CHECK_WORKERS = 8  # booking engines asked at once
+# Checks per engine and evening: an engine's site is asked every half second, so its checks follow each other;
+# spread over the engines, they run side by side. Come to Paris asks its site 3 or 4 times a check.
+PER_ENGINE = 5
+_PER_ENGINE_OF = {"come_to_paris": 2}
 WALK_KM = 1.3  # about 20 minutes on foot
 DEFAULT_MODEL = "claude-opus-5-5"
 
@@ -521,10 +525,10 @@ def check_engines(store: LocalStore, items: list[dict[str, Any]], request: Reque
     """Engine answers for the date: cached ones, then live checks of the best `limit` activities not yet asked."""
     day = request.day.isoformat()
     cached = store.cached_availability(day, request.party, CACHE_HOURS)
-    todo = sorted(
+    todo = _spread(sorted(
         (item for item in items if needs_check(item) and (item["source_id"], item["external_id"]) not in cached),
         key=lambda item: -prescore.get((item["source_id"], item["external_id"]), 0),
-    )
+    ))
     # Half of the checks for dinners, the rarest step to confirm; none when the couple will have eaten.
     dinners = [item for item in todo if role(item["activity"], describe(item["activity"])["tags"], request.no_dinner) == "repas"]
     others = [item for item in todo if item not in dinners]
@@ -545,14 +549,30 @@ def check_engines(store: LocalStore, items: list[dict[str, Any]], request: Reque
     with httpx.Client(timeout=20, follow_redirects=True, headers={"User-Agent": availability.USER_AGENT}, event_hooks=hooks) as client, \
             ThreadPoolExecutor(CHECK_WORKERS) as pool:
         futures = {pool.submit(one, item): item for item in todo}
-        # Written from this thread only: the store's connection is not shared.
-        for index, future in enumerate(as_completed(futures), 1):
-            item, (engine, result) = futures[future], future.result()
-            store.save_availability(item["source_id"], item["external_id"], day, request.party, engine, result.available, result.slots, result.detail)
-            cached[(item["source_id"], item["external_id"])] = {"engine": engine, "available": result.available, "slots": result.slots, "detail": result.detail}
-            mark = {True: "✓", False: "✗", None: "·"}[result.available]
-            print(f"  {index:>3}/{len(todo)} {mark} {item['activity']['title'][:70]}")
+        answers = []
+        try:
+            for index, future in enumerate(as_completed(futures), 1):
+                item, (engine, result) = futures[future], future.result()
+                answers.append((item["source_id"], item["external_id"], day, request.party, engine, result.available, result.slots, result.detail))
+                cached[(item["source_id"], item["external_id"])] = {"engine": engine, "available": result.available, "slots": result.slots, "detail": result.detail}
+                mark = {True: "✓", False: "✗", None: "·"}[result.available]
+                print(f"  {index:>3}/{len(todo)} {mark} {item['activity']['title'][:70]}")
+        finally:
+            # In one write, from this thread only: the store's connection is not shared.
+            store.save_availabilities(answers)
     return cached
+
+
+def _spread(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The first items of each engine (their booking's check), in their order: PER_ENGINE, or the engine's own."""
+    asked: Counter = Counter()
+    kept = []
+    for item in items:
+        engine = item["activity"]["booking"]["check"].split(":", 1)[0]
+        asked[engine] += 1
+        if asked[engine] <= _PER_ENGINE_OF.get(engine, PER_ENGINE):
+            kept.append(item)
+    return kept
 
 
 def _paced(delay: float) -> Callable[[httpx.Request], None]:

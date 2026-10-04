@@ -1,8 +1,10 @@
+import json
 from datetime import datetime, timezone
 
 import httpx
 import respx
 
+from surprise.availability import FUNBOOKER_API
 from surprise.booking import booking_found, engine_in, slot_check
 from surprise.collectors.common import Normalized, require_booking
 from surprise.models import Activity, BookingMode, RawRecord
@@ -174,8 +176,17 @@ def test_each_activity_says_how_it_is_booked():
         assert mode(is_free=True) == (BookingMode.FREE, None, None)
         assert mode(booking_url="https://shotgun.live/fr/events/guinguette") == (BookingMode.TICKETING, "Shotgun", None)
         assert mode(booking_url="https://bookings.zenchef.com/results?rid=351778") == (BookingMode.SLOT, "Zenchef", "zenchef:351778")
+        respx.get(f"{FUNBOOKER_API}/listing/color-room-a-paris-9eme").mock(return_value=httpx.Response(200, json={"id": 24, "listingItems": [
+            {"id": 10, "label": "Duo", "priceType": "plan", "numberOfPersons": 2, "isOption": False},
+            {"id": 11, "label": "Photo souvenir", "priceType": "per_person", "isOption": True},
+        ]}))
         listing = "https://www.funbooker.com/fr/annonce/color-room-a-paris-9eme/voir"
-        assert mode(booking_url=listing) == (BookingMode.SLOT, "Funbooker", "funbooker:color-room-a-paris-9eme")
+        booked, engine, check = mode(booking_url=listing)
+        # The listing's id and items, read at collection: an evening asks only for the slots, for any party.
+        assert (booked, engine, json.loads(check.removeprefix("funbooker:"))) == (BookingMode.SLOT, "Funbooker", {
+            "slug": "color-room-a-paris-9eme", "listing": 24,
+            "items": [{"id": 10, "label": "Duo", "priceType": "plan", "minCapacity": None, "maxCapacity": None, "numberOfPersons": 2}],
+        })
         raw = RawRecord(source_id="paris_zigzag", external_id="bar", payload={})
         bar = Activity(title="Un bar", kind="permanent", website="https://bar.example/", categories=["bar"], offers=[{"price_min": 8}])
         assert require_booking(client, Normalized(raw, activity=bar)).activity.booking.mode == BookingMode.WALK_IN

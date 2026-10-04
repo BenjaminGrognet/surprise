@@ -81,6 +81,36 @@ def test_checked_slots_and_walk_in_bars():
     assert parcours.build_candidate(restaurant, request(), None) is None  # a dinner needs a confirmed table
 
 
+def test_the_checks_are_spread_over_the_engines_and_saved_at_once(monkeypatch):
+    def workshop(engine, n):
+        found = item(f"{engine}{n}", f"Atelier {n}", ["atelier"], kind="permanent")
+        found["activity"]["booking"] = {"mode": "creneau", "engine": engine, "check": f"{engine}:{n}"}
+        return found
+
+    class Store:
+        saved = []
+
+        def cached_availability(self, day, party, max_age_hours):
+            return {}
+
+        def save_availabilities(self, answers):
+            self.saved.append(answers)
+
+    items = [workshop("funbooker", n) for n in range(8)] + [workshop("wecandoo", n) for n in range(3)] + [workshop("come_to_paris", n) for n in range(3)]
+    prescore = {(i["source_id"], i["external_id"]): -n for n, i in enumerate(items)}
+    asked = []
+    monkeypatch.setattr(parcours.availability, "check", lambda client, item, day, party: asked.append(item["external_id"]) or (
+        "Funbooker", parcours.availability.Availability(True, ["20:00"]),
+    ))
+    store = Store()
+    checked = parcours.check_engines(store, items, request(), 30, prescore)
+    # The best 5 of an engine, whose site is asked every half second, then the other engines'; Come to Paris,
+    # asked 3 or 4 times a check, 2.
+    assert sorted(asked) == sorted([f"funbooker{n}" for n in range(5)] + [f"wecandoo{n}" for n in range(3)] + ["come_to_paris0", "come_to_paris1"])
+    assert set(checked) == {("test", name) for name in asked}
+    assert [len(answers) for answers in store.saved] == [10]
+
+
 def test_routes_chain_in_time_and_place_and_do_not_share_steps():
     items = [
         item("a", "Comedy club", ["humour"], occurrences=[at(19, 30)], venue="Club"),
