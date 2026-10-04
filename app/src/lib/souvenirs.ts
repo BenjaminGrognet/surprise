@@ -1,8 +1,8 @@
 // Le Livre des Secrets (supabase/migrations/…_souvenirs.sql): after a kept evening, each of the couple seals
 // one page — a photo, a note. Sealed is final; the other's page reads only once one's own is sealed.
-import { currentUser, type EveningHistoryRow } from '@/lib/account';
+import type { EveningHistoryRow } from '@/lib/account';
 import type { SoireeRoute } from '@/lib/api';
-import { supabase } from '@/lib/supabase';
+import { currentUser, supabase } from '@/lib/supabase';
 
 export type Souvenir = { soiree_id: string; author: string; note: string; photo: string | null; sealed_at: string };
 

@@ -27,7 +27,9 @@ if not defined IP (
 )
 start "surprise - serveur" cmd /k uv run --env-file .env python -m surprise.quiz --host 0.0.0.0 --no-open
 rem Expo ne remplace pas une variable deja definie par celle de app\.env : l'app vise le PC, pas localhost.
-start "surprise - app" /d app cmd /k "set EXPO_PUBLIC_API_URL=http://%IP%:8001&& npx expo start --web"
+rem REACT_NATIVE_PACKAGER_HOSTNAME : le QR code porte l'IP du Wi-Fi, pas celle d'une carte virtuelle (Hyper-V, WSL).
+start "surprise - app" /d app cmd /k "set EXPO_PUBLIC_API_URL=http://%IP%:8001&& set REACT_NATIVE_PACKAGER_HOSTNAME=%IP%&& npx expo start --web"
+echo Le Wi-Fi doit etre un reseau "Prive" (Parametres ^> Reseau ^> Wi-Fi) : en "Public", le pare-feu bloque le telephone.
 echo Scanner le QR code de la fenetre "surprise - app" (appareil photo sur iPhone, Expo Go sur Android).
 echo Si Windows le demande, autoriser Python sur les reseaux prives.
 goto fin

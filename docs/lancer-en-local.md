@@ -137,4 +137,5 @@ uv run --env-file .env python -m surprise.local_store --db data/surprise.db   # 
 | La base est vide | commande lancée sans `--env-file .env` : elle a lu `data/surprise.db` au lieu de Supabase |
 | Connexion à Supabase impossible | `SUPABASE_DB_URL` doit être l'URL du *session pooler* (IPv4), pas `db.<projet>.supabase.co` |
 | `opendata.paris.fr` ne répond pas | préfixer par `OPENDATA_PARIS_URL=https://parisdata.opendatasoft.com` (Git Bash) |
+| Le téléphone n'ouvre pas l'app après le QR code | Wi-Fi du PC en réseau « Public » : le pare-feu bloque Node (8081) et Python (8001). Le passer en « Privé » (Paramètres > Réseau et Internet > Wi-Fi > le réseau) |
 | Port déjà utilisé | un ancien serveur tourne encore : le fermer, ou `--port 8002` |

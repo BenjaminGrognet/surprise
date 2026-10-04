@@ -18,3 +18,9 @@ export const supabase = createClient(supabaseUrl || 'https://placeholder.supabas
     detectSessionInUrl: false,
   },
 });
+
+// The signed-in account, if any.
+export async function currentUser() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user ?? null;
+}

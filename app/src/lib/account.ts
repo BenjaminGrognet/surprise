@@ -1,14 +1,11 @@
 // Accounts (Supabase Auth) and the couple's own data: profile sync and evening history.
 // Row-level security scopes couple_profiles/soirees_choisies to the signed-in user.
-import { supabase } from '@/lib/supabase';
+import { currentUser, supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/api';
 import type { RevealMode } from '@/lib/clues';
 import { removePhotos } from '@/lib/souvenirs';
 
-export async function currentUser() {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user ?? null;
-}
+export { currentUser };
 
 export async function signIn(email: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
