@@ -11,8 +11,9 @@
   choosing the date returns its hours and the ticket quantities on sale. Only
   the first step of a bundle ("Conciergerie + Bateaux-Mouches") is checked.
 
-For the other sources, the booking engine is found in the activity's booking
-link or in the page it leads to, then asked through its public widget API:
+For the other sources, the booking engine is found at collection in the
+activity's booking link or in the page it leads to (surprise.booking: its
+booking's `check`), then asked through its public widget API:
 - Zenchef (restaurants): the day's services and times open to 2 guests.
 - SevenRooms (restaurants): the times bookable at once for 2, not the requests.
 - 4escape (escape games, immersive games): each room's sessions with places
@@ -21,9 +22,7 @@ Bookeo is not checked: its booking pages sit behind a captcha.
 """
 
 import argparse
-import base64
 import html
-import json
 import re
 import time as clock
 from collections import Counter
@@ -34,7 +33,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from surprise.collectors import come_to_paris, funbooker, wecandoo
+from surprise.collectors import come_to_paris, funbooker
 from surprise.local_store import open_store
 
 USER_AGENT = "Mozilla/5.0 (compatible; surprise-availability/0.1)"
@@ -45,13 +44,6 @@ COME_TO_PARIS_AJAX = f"{come_to_paris.BASE_URL}/fre/ajax/booking.json.php"
 ZENCHEF_API = "https://bookings-middleware.zenchef.com/getAvailabilities"
 WECANDOO_EVENTS = "https://wecandoo.fr/api/ateliers/{}/events"
 SEVENROOMS_API = "https://www.sevenrooms.com/api-yoa/availability/widget/range"
-
-# Booking engines found in a link or in the page it leads to, with the venue's id there.
-_ZENCHEF_ID = re.compile(r"bookings\.zenchef\.com/[^\"'\s<>]*?[?&](?:amp;)?rid=(\d+)|data-restaurant(?:-id)?=[\"'](\d+)")
-_SEVENROOMS_VENUE = re.compile(r"sevenrooms\.com/reservations/([\w-]+)")
-_4ESCAPE_SETTINGS = re.compile(r'class="forescape-[\w-]+"[^>]*data-settings="b64\.([A-Za-z0-9+/=]+)"')
-_4ESCAPE_SUBDOMAIN = re.compile(r'class="forescape"[^>]*data-subdomain="([\w-]+)"')
-_4ESCAPE_DOMAIN = re.compile(r"(?<![\w-])(?!www\.)[\w-]+\.4escape\.io\b")
 
 _WECANDOO_ID = re.compile(r"&quot;workshop&quot;:\{&quot;id&quot;:(\d+)")
 _LEAST_PLAYERS = re.compile(r"\b(\d+)\s*(?:à|-)\s*\d+\s*(?:joueurs|personnes|pers\b)|à partir de (\d+)", re.IGNORECASE)
@@ -119,14 +111,17 @@ def _funbooker_capacities(items: list[dict[str, Any]], party: int) -> list[tuple
     return candidates
 
 
-def check_wecandoo(client: httpx.Client, url: str, day: date, party: int = 2) -> Availability:
-    page = client.get(url)
-    page.raise_for_status()
-    if not (workshop := _WECANDOO_ID.search(page.text)):
-        return Availability(None, detail="atelier introuvable")
+def check_wecandoo(client: httpx.Client, workshop: str, day: date, party: int = 2) -> Availability:
+    """`workshop`: its id, known at collection, else its page, which gives it."""
+    if not workshop.isdigit():
+        page = client.get(workshop)
+        page.raise_for_status()
+        if not (found := _WECANDOO_ID.search(page.text)):
+            return Availability(None, detail="atelier introuvable")
+        workshop = found.group(1)
     midnight = datetime(day.year, day.month, day.day, tzinfo=_PARIS)
     response = client.get(
-        WECANDOO_EVENTS.format(workshop.group(1)),
+        WECANDOO_EVENTS.format(workshop),
         params={"start": midnight.isoformat(), "end": (midnight + timedelta(days=1)).isoformat()},
         headers={"Accept": "application/json"},
     )
@@ -274,57 +269,27 @@ def check_4escape(client: httpx.Client, domain: str, day: date, party: int = 2) 
     return Availability(True, sorted(set(slots)), ", ".join(names))
 
 
-ENGINE_CHECKERS = {"zenchef": check_zenchef, "sevenrooms": check_sevenrooms, "4escape": check_4escape}
-
-
-def find_engine(client: httpx.Client, urls: list[str]) -> tuple[str, str] | None:
-    """The booking engine behind the activity's links and its id there: in a link, else in the linked page."""
-    for url in urls:
-        if engine := _engine_in(url):
-            return engine
-    for url in urls:
-        try:
-            page = client.get(url)
-        except httpx.HTTPError:
-            continue
-        if page.is_success and (engine := _engine_in(page.text)):
-            return engine
-    return None
-
-
-def _engine_in(text: str) -> tuple[str, str] | None:
-    if match := _ZENCHEF_ID.search(text):
-        return "zenchef", match.group(1) or match.group(2)
-    if match := _SEVENROOMS_VENUE.search(text):
-        return "sevenrooms", match.group(1)
-    if match := _4ESCAPE_SETTINGS.search(text):
-        try:
-            return "4escape", json.loads(base64.b64decode(match.group(1)))["domain"]
-        except (ValueError, KeyError):
-            pass
-    if match := _4ESCAPE_SUBDOMAIN.search(text):
-        return "4escape", f"{match.group(1)}.4escape.io"
-    if match := _4ESCAPE_DOMAIN.search(text):
-        return "4escape", match.group(0)
-    return None
+# The engines asked for a date, by the name a booking's check gives them (surprise.booking.slot_check), and the
+# name their answers are kept under.
+CHECKERS = {
+    "funbooker": ("Funbooker", check_funbooker),
+    "wecandoo": ("Wecandoo", check_wecandoo),
+    "come_to_paris": ("Come to Paris", check_come_to_paris),
+    "zenchef": ("zenchef", check_zenchef),
+    "sevenrooms": ("sevenrooms", check_sevenrooms),
+    "4escape": ("4escape", check_4escape),
+}
 
 
 def check(client: httpx.Client, activity: dict[str, Any], day: date, party: int) -> tuple[str, Availability] | None:
-    """The engine checked and its answer; None when the activity's booking goes through no supported engine."""
-    if activity["source_id"] == funbooker.SOURCE_ID:
-        return "Funbooker", check_funbooker(client, activity["external_id"], day, party)
-    if activity["source_id"] == wecandoo.SOURCE_ID:
-        return "Wecandoo", check_wecandoo(client, activity["source_url"], day, party)
-    if activity["source_id"] == come_to_paris.SOURCE_ID:
-        return "Come to Paris", check_come_to_paris(client, activity["source_url"], day, party)
-    urls = [offer["booking_url"] for offer in activity["activity"].get("offers") or [] if offer.get("booking_url")]
-    urls += [activity["enrichment"]["booking_url"]] if activity["enrichment"].get("booking_url") else []
-    # The official site often embeds the widget (a restaurant's Zenchef button).
-    urls += [activity["activity"]["website"]] if activity["activity"].get("website") else []
-    if not (found := find_engine(client, list(dict.fromkeys(urls)))):
+    """The engine checked and its answer; None when no engine tells the activity's slots (its booking's check, found
+    at collection: no page to read for it now)."""
+    found = (activity["activity"].get("booking") or {}).get("check")
+    if not found:
         return None
-    engine, key = found
-    return engine, ENGINE_CHECKERS[engine](client, key, day, party)
+    engine, key = found.split(":", 1)
+    name, checker = CHECKERS[engine]
+    return name, checker(client, key, day, party)
 
 
 def main() -> None:

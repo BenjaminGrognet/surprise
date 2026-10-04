@@ -39,8 +39,9 @@ import webbrowser
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from datetime import date, datetime, time, timedelta
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -95,8 +96,6 @@ _PLENTIFUL = {"theatre", "humour"}
 _PLENTIFUL_BELOW = 45  # originality from which a play or a comedy club stands out
 _CHECKED_SOURCES = {funbooker.SOURCE_ID, come_to_paris.SOURCE_ID, wecandoo.SOURCE_ID}
 _PLATFORMS = _CHECKED_SOURCES | {"getyourguide", "tiqets", "civitatis", "explore_paris", "fever", "paris_jetaime_billetterie", "eventbrite", "shotgun", "billetreduc"}
-# Links that point straight at a restaurant or game booking engine checked by surprise.availability.
-_ENGINE_LINK = re.compile(r"zenchef|sevenrooms|4escape", re.IGNORECASE)
 _QUARTERS = {
     1: "Louvre", 2: "Bourse", 3: "Haut-Marais", 4: "Marais", 5: "Quartier latin", 6: "Saint-Germain",
     7: "Tour Eiffel", 8: "Champs-Élysées", 9: "Pigalle–Opéra", 10: "Canal Saint-Martin", 11: "Bastille–Oberkampf",
@@ -330,16 +329,9 @@ def coordinates(item: dict[str, Any]) -> tuple[float, float] | None:
 
 
 def needs_check(item: dict[str, Any]) -> bool:
-    """An activity without dated sessions whose engine answers for a date."""
+    """An activity without dated sessions whose engine answers for a date: a slot to check, as found at collection."""
     activity = item["activity"]
-    if activity.get("occurrences"):
-        return False
-    if item["source_id"] in _CHECKED_SOURCES:
-        return True
-    links = " ".join(filter(None, [booking_url(item), str(activity.get("website") or "")]))
-    if not links:
-        return False
-    return bool(_ENGINE_LINK.search(links)) or bool({"restaurant", "jeux"} & set(activity.get("categories") or []))
+    return not activity.get("occurrences") and bool((activity.get("booking") or {}).get("check"))
 
 
 def build_candidate(item: dict[str, Any], request: Request, checked: dict[str, Any] | None, originality: int = 35) -> Candidate | None:
@@ -357,7 +349,17 @@ def build_candidate(item: dict[str, Any], request: Request, checked: dict[str, A
         candidate.starts = [s for s in candidate.starts if DINNER_HOURS[0] <= s.time() <= DINNER_HOURS[1] and s.date() == request.day]
         if not candidate.starts:
             return None
+    if candidate:
+        candidate.genres = item_genres(item)
     return candidate
+
+
+def item_genres(item: dict[str, Any]) -> list[str]:
+    """What the activity plays (surprise.genres), read in its texts once per loaded activity: only for a candidate,
+    as reading the long texts of the whole base took most of a composition."""
+    if "genres" not in item:
+        item["genres"] = genres.genres(item)
+    return item["genres"]
 
 
 def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, Any] | None, originality: int) -> Candidate | None:
@@ -376,7 +378,7 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
         item=item, title=activity["title"], venue=venue.get("name") or "", arrondissement=venue.get("arrondissement"),
         lat=place[0], lon=place[1], tags=found["tags"], vibes=found["vibes"], role=role_, duration=duration,
         price=price, price_estimated=estimated, booking_url=link,
-        originality=originality, keywords=item["enrichment"].get("keywords") or [], genres=genres.genres(item),
+        originality=originality, keywords=item["enrichment"].get("keywords") or [],
     )
     latest = request.end - timedelta(minutes=30)
     categories = set(activity.get("categories") or [])
@@ -798,7 +800,7 @@ def unshown(steps: list[Step]) -> set:
             found = dict(zip(dead, pool.map(lambda url: images.replacement(client, items[url], url), dead)))
         with open_store(DB) if dead else contextlib.nullcontext() as store:
             if dead:
-                store.save_page_checks({url: (images.CHECK, True) for url in dead})
+                store.save_page_checks({url: (images.CHECK, True, None) for url in dead})
             for url, image in found.items():
                 if image:
                     item = items[url]
@@ -1326,6 +1328,7 @@ def soiree_json(name: str, state: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": name,
         "naming": bool(state.get("naming")),  # Claude's titles are still coming; poll GET /api/parcours/<name>
+        "chosen": bool(state.get("chosen")),  # the couple kept a route: it is the only one left
         "days": [r.day.isoformat() for r in requests],
         "start": request.start.isoformat(), "end": request.end.isoformat(),
         "budget": request.budget, "night_budget": request.room_budget if request.overnight else None,
@@ -1356,7 +1359,7 @@ class Base:
     @classmethod
     def load(cls, store: LocalStore) -> "Base":
         # Nor an image recorded dead (python -m surprise.images).
-        dead = {url for url, (engine, closed) in store.page_checks().items() if engine == images.CHECK and closed}
+        dead = {url for url, (engine, closed, _) in store.page_checks().items() if engine == images.CHECK and closed}
         items = [
             item for item in store.list_for_moderation()
             if item["status"] not in ("rejected", "filtered") and shown(item) and images.of(item) not in dead
@@ -1364,25 +1367,37 @@ class Base:
         scorer = Scorer(items)
         return cls(items, {(i["source_id"], i["external_id"]): scorer.score(i).score for i in items})
 
+    @cached_property
+    def by_key(self) -> dict[tuple[str, str], dict[str, Any]]:
+        return {(i["source_id"], i["external_id"]): i for i in self.items}
+
 
 def plan(store: LocalStore, request: Request, checks: int = 60, count: int = 3, base: Base | None = None) -> list[Route]:
-    return pick(evening_routes(store, base or Base.load(store), request, checks), count)
+    return pick(evening_routes(candidates_for(store, base or Base.load(store), request, checks), request), count)
 
 
-def evening_routes(store: LocalStore, base: Base, request: Request, checks: int = 60) -> list[Route]:
-    """Every route found for the evening, best first."""
-    routes = compose(candidates_for(store, base, request, checks), request)
+def evening_routes(candidates: list[Candidate], request: Request) -> list[Route]:
+    """Every route found for the evening from its candidates, with a new draw of luck, best first."""
+    routes = compose(lucky(candidates), request)
     for route in routes:
         route.request = request
     return routes
 
 
+def lucky(candidates: list[Candidate]) -> list[Candidate]:
+    """The candidates with a draw of luck (VARIETY) on their score, so that two compositions of the same evening,
+    or two redraws from the candidates kept, differ."""
+    return [replace(c, score=c.score + random.uniform(0, VARIETY)) for c in candidates]
+
+
 def candidates_for(store: LocalStore, base: Base, request: Request, checks: int = 60) -> list[Candidate]:
-    """The activities that can be a step that evening, scored, with a draw of luck (VARIETY) so that two
-    compositions of the same evening, and the activities checked for it, differ."""
+    """The activities that can be a step that evening, scored without luck (`lucky` draws it); the activities
+    checked for it get a draw of luck (VARIETY), so that two compositions of the same evening check others."""
     items = base.items
-    luck = {(i["source_id"], i["external_id"]): random.uniform(0, VARIETY) for i in items}
-    prescore = {key: quick_score(i, request, base.originality[key]) + luck[key] for i in items if (key := (i["source_id"], i["external_id"]))}
+    prescore = {
+        key: quick_score(i, request, base.originality[key]) + random.uniform(0, VARIETY)
+        for i in items if (key := (i["source_id"], i["external_id"]))
+    }
     checked = check_engines(store, items, request, checks, prescore) if checks else store.cached_availability(
         request.day.isoformat(), request.party, CACHE_HOURS
     )
@@ -1393,7 +1408,7 @@ def candidates_for(store: LocalStore, base: Base, request: Request, checks: int 
             continue
         candidate = build_candidate(item, request, checked.get(key), base.originality[key])
         if candidate:
-            candidate.score = score(candidate, request) + luck[key]
+            candidate.score = score(candidate, request)
             if candidate.score > -math.inf:
                 candidates.append(candidate)
     kinds = Counter(c.kind for c in candidates)
@@ -1470,13 +1485,16 @@ def generate(
 
     `base`: the activities already loaded (a server keeps them). `name_later`: routes are saved at
     once, named by rules, and Claude's titles replace them when they come (`soiree_json`'s `naming`).
+    The candidates of each evening are saved with it: a redraw starts from them until a route is chosen.
     """
     base = base or Base.load(store)
     routes: list[Route] = []
+    pools: list[list[Candidate]] = []
     for request in requests:
         if len(requests) > 1:
             print(f"\n— {_weekday(request.day)} {request.day:%d/%m}")
-        routes += evening_routes(store, base, request, checks)
+        pools.append(candidates_for(store, base, request, checks))
+        routes += evening_routes(pools[-1], request)
     # The best routes of all evenings together, without a step in common.
     routes = pick_shown(sorted(routes, key=lambda route: -route.score), count)
     if len(requests) > 1:
@@ -1493,7 +1511,7 @@ def generate(
     name = name or f"{days[0].isoformat()}{'' if len(days) == 1 else '_' + days[-1].isoformat()}-{secrets.token_urlsafe(6)}"
     state = {"routes": routes, "requests": requests, "seen": {s.candidate.key for r in routes for s in r.steps}, "naming": int(later)}
     with _SAVING:
-        save(name, state)
+        save(name, state, store, candidates=pools)
     if later:
         threading.Thread(target=_name_later, args=(name, routes, requests[0]), daemon=True).start()
     return routes, name
@@ -1521,7 +1539,8 @@ def _name_later(name: str, routes: list[Route], request: Request) -> None:
 # Regeneration ----------------------------------------------------------------
 # The page's routes are kept in the store (soirees, soiree_routes, soiree_steps), so that one route, or one step
 # of a route, can be drawn again from the page. Activities already shown are not proposed again
-# while others fit.
+# while others fit. Until the couple chooses a route, the evening's candidates are kept too (soiree_candidates):
+# a redraw starts from them. Once a route is chosen, the evening is that route alone.
 
 
 # A page is loaded, changed and saved again by the composition, a redraw and Claude's titles: one at a time.
@@ -1582,9 +1601,31 @@ def _json(value: Any) -> str:
     return json.dumps(_encode(value), ensure_ascii=False).replace("\\u0000", "")
 
 
-def save(name: str, state: dict[str, Any]) -> None:
+def _own(store: LocalStore | None) -> contextlib.AbstractContextManager[LocalStore]:
+    """The store given, left open; else one opened on DB for the while (one connection: under a second through the pooler)."""
+    return contextlib.nullcontext(store) if store else open_store(DB)
+
+
+def _candidates_json(candidates: list[Candidate]) -> str:
+    """The candidates for the store, each activity by its key: the server has the activities loaded (Base)."""
+    return _json([{"key": c.key, **{f.name: getattr(c, f.name) for f in fields(c) if f.name != "item"}} for c in candidates])
+
+
+def _candidates_from(text: str, base: Base) -> list[Candidate]:
+    """The candidates kept, on the activities loaded; one that left the base since (rejected in moderation) is not."""
+    found = []
+    for data in _decode(json.loads(text)):
+        if (item := base.by_key.get(data.pop("key"))) is not None:
+            found.append(Candidate(item=item, **data))
+    return found
+
+
+def save(name: str, state: dict[str, Any], store: LocalStore | None = None, candidates: list[list[Candidate]] | None = None) -> None:
     """A composed evening in the store (soirees, soiree_routes, soiree_steps), under this name, so a route or a
-    step of it can be drawn again (see `regenerate`). The activities already shown are its steps, replaced ones too."""
+    step of it can be drawn again (see `regenerate`). The activities already shown are its steps, replaced ones too.
+
+    `candidates`: those of each evening asked, kept for the redraws until a route is chosen (`choose`).
+    """
     requests = state["requests"]
     routes = [
         (index, requests.index(route.request) if route.request in requests else None, route.title, route.pitch, route.score)
@@ -1595,13 +1636,14 @@ def save(name: str, state: dict[str, Any]) -> None:
         for index, route in enumerate(state["routes"])
         for position, step in enumerate([*route.steps, *filter(None, [route.night])])
     ]
-    # ponytail: one connection per save and load (under a second through the pooler); pass the store along if it drags.
-    with open_store(DB) as store:
+    with _own(store) as store:
         store.save_soiree(name, _json(requests), int(state.get("naming") or 0), routes, steps)
+        if candidates is not None:
+            store.save_candidates(name, {at: _candidates_json(found) for at, found in enumerate(candidates)}, CACHE_HOURS)
 
 
-def load(name: str) -> dict[str, Any] | None:
-    with open_store(DB) as store:
+def load(name: str, store: LocalStore | None = None) -> dict[str, Any] | None:
+    with _own(store) as store:
         data = store.soiree(name)
     if data is None:
         return None
@@ -1618,15 +1660,42 @@ def load(name: str) -> dict[str, Any] | None:
         for index, request, title, pitch, score in data["routes"]
     ]
     seen = {(source_id, external_id) for source_id, external_id in data["seen"]}
-    return {"routes": routes, "requests": requests, "seen": seen, "naming": data["naming"], "sizes": data.get("sizes") or {}}
+    return {
+        "routes": routes, "requests": requests, "seen": seen, "naming": data["naming"], "chosen": data["chosen"],
+        "sizes": data.get("sizes") or {},
+    }
 
 
 def regenerate(
-    store: LocalStore, base: Base, name: str, index: int, position: int | None = None, checks: int = 10, claude: bool = True,
+    store: LocalStore | None, base: Base, name: str, index: int, position: int | None = None, checks: int = 10, claude: bool = True,
 ) -> str | None:
-    """Draws route `index` again, or only its step `position`, and rewrites the page; the error, if any."""
-    with _SAVING:
+    """Draws route `index` again, or only its step `position`, and rewrites the page; the error, if any.
+
+    While the couple chooses, from the candidates kept at the composition (CACHE_HOURS at most, as the engines'
+    answers): no activity read nor checked again. Once a route is chosen, from candidates found anew, checked live.
+    """
+    with _SAVING, _own(store) as store:
         return _regenerate(store, base, name, index, position, checks, claude)
+
+
+def choose(name: str, index: int, store: LocalStore | None = None) -> str | None:
+    """The couple keeps route `index`: the evening is that route alone from now on, its name enough to find it; the
+    other routes and the candidates go. The error, if any."""
+    with _SAVING, _own(store) as store:
+        if not store.keep_route(name, index):
+            return "parcours introuvable : relancez la composition"
+    return None
+
+
+def _candidates(store: LocalStore, base: Base, name: str, state: dict[str, Any], request: Request, checks: int) -> list[Candidate]:
+    """The candidates of the evening asked: kept since its composition, or found anew and kept until a route is chosen."""
+    at = state["requests"].index(request) if request in state["requests"] else 0
+    if not state["chosen"] and (kept := store.soiree_candidates(name, at, CACHE_HOURS)) is not None:
+        return _candidates_from(kept, base)
+    found = candidates_for(store, base, request, checks)
+    if not state["chosen"]:
+        store.save_candidates(name, {at: _candidates_json(found)}, CACHE_HOURS)
+    return found
 
 
 def remove(name: str, index: int, position: int) -> str | None:
@@ -1646,7 +1715,7 @@ def remove(name: str, index: int, position: int) -> str | None:
 
 
 def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: int | None, checks: int, claude: bool) -> str | None:
-    state = load(name)
+    state = load(name, store)
     if state is None:
         return "parcours introuvable : relancez la composition"
     routes = state["routes"]
@@ -1654,7 +1723,7 @@ def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: 
         return "étape inconnue"
     route = routes[index]
     request = route.request or state["requests"][0]
-    candidates = candidates_for(store, base, request, checks)
+    candidates = lucky(_candidates(store, base, name, state, request, checks))
     on_page = {s.candidate.key for r in routes for s in r.steps}
     if position is None:
         # None of the route's activities again, under the same listing or another one.
@@ -1693,7 +1762,7 @@ def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: 
     routes[index] = new
     state["seen"] |= {s.candidate.key for s in new.steps}
     state["naming"] = int(state.get("naming") or 0) + later
-    save(name, state)
+    save(name, state, store)
     if later:
         threading.Thread(target=_name_later, args=(name, [new], request), daemon=True).start()
     return None

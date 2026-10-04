@@ -11,16 +11,14 @@ export type Page = Souvenir & { photoUrl: string | null; mine: boolean };
 
 export type Book = { evening: EveningHistoryRow; pages: Page[] };
 
-// The kept evening's book, found as the revelation finds it: by its page and route.
-export async function book(pageName: string, routeIndex: number): Promise<Book | null> {
+// The kept evening's book, found as the revelation finds it: by its page.
+export async function book(pageName: string): Promise<Book | null> {
   const user = await currentUser();
   if (!user) return null;
-  const { data, error } = await supabase
-    .from('soirees_choisies').select('*, souvenirs(*)').eq('page_name', pageName).eq('route_index', routeIndex)
-    .order('chosen_at', { ascending: false }).limit(1);
+  const { data, error } = await supabase.from('soirees_choisies').select('*, souvenirs(*)').eq('page_name', pageName).maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data?.length) return null;
-  const { souvenirs, ...evening } = data[0] as Omit<EveningHistoryRow, 'souvenirs'> & { souvenirs: Souvenir[] };
+  if (!data) return null;
+  const { souvenirs, ...evening } = data as Omit<EveningHistoryRow, 'souvenirs'> & { souvenirs: Souvenir[] };
   const urls = await photoUrls(souvenirs.map((s) => s.photo));
   const pages = souvenirs
     .map((s) => ({ ...s, photoUrl: s.photo ? urls[s.photo] ?? null : null, mine: s.author === user.id }))

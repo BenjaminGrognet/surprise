@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from surprise import quiz
+from surprise import parcours, quiz
 from surprise.categories import CATEGORIES
 from surprise.local_store import open_store
 from surprise.tags import TAGS, VIBES
@@ -162,6 +162,33 @@ def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
                 assert error.code == code
             else:
                 raise AssertionError(body)
+    finally:
+        server.shutdown()
+
+
+def test_the_route_kept_is_the_pages_only_one(tmp_path, monkeypatch):
+    from test_parcours import _night
+
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")  # make_handler sets it: put back after
+    server =ThreadingHTTPServer(("127.0.0.1", 0), quiz.make_handler(tmp_path / "s.db", checks=0))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req, _, route = _night()
+        route.request = req
+        parcours.save("essai", {"routes": [route, route], "requests": [req], "seen": set()})
+        url = f"http://127.0.0.1:{server.server_port}/api/parcours"
+        assert len(json.load(urlopen(f"{url}/essai"))["routes"]) == 2
+
+        def choose(name, index):
+            post = Request(f"{url}/{name}/routes/{index}/choose", data=b"{}", headers={"Content-Type": "application/json"})
+            return json.load(urlopen(post))
+
+        page = choose("essai", 1)
+        assert page["chosen"] and [r["index"] for r in page["routes"]] == [0]
+        assert json.load(urlopen(f"{url}/essai")) == page
+        with pytest.raises(HTTPError) as error:
+            choose("essai", 1)
+        assert error.value.code == 409
     finally:
         server.shutdown()
 

@@ -110,7 +110,7 @@ function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: n
   const pages = row.souvenirs ?? [];
   const photo = pages.map((s) => s.photo && photos[s.photo]).find(Boolean);
   const notes = pages.map((s) => s.note).filter(Boolean);
-  const open = () => router.push({ pathname: '/livre', params: { soiree: row.page_name, route: String(row.route_index) } });
+  const open = () => router.push({ pathname: '/livre', params: { soiree: row.page_name } });
   return (
     <Pressable onPress={open} style={styles.entry}>
       <View style={[styles.dot, age === 0 ? { backgroundColor: theme.gold, boxShadow: `0 0 8px ${theme.gold}` } : styles.dimDot]} />
@@ -150,7 +150,7 @@ function Anchor({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => v
   const theme = useTheme();
   const { role } = useCouple();
   const ahead = !!row.day && row.day >= isoDay(new Date());
-  const href = { pathname: ahead ? '/revelation' : '/livre', params: { soiree: row.page_name, route: String(row.route_index) } } as const;
+  const href = { pathname: ahead ? '/revelation' : '/livre', params: { soiree: row.page_name } } as const;
   // To the passager, an evening to come keeps its secret here too: only its secret name, never its plain title.
   const hidden = ahead && role === 'passager';
   return (

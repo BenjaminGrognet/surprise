@@ -92,7 +92,8 @@ create table if not exists page_checks (
   url text primary key,
   engine text,
   closed boolean not null,
-  checked_at text not null default (datetime('now'))
+  checked_at text not null default (datetime('now')),
+  slot_check text
 );
 -- OpenStreetMap place of each venue (surprise.enrich), place null when none was found; asked again after 3 months.
 create table if not exists osm_places (
@@ -101,6 +102,13 @@ create table if not exists osm_places (
   place text,
   checked_at text not null default (datetime('now')),
   primary key (name, postal_code)
+);
+-- Nominatim's answer to each question (surprise.enrich: osm_place, osm_area, osm_address), answer null when nothing
+-- was found; asked again after 3 months.
+create table if not exists nominatim_answers (
+  question text primary key,
+  answer text,
+  checked_at text not null default (datetime('now'))
 );
 -- Every profile the questionnaire draws (surprise.quiz), with its answers.
 create table if not exists profiles (
@@ -115,7 +123,16 @@ create table if not exists soirees (
   requests text not null,
   naming integer not null default 0,
   created_at text not null default (datetime('now')),
-  saved_at text not null default (datetime('now'))
+  saved_at text not null default (datetime('now')),
+  chosen_at text
+);
+-- The candidates of a composed evening, kept while the couple picks a route: a redraw starts from them.
+create table if not exists soiree_candidates (
+  soiree_id text not null references soirees (id) on delete cascade,
+  request integer not null,
+  candidates text not null,
+  created_at text not null default (datetime('now')),
+  primary key (soiree_id, request)
 );
 create table if not exists soiree_routes (
   soiree_id text not null references soirees (id) on delete cascade,
@@ -150,9 +167,15 @@ OSM_PLACE_DAYS = 90
 
 
 _LATER_COLUMNS = {
-    "booking_url": "text", "latitude": "real", "longitude": "real",
-    "opening_hours": "text", "osm_address": "text", "osm_url": "text",
+    "enrichment": {
+        "booking_url": "text", "latitude": "real", "longitude": "real",
+        "opening_hours": "text", "osm_address": "text", "osm_url": "text",
+    },
+    "soirees": {"chosen_at": "text"},
+    "page_checks": {"slot_check": "text"},
 }
+# Once, when the column comes: the pages of a widget engine are read again, for the venue's id there.
+_ON_ADDED = {"slot_check": "delete from page_checks where engine in ('Zenchef', 'SevenRooms', '4escape')"}
 _ENRICHMENT_COLUMNS = (
     "image_url", "image_origin", "place_id", "site_excerpt", "description", "description_model", "booking_url",
     "latitude", "longitude", "opening_hours", "osm_address", "osm_url",
@@ -178,10 +201,14 @@ class LocalStore:
         self._db = sqlite3.connect(path)
         self._db.executescript(SCHEMA)
         # Columns added after the first databases were created.
-        existing = {row[1] for row in self._db.execute("pragma table_info(enrichment)")}
-        for column, kind in _LATER_COLUMNS.items():
-            if column not in existing:
-                self._db.execute(f"alter table enrichment add column {column} {kind}")
+        for table, columns in _LATER_COLUMNS.items():
+            existing = {row[1] for row in self._db.execute(f"pragma table_info({table})")}
+            for column, kind in columns.items():
+                if column not in existing:
+                    self._db.execute(f"alter table {table} add column {column} {kind}")
+                    if column in _ON_ADDED:
+                        self._db.execute(_ON_ADDED[column])
+                        self._db.commit()
 
     def __enter__(self) -> "LocalStore":
         return self
@@ -239,9 +266,11 @@ class LocalStore:
             )
 
     def raw_with_rejection(self) -> list[tuple[str, str, str | None]]:
-        """Every raw payload (source, JSON text) with its current rejection, to normalize again."""
+        """Each record's current raw payload (source, JSON text), the one its normalization came from, with its
+        rejection, to normalize again; not an older version of its page, which would replace the current one."""
         return self._run(
-            "select r.source_id, r.payload, n.rejection from raw_records r left join normalized n using (source_id, external_id)"
+            "select r.source_id, r.payload, n.rejection from raw_records r join normalized n"
+            " on n.source_id = r.source_id and n.external_id = r.external_id and n.content_hash = r.content_hash"
         ).fetchall()
 
     def fresh_pages(self, source_id: str, days: float = FRESH_DAYS) -> dict[str, list[dict[str, Any]]]:
@@ -258,18 +287,19 @@ class LocalStore:
             pages.setdefault(page, []).append(json.loads(payload) | {"_cached": True})
         return pages
 
-    def page_checks(self, days: float = PAGE_CHECK_DAYS) -> dict[str, tuple[str | None, bool]]:
+    def page_checks(self, days: float = PAGE_CHECK_DAYS) -> dict[str, tuple[str | None, bool, str | None]]:
+        """Each page's verdict (surprise.booking.Verdict): engine, closed, slot check."""
         since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-        rows = self._run("select url, engine, closed from page_checks where checked_at >= ?", (since,))
-        return {url: (engine, bool(closed)) for url, engine, closed in rows}
+        rows = self._run("select url, engine, closed, slot_check from page_checks where checked_at >= ?", (since,))
+        return {url: (engine, bool(closed), slot_check) for url, engine, closed, slot_check in rows}
 
-    def save_page_checks(self, verdicts: dict[str, tuple[str | None, bool]]) -> None:
+    def save_page_checks(self, verdicts: dict[str, tuple[str | None, bool, str | None]]) -> None:
         with self._transaction():
             self._run_many(
-                "insert into page_checks (url, engine, closed) values (?, ?, ?)"
+                "insert into page_checks (url, engine, closed, slot_check) values (?, ?, ?, ?)"
                 " on conflict (url) do update set engine = excluded.engine, closed = excluded.closed,"
-                " checked_at = current_timestamp",
-                [(url, engine, closed) for url, (engine, closed) in verdicts.items()],
+                " slot_check = excluded.slot_check, checked_at = current_timestamp",
+                [(url, engine, closed, slot_check) for url, (engine, closed, slot_check) in verdicts.items()],
             )
 
     def osm_places(self, days: float = OSM_PLACE_DAYS) -> dict[tuple[str, str], dict[str, Any] | None]:
@@ -285,6 +315,19 @@ class LocalStore:
                 [(name, postal_code, place and json.dumps(place)) for (name, postal_code), place in places.items()],
             )
 
+    def nominatim_answers(self, days: float = OSM_PLACE_DAYS) -> dict[str, Any]:
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        rows = self._run("select question, answer from nominatim_answers where checked_at >= ?", (since,))
+        return {question: json.loads(answer) if answer else None for question, answer in rows}
+
+    def save_nominatim_answers(self, answers: dict[str, Any]) -> None:
+        with self._transaction():
+            self._run_many(
+                "insert into nominatim_answers (question, answer) values (?, ?)"
+                " on conflict (question) do update set answer = excluded.answer, checked_at = current_timestamp",
+                [(question, None if answer is None else json.dumps(answer)) for question, answer in answers.items()],
+            )
+
     def save_profile(self, profile_id: str, answers: dict[str, Any], profile: dict[str, Any]) -> None:
         with self._transaction():
             self._run(
@@ -293,14 +336,15 @@ class LocalStore:
             )
 
     def soiree(self, soiree_id: str) -> dict[str, Any] | None:
-        """An evening as saved: its requests (JSON), naming, routes, current steps, every activity it ever showed, and
-        each route's number of steps as composed."""
-        row = self._run("select requests, naming from soirees where id = ?", (soiree_id,)).fetchone()
+        """An evening as saved: its requests (JSON), naming, whether its route was chosen, routes, current steps, every
+        activity it ever showed, and each route's number of steps as composed."""
+        row = self._run("select requests, naming, chosen_at is not null from soirees where id = ?", (soiree_id,)).fetchone()
         if row is None:
             return None
         return {
             "requests": row[0],
             "naming": row[1],
+            "chosen": bool(row[2]),
             "routes": self._run(
                 "select route, request, title, pitch, score from soiree_routes where soiree_id = ? order by route", (soiree_id,)
             ).fetchall(),
@@ -317,15 +361,48 @@ class LocalStore:
             ).fetchall()),
         }
 
-    def chosen_activities(self, routes: Sequence[tuple[str, int]]) -> set[tuple[str, str]]:
-        """The activities of these routes (evening, route index), as they were when chosen: their current steps."""
+    def chosen_activities(self, soirees: Sequence[str]) -> set[tuple[str, str]]:
+        """The activities of these chosen evenings (their only route left): their current steps."""
         found: set[tuple[str, str]] = set()
-        for soiree_id, route in routes:
+        for soiree_id in soirees:
             found |= set(self._run(
-                "select source_id, external_id from soiree_steps where soiree_id = ? and route = ? and not night and replaced_at is null",
-                (soiree_id, route),
+                "select source_id, external_id from soiree_steps where soiree_id = ? and not night and replaced_at is null",
+                (soiree_id,),
             ).fetchall())
         return found
+
+    def keep_route(self, soiree_id: str, route: int) -> bool:
+        """The couple chose this route: the evening keeps it alone, as route 0, the other routes and its candidates
+        gone. Chosen again, nothing changes. False if the evening has no such route."""
+        with self._transaction():
+            if not self._run("select 1 from soiree_routes where soiree_id = ? and route = ?", (soiree_id, route)).fetchone():
+                return False
+            for table in ("soiree_steps", "soiree_routes"):
+                self._run(f"delete from {table} where soiree_id = ? and route <> ?", (soiree_id, route))
+                self._run(f"update {table} set route = 0 where soiree_id = ?", (soiree_id,))
+            self._run("update soirees set chosen_at = coalesce(chosen_at, current_timestamp) where id = ?", (soiree_id,))
+            self._run("delete from soiree_candidates where soiree_id = ?", (soiree_id,))
+        return True
+
+    def save_candidates(self, soiree_id: str, candidates: dict[int, str], max_age_hours: float) -> None:
+        """The candidates (JSON) of evenings asked, by their index; those kept longer than `max_age_hours` go."""
+        since = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        with self._transaction():
+            self._run("delete from soiree_candidates where created_at < ?", (since,))
+            self._run_many(
+                "insert into soiree_candidates (soiree_id, request, candidates) values (?, ?, ?)"
+                " on conflict (soiree_id, request) do update set candidates = excluded.candidates, created_at = current_timestamp",
+                [(soiree_id, request, text) for request, text in candidates.items()],
+            )
+
+    def soiree_candidates(self, soiree_id: str, request: int, max_age_hours: float) -> str | None:
+        """The candidates (JSON) kept for this evening asked, if saved less than `max_age_hours` ago."""
+        since = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        row = self._run(
+            "select candidates from soiree_candidates where soiree_id = ? and request = ? and created_at >= ?",
+            (soiree_id, request, since),
+        ).fetchone()
+        return row[0] if row else None
 
     def save_soiree(
         self, soiree_id: str, requests: str, naming: int, routes: Sequence[tuple[Any, ...]], steps: Sequence[tuple[Any, ...]]
@@ -578,7 +655,7 @@ def open_store(db: Path | str | None = None) -> LocalStore:
     return LocalStore(Path(db))
 
 
-# Copied to Supabase; availability is a 6-hour cache, left behind.
+# Copied to Supabase; availability and an evening's candidates are caches of a few hours, left behind.
 _COPIED = {
     "raw_records": ("source_id", "external_id", "url", "payload", "content_hash", "fetched_at"),
     "normalized": ("source_id", "external_id", "content_hash", "activity", "rejection", "normalized_at"),
@@ -586,8 +663,9 @@ _COPIED = {
     "enrichment": ("source_id", "external_id", *_ENRICHMENT_COLUMNS, "enriched_at"),
     "keywords": ("source_id", "external_id", "keywords", "computed_at"),
     "osm_places": ("name", "postal_code", "place", "checked_at"),
+    "nominatim_answers": ("question", "answer", "checked_at"),
     "profiles": ("id", "answers", "profile", "created_at"),
-    "soirees": ("id", "requests", "naming", "created_at", "saved_at"),
+    "soirees": ("id", "requests", "naming", "created_at", "saved_at", "chosen_at"),
     "soiree_routes": ("soiree_id", "route", "request", "title", "pitch", "score"),
     # ponytail: without its id, a replaced step is copied again on every run; key the history if copies get repeated.
     "soiree_steps": (

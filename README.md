@@ -39,7 +39,10 @@ Eventbrite, Fever), 14 pour les catalogues d'activités, 30 pour les lieux (OSM,
 7 par défaut (médias). Ses payloads stockés (`_page`) sont renormalisés à la date du jour, sauf si le sitemap la dit
 modifiée depuis (Paris ZigZag). Une page de réservation ou un site officiel n'est vérifié qu'une fois par mois
 (`pipeline.page_checks`, migration `20260930000000_page_checks.sql`), et une fois par passage même si 46 concerts y
-renvoient. Ces vérifications se font à 16 en parallèle, une seule à la fois par site. Nominatim reste à 1 requête/s.
+renvoient. Ces vérifications se font à 16 en parallèle, une seule à la fois par site. Nominatim reste à 1 requête/s ;
+chacune de ses réponses (adresse trouvée ou lieu introuvable) est gardée 3 mois (`pipeline.nominatim_answers`, migration
+`20261004000002_nominatim_answers.sql`) : une adresse n'est demandée qu'une fois, pas à chaque collecte ou
+renormalisation. Un échec de Nominatim n'est pas gardé.
 
 ```bash
 uv run --env-file .env python -m surprise.collect --limit 50
@@ -118,6 +121,14 @@ du lieu (« …/fr/tickets/… »), et le formulaire d'un organisateur (Google F
 réserver ou de s'inscrire. Sur Paris ZigZag, la page officielle d'un bloc pratique est le lien qui nomme le lieu ou le
 spectacle ; sa billetterie est suivie de là.
 
+Chaque fiche gardée dit comment elle se réserve (`activity.booking`, badge en modération) : `gratuit`, `creneau`
+(un moteur donne les créneaux d'une date : Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms, 4escape ; avec
+l'identifiant du lieu chez lui, `check` = « zenchef:351778 », trouvé dans le lien, la page ou sa page « Réserver »),
+`billetterie` (réservable en ligne, créneaux non vérifiables) ou `sans_resa` (bar, club, restaurant sans réservation
+en ligne). Les soirées ne vérifient en direct que les `creneau`, sans relire le site du lieu. Rattrapage des fiches
+collectées avant (relit une fois les pages Zenchef, SevenRooms et 4escape, pour leur identifiant) :
+`uv run --env-file .env python -m surprise.renormalize --source <id>`.
+
 Tous les motifs de rejet d'une fiche sont gardés (« jeune public · passé »), un badge chacun dans la modération : la
 fiche est construite quand même, sauf si un motif l'en empêche (sans nom, sans lieu, hors zone, invalide, page
 illisible). Celles-là apparaissent aussi dans « Écartées à la collecte », avec leur titre et le lien de la source,
@@ -129,7 +140,8 @@ de trajet entre deux étapes.
 
 Règles changées : `uv run python -m surprise.renormalize --rejet "<motif>"` (ou `--source <id>`) normalise de nouveau
 les pages déjà collectées, puis revérifie la réservation, sans rien recollecter. `--rejet` prend les fiches qui ont ce
-motif parmi les autres.
+motif parmi les autres. Les fiches passent à 32 en parallèle, une page à la fois par site, enregistrées par lots de 200 :
+un passage interrompu garde ce qu'il a fait.
 
 ## Enrichissement
 
@@ -203,8 +215,8 @@ uv run python -m surprise.originality    # répartition, les plus originales et 
 ## Disponibilités
 
 Vérifie pour une date si les activités de la base locale sont réservables à 2 (créneaux horaires et formule),
-sans compte : Funbooker, Wecandoo, Come to Paris, puis Zenchef, SevenRooms et 4escape quand le lien de réservation
-ou le site officiel (ou la page où ils mènent) passe par eux. Bookeo n'est pas vérifiable (captcha). Les activités rejetées en modération et
+sans compte : Funbooker, Wecandoo, Come to Paris, Zenchef, SevenRooms et 4escape, celles dont la collecte a trouvé le
+moteur et l'identifiant (`booking.check`). Bookeo n'est pas vérifiable (captcha). Les activités rejetées en modération et
 celles sans moteur pris en charge sont ignorées.
 
 ```bash
@@ -255,7 +267,12 @@ uv run python -m surprise.parcours 2026-10-09 --budget 150 --de 19:00 --a 00:30 
   « ↻ Tout le parcours » (une autre soirée, différente des deux autres) et « ↻ Changer » sur chaque étape (une autre
   activité du même rôle ou de la même étape de la trame, qui s'enchaîne avec ses voisines ; un bar voisin est écourté
   ou prolongé). Les activités déjà proposées ne reviennent pas tant que d'autres conviennent ; celle qu'on change ne revient jamais,
-  même vendue sous une autre fiche (même lieu ou même titre). Les parcours sont gardés
+  même vendue sous une autre fiche (même lieu ou même titre). Tant qu'aucun parcours n'est choisi, la régénération
+  part des candidats gardés à la composition (`pipeline.soiree_candidates`, 6 h au plus, un nouveau tirage de hasard
+  à chaque fois) : ni relecture de la base, ni vérification en direct. Une fois un parcours gardé
+  (`POST /api/parcours/<nom>/routes/<i>/choose`), la soirée n'a plus que lui (route 0, les autres et les candidats
+  effacés) et son nom suffit à la retrouver (`/revelation?soiree=<nom>`) ; changer une étape ensuite revérifie en
+  direct. Les parcours sont gardés
   dans la base, lisibles en SQL (migration `20260930000002_profiles_soirees.sql`) : `pipeline.soirees` (le nom de
   la page pour identifiant, la demande), `pipeline.soiree_routes` (titre, pitch, score de chaque parcours) et
   `pipeline.soiree_steps`, chaque étape liée à son activité (`source_id`, `external_id`) avec ses horaires et
@@ -303,6 +320,17 @@ Il n'y a pas d'autre page client : toute évolution se fait dans `app/` et vaut 
 Le build web appelle l'API sur sa propre adresse ; en développement (`npm run web`, port 8081), sur
 `EXPO_PUBLIC_API_URL`.
 
+En développement, l'app sur 8081 a besoin du serveur 8001 : sans lui, une soirée affiche « L'enveloppe reste
+close ». Lancé depuis le volet navigateur de Claude, il s'arrête dès que son onglet est fermé ; le lancer plutôt
+dans un terminal à part, qui le garde tant qu'il reste ouvert :
+
+```bash
+uv run --env-file .env python -m surprise.quiz --no-open
+```
+
+Le site sur 8001 sert `app/dist` tel qu'il a été construit : après une modification de l'app, refaire
+`npm run build:web` dans `app/` pour qu'il suive (8081, lui, lit le code en direct).
+
 ## Compte client et historique
 
 L'app demande un compte (email + mot de passe, Supabase Auth) avant tout le reste : sans être connecté, seul
@@ -327,7 +355,7 @@ son ambiance et le quartier de son étape la plus centrale, jamais un lieu (un q
 soirée est sauté). Règles sans Claude (`parcours.secret_title`), envoyé avec chaque parcours (`secret_title`) et figé
 à la garde dans `soirees_choisies.secret_title` (migration `20261001000003_secret_title.sql`).
 
-Le Livre des Secrets (`/livre?soiree=…&route=…`) : en fin de soirée (sa dernière étape commencée) puis les jours
+Le Livre des Secrets (`/livre?soiree=…`) : en fin de soirée (sa dernière étape commencée) puis les jours
 suivants, chacun des deux scelle une page — une photo, un mot (table `souvenirs`, photos dans le bucket privé
 `souvenirs`, lues par liens signés). Scellée, une page ne se modifie plus ; on ne lit celle de l'autre qu'après avoir
 scellé la sienne (fonction `sealed_by_me`). Mes soirées (`/historique`) n'en montrent plus que la photo et les

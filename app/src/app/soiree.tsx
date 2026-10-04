@@ -12,9 +12,9 @@ import { Waiting } from '@/components/spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { chooseEvening, currentUser, eveningsHistory } from '@/lib/account';
+import { chooseEvening, currentUser, eveningsHistory, keptEvening } from '@/lib/account';
 import {
-  composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart,
+  chooseRoute, composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart,
   type ComposedSoiree, type Night, type Profile, type SoireeData,
 } from '@/lib/api';
 import { isoDay, longDay, nextFriday, shortDay } from '@/lib/dates';
@@ -38,9 +38,9 @@ const NAMING_TIMEOUT_MS = 60000;
 const NAMING_POLL_MS = 2000;
 
 export default function SoireeScreen() {
-  // ?soiree=<name>: the evening composed before, so a reload or a shared link shows it again;
-  // &route=<index>: the route the couple chose, then the only one shown.
-  const { soiree: saved, route: picked } = useLocalSearchParams<{ soiree?: string; route?: string }>();
+  // ?soiree=<name>: the evening composed before, so a reload or a shared link shows it again; once a route
+  // is kept, the page has that route alone.
+  const { soiree: saved } = useLocalSearchParams<{ soiree?: string }>();
   const [data, setData] = useState<SoireeData | null>(null);
   const [vibes, setVibes] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -76,6 +76,13 @@ export default function SoireeScreen() {
     if (saved) getSoireeState(saved).then(setComposed).catch(() => null);
   }, [saved]);
 
+  // A page whose route was kept: is it in the couple's history yet (else "Garder" again saves it there)?
+  const [keptPage, setKeptPage] = useState<string | null>(null);
+  useEffect(() => {
+    if (composed?.chosen) keptEvening(composed.name).then((e) => setKeptPage(e?.page_name ?? null)).catch(() => {});
+  }, [composed?.chosen, composed?.name]);
+  const inHistory = !!composed && keptPage === composed.name;
+
   // Claude's titles arrive a few seconds after the composition: poll until they do.
   useEffect(() => {
     if (!composed?.naming) return;
@@ -108,9 +115,9 @@ export default function SoireeScreen() {
     setStatus('composing');
     try {
       const history = (await currentUser()) ? await eveningsHistory().catch(() => []) : [];
-      const fresh = await composeSoiree({ ...night, envies, done: history.map((h) => ({ page_name: h.page_name, route_index: h.route_index })) });
+      const fresh = await composeSoiree({ ...night, envies, done: history.map((h) => h.page_name) });
       setComposed(fresh);
-      router.setParams({ soiree: fresh.name, route: undefined });
+      router.setParams({ soiree: fresh.name });
       setStatus('idle');
     } catch {
       setStatus('error');
@@ -137,21 +144,29 @@ export default function SoireeScreen() {
       setNotice('signin');
       return;
     }
+    // The page keeps this route alone (the others go), then the couple's history keeps the page. Kept again
+    // (the history failed the first time), the page has that route as its route 0 and nothing changes.
+    const kept = await chooseRoute(composed.name, route.index).catch(() => null);
+    if (!kept) {
+      setNotice("Cette intrigue n'a pas pu être gardée : réessayez dans un instant.");
+      return;
+    }
+    setComposed(kept);
     try {
       await chooseEvening({
-        pageName: composed.name, routeIndex: route.index, title: route.title, secretTitle: route.secret_title, pitch: route.pitch,
+        pageName: composed.name, title: route.title, secretTitle: route.secret_title, pitch: route.pitch,
         vibes: composed.vibes.map((v) => vibes[v] || v), day: route.day,
       });
       // Kept: on to the day itself, where each partner picks a side — organiser or surprised.
-      router.replace({ pathname: '/revelation', params: { soiree: composed.name, route: String(route.index) } });
+      router.replace({ pathname: '/revelation', params: { soiree: composed.name } });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Impossible de la garder.');
     }
   }
 
   if (composed) {
-    const shown = picked === undefined ? composed.routes : composed.routes.filter((r) => String(r.index) === picked);
-    const chosen = picked !== undefined && shown.length > 0;
+    const shown = composed.routes;
+    const chosen = composed.chosen && shown.length > 0;
     return (
       <Screen>
         <PageCard
@@ -160,8 +175,8 @@ export default function SoireeScreen() {
           text={composed.routes.length === 0
             ? "Élargissez les horaires, le budget ou les envies, et relancez l'intrigue."
             : chosen ? undefined : "Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, votre passager n'en verra que les indices."}>
-          {chosen ? (
-            <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name, route: picked } }}>Ouvrir la révélation</PrimaryLink>
+          {chosen && inHistory ? (
+            <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name } }}>Ouvrir la révélation</PrimaryLink>
           ) : null}
           <TextButton onPress={() => (chosen ? router.back() : setComposed(null))}>{chosen ? '← Retour' : '← Changer nos envies'}</TextButton>
         </PageCard>
@@ -177,7 +192,7 @@ export default function SoireeScreen() {
           <RouteResult
             key={route.index}
             route={route}
-            chosen={picked === String(route.index)}
+            chosen={chosen && inHistory}
             busyRedo={busyRedo}
             onRedo={redo}
             onChoose={() => choose(route)}

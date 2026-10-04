@@ -29,7 +29,7 @@ export function TabBar() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const path = usePathname();
-  const params = useGlobalSearchParams<{ soiree?: string; route?: string }>();
+  const params = useGlobalSearchParams<{ soiree?: string }>();
   const { role } = useCouple();
   const [upcoming, setUpcoming] = useState<EveningHistoryRow[]>([]);
   const next = upcoming[0] ?? null;
@@ -40,9 +40,9 @@ export function TabBar() {
     upcomingEvenings(eveningDay(new Date())).then(setUpcoming).catch(() => {});
   }, [role, path]);
 
-  const evening: Href | null = next ? { pathname: '/revelation', params: { soiree: next.page_name, route: String(next.route_index) } } : null;
+  const evening: Href | null = next ? { pathname: '/revelation', params: { soiree: next.page_name } } : null;
   // Lit on any evening still to come: the compass leafs through them (EveningsNav).
-  const onEvening = path === '/revelation' && upcoming.some((e) => params.soiree === e.page_name && params.route === String(e.route_index));
+  const onEvening = path === '/revelation' && upcoming.some((e) => params.soiree === e.page_name);
   const items: Item[] = role === 'passager'
     ? [
       { icon: 'maison', label: 'Accueil', href: '/', active: path === '/' },

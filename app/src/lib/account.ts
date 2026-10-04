@@ -53,8 +53,7 @@ export type EveningHistoryRow = {
   passager_email: string | null;
   invite_code: string; // the link's code, renewed when the passager is let go
   reveal_mode?: string; // how its programme is lifted for the passager (lib/clues.ts RevealMode); absent before the migration
-  page_name: string;
-  route_index: number;
+  page_name: string; // the evening's page on the server: once kept, its only route
   title: string;
   secret_title: string | null; // "Le Pacte de l'Île Saint-Louis", fixed when kept; null for older evenings
   pitch: string;
@@ -84,10 +83,9 @@ export async function upcomingEvenings(today: string, limit = 20): Promise<Eveni
   return (data ?? []) as EveningHistoryRow[];
 }
 
-// One evening kept in the couple's history: the route they actually picked, among the ones proposed.
+// One evening kept in the couple's history: the route they actually picked, the page's only one once chosen (chooseRoute).
 export async function chooseEvening(input: {
   pageName: string;
-  routeIndex: number;
   title: string;
   secretTitle: string;
   pitch: string;
@@ -97,33 +95,29 @@ export async function chooseEvening(input: {
   const user = await currentUser();
   if (!user) throw new Error('Connectez-vous pour la garder dans votre historique.');
   const { error } = await supabase.from('soirees_choisies').insert({
-    user_id: user.id, page_name: input.pageName, route_index: input.routeIndex,
+    user_id: user.id, page_name: input.pageName,
     title: input.title, secret_title: input.secretTitle, pitch: input.pitch, vibes: input.vibes, day: input.day,
   });
-  if (error) throw new Error(error.message);
+  // Already kept (a second tap, one page per evening): nothing more to do.
+  if (error && error.code !== '23505') throw new Error(error.message);
 }
 
 // A kept evening's secret name, as it was fixed when kept (readable by the passager too).
-export async function keptSecretTitle(pageName: string, routeIndex: number): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('soirees_choisies').select('secret_title').eq('page_name', pageName).eq('route_index', routeIndex)
-    .order('chosen_at', { ascending: false }).limit(1);
+export async function keptSecretTitle(pageName: string): Promise<string | null> {
+  const { data, error } = await supabase.from('soirees_choisies').select('secret_title').eq('page_name', pageName).maybeSingle();
   if (error) throw new Error(error.message);
-  return (data?.[0]?.secret_title as string | null | undefined) ?? null;
+  return (data?.secret_title as string | null | undefined) ?? null;
 }
 
 // What the organiser has booked for a kept evening: the id (source_id:external_id) of each step marked "réservé".
-export async function bookedSteps(pageName: string, routeIndex: number): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('soirees_choisies').select('booked').eq('page_name', pageName).eq('route_index', routeIndex)
-    .order('chosen_at', { ascending: false }).limit(1);
+export async function bookedSteps(pageName: string): Promise<string[]> {
+  const { data, error } = await supabase.from('soirees_choisies').select('booked').eq('page_name', pageName).maybeSingle();
   if (error) throw new Error(error.message);
-  return (data?.[0]?.booked as string[] | undefined) ?? [];
+  return (data?.booked as string[] | undefined) ?? [];
 }
 
-export async function saveBookedSteps(pageName: string, routeIndex: number, booked: string[]) {
-  const { data, error } = await supabase
-    .from('soirees_choisies').update({ booked }).eq('page_name', pageName).eq('route_index', routeIndex).select('id');
+export async function saveBookedSteps(pageName: string, booked: string[]) {
+  const { data, error } = await supabase.from('soirees_choisies').update({ booked }).eq('page_name', pageName).select('id');
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error("Cette soirée n'est pas gardée sur votre compte.");
 }
@@ -148,13 +142,11 @@ export async function deleteMyAccount() {
   await supabase.auth.signOut();
 }
 
-// The kept evening of a page and route, as the revelation finds it.
-export async function keptEvening(pageName: string, routeIndex: number): Promise<EveningHistoryRow | null> {
-  const { data, error } = await supabase
-    .from('soirees_choisies').select('*').eq('page_name', pageName).eq('route_index', routeIndex)
-    .order('chosen_at', { ascending: false }).limit(1);
+// The kept evening of a page, as the revelation finds it.
+export async function keptEvening(pageName: string): Promise<EveningHistoryRow | null> {
+  const { data, error } = await supabase.from('soirees_choisies').select('*').eq('page_name', pageName).maybeSingle();
   if (error) throw new Error(error.message);
-  return (data?.[0] as EveningHistoryRow | undefined) ?? null;
+  return (data as EveningHistoryRow | null) ?? null;
 }
 
 // How the passager's programme is lifted (instigateur only, RLS: their own row).

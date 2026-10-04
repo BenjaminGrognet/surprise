@@ -141,27 +141,6 @@ def test_come_to_paris_closed_day():
     assert booking.call_count == 1
 
 
-def test_engine_in_links_and_pages():
-    assert availability._engine_in("https://bookings.zenchef.com/results?rid=351778&pid=1001") == ("zenchef", "351778")
-    assert availability._engine_in('<a href="https://bookings.zenchef.com/results?lang=fr&amp;rid=353900">') == ("zenchef", "353900")
-    assert availability._engine_in("https://www.sevenrooms.com/reservations/sienarestaurant") == ("sevenrooms", "sienarestaurant")
-    # {"domain":"activeroom-paris.4escape.io"}
-    settings = '<div class="forescape-catalog" data-widget-id="7175" data-settings="b64.eyJkb21haW4iOiJhY3RpdmVyb29tLXBhcmlzLjRlc2NhcGUuaW8ifQ=="></div>'
-    assert availability._engine_in(settings) == ("4escape", "activeroom-paris.4escape.io")
-    assert availability._engine_in('<div class="forescape" data-subdomain="wyb-immersion" data-type="bookings">') == ("4escape", "wyb-immersion.4escape.io")
-    assert availability._engine_in('<a href="https://www.4escape.io">Propulsé par 4escape</a>') is None
-
-
-@respx.mock
-def test_find_engine_reads_the_linked_page():
-    respx.get("https://casa-loca.example/reservation/").mock(
-        return_value=httpx.Response(200, text='<iframe src="https://bookings.zenchef.com/results?rid=353900&amp;pid=1001">')
-    )
-    respx.get("https://down.example/").mock(side_effect=httpx.ConnectError("dns"))
-    with httpx.Client() as client:
-        assert availability.find_engine(client, ["https://down.example/", "https://casa-loca.example/reservation/"]) == ("zenchef", "353900")
-
-
 def zenchef_slot(name, guests=(2, 3, 4), **extra):
     return {"name": name, "closed": False, "marked_as_full": False, "possible_guests": list(guests), **extra}
 
@@ -240,5 +219,19 @@ def test_wecandoo_keeps_sessions_with_two_seats_left():
     ]}))
     with httpx.Client() as client:
         result = availability.check_wecandoo(client, url, DAY)
+        # Its id known at collection: no page to read.
+        assert availability.check_wecandoo(client, "4512", DAY) == result
     assert (result.available, result.slots) == (True, ["19:00-21:00"])
     assert events.calls[0].request.url.params["start"] == "2026-10-09T00:00:00+02:00"
+    assert respx.calls.call_count == 3
+
+
+@respx.mock
+def test_the_engine_asked_is_the_one_found_at_collection():
+    events = respx.get(availability.WECANDOO_EVENTS.format(4512)).mock(return_value=httpx.Response(200, json={"data": []}))
+    workshop = {"source_id": "selections_couple", "activity": {"booking": {"mode": "creneau", "check": "wecandoo:4512"}}}
+    with httpx.Client() as client:
+        assert availability.check(client, workshop, DAY, 2)[0] == "Wecandoo"
+        assert availability.check(client, {"activity": {"booking": {"mode": "billetterie", "engine": "Fever"}}}, DAY, 2) is None
+        assert availability.check(client, {"activity": {}}, DAY, 2) is None
+    assert events.call_count == 1

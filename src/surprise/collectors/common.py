@@ -18,8 +18,8 @@ from typing import Any
 import httpx
 from pydantic import HttpUrl, TypeAdapter, ValidationError
 
-from surprise.booking import PageChecks, booking_engine, booking_urls, is_free, is_open, is_walk_in
-from surprise.models import Activity, Offer, RawRecord
+from surprise.booking import PageChecks, booking_found, booking_urls, is_free, is_open, is_walk_in
+from surprise.models import Activity, Booking, BookingMode, Offer, RawRecord
 
 USER_AGENT = "surprise-collector/0.1"
 # Fiches saved together; booking pages read at once (one at a time per site).
@@ -89,22 +89,28 @@ def euro_amounts(text: str | None) -> list[Decimal]:
 
 
 def require_booking(client: httpx.Client, result: Normalized, checks: PageChecks | None = None) -> Normalized:
-    """Only free activities, or ones bookable through a known ticketing or booking site, are kept.
+    """Only free activities, or ones bookable through a known ticketing or booking site, are kept, with how they are
+    booked (Booking): free, a slot an engine tells for a date, a ticketing, or no booking.
 
     Bars, clubs and restaurants are kept while open, marked not bookable online when they are not.
-    Rejected activities keep their normalization, to be reviewed apart in moderation.
+    Rejected activities keep their normalization, to be reviewed apart in moderation. A collector that knows its
+    platform's id for the slots (Wecandoo) has set the booking already.
     """
     activity = result.activity
-    if not activity or result.rejection or is_free(activity):
+    if not activity or result.rejection or (activity.booking and activity.booking.check):
         return result
+    if is_free(activity):
+        return Normalized(result.raw, activity.model_copy(update={"booking": Booking(mode=BookingMode.FREE)}))
     checks = checks or PageChecks()
-    if booking_engine(client, booking_urls(activity), checks):
-        return result
+    if found := booking_found(client, booking_urls(activity), checks):
+        engine, check = found
+        booking = Booking(mode=BookingMode.SLOT if check else BookingMode.TICKETING, engine=engine, check=check)
+        return Normalized(result.raw, activity.model_copy(update={"booking": booking}))
     if is_walk_in(activity):
         if not is_open(client, activity, json.dumps(result.raw.payload, ensure_ascii=False), checks):
             return Normalized(result.raw, activity, "fermé définitivement")
         offers = [offer.model_copy(update={"online_booking": False}) for offer in activity.offers] or [Offer(online_booking=False)]
-        return Normalized(result.raw, activity.model_copy(update={"offers": offers}))
+        return Normalized(result.raw, activity.model_copy(update={"offers": offers, "booking": Booking(mode=BookingMode.WALK_IN)}))
     return Normalized(result.raw, activity, "ni gratuit ni réservable en ligne")
 
 
@@ -176,6 +182,11 @@ def collect_source(
         days = getattr(sys.modules[collect.__module__], "FRESH_DAYS", None)
         _fresh.update(store.fresh_pages(source_id, days) if days else store.fresh_pages(source_id))
     checks = PageChecks(store.page_checks() if store else None)
+    # Imported here: the enrichment imports the collectors.
+    from surprise import enrich
+
+    if store:
+        enrich.load_answers(store)
     counts: Counter = Counter()
     with (
         httpx.Client(timeout=15, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client,
@@ -188,6 +199,7 @@ def collect_source(
                 store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
                 store.save_page_checks(checks.new)
                 checks.new = {}
+                enrich.save_answers(store)
             for r in results:
                 counts["fiches"] += 1
                 counts["pages déjà fraîches"] += bool(r.raw.payload.get("_cached"))

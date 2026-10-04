@@ -123,6 +123,21 @@ class Offer(BaseModel):
         return self
 
 
+class BookingMode(StrEnum):
+    FREE = "gratuit"
+    SLOT = "creneau"  # booked online through an engine that tells a date's slots (surprise.availability): checked
+    TICKETING = "billetterie"  # booked online elsewhere: a session is bookable, a date is not checked
+    WALK_IN = "sans_resa"  # a bar, club or restaurant without online booking: being open is enough
+
+
+class Booking(BaseModel):
+    """How the activity is booked, as found at collection (surprise.booking)."""
+
+    mode: BookingMode
+    engine: str | None = None  # the platform or ticketing found: "Zenchef", "Fever", "billetterie du lieu"…
+    check: str | None = None  # a slot's: the engine asked for a date and the activity's id there, "zenchef:351778"
+
+
 class Activity(BaseModel):
     title: str
     description: str | None = None
@@ -137,6 +152,7 @@ class Activity(BaseModel):
     categories: list[str] = Field(default_factory=list)
     occurrences: list[Occurrence] = Field(default_factory=list)
     offers: list[Offer] = Field(default_factory=list)
+    booking: Booking | None = None
 
     @field_validator("categories")
     @classmethod

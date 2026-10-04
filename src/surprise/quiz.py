@@ -398,6 +398,8 @@ def new_id() -> str:
 _REDO = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)(?:/steps/(?P<step>\d+))?$")
 # /api/parcours/<page>/routes/<index>/steps/<position>/remove: the couple takes a step out.
 _REMOVE = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)/steps/(?P<step>\d+)/remove$")
+# /api/parcours/<page>/routes/<index>/choose: the couple keeps this route, the page's only one from then on.
+_CHOOSE = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)/choose$")
 BASE_MINUTES = 15
 
 
@@ -490,6 +492,11 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                 if error := parcours.remove(remove["name"], int(remove["route"]), int(remove["step"])):
                     return self._send_json(HTTPStatus.CONFLICT, {"error": error})
                 return self._send_json(HTTPStatus.OK, parcours.soiree_json(remove["name"], parcours.load(remove["name"])))
+            if choose := _CHOOSE.match(path):
+                with open_store(db) as store:
+                    if error := parcours.choose(choose["name"], int(choose["route"]), store):
+                        return self._send_json(HTTPStatus.CONFLICT, {"error": error})
+                    return self._send_json(HTTPStatus.OK, parcours.soiree_json(choose["name"], parcours.load(choose["name"], store)))
             if redo := _REDO.match(path):
                 return self._redo(redo["name"], int(redo["route"]), None if redo["step"] is None else int(redo["step"]))
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
@@ -514,12 +521,9 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                 profile = profile_from({})
             elif (profile := valid_profile(body.get("profile"))) is None:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "profil invalide"})
-            # The evenings the couple chose (its history): their activities are never proposed again.
+            # The evenings the couple chose (its history, by their pages): their activities are never proposed again.
             chosen = body.get("done") if isinstance(body.get("done"), list) else []
-            chosen = [
-                (c["page_name"], c["route_index"]) for c in chosen[:200]
-                if isinstance(c, dict) and isinstance(c.get("page_name"), str) and type(c.get("route_index")) is int
-            ]
+            chosen = [name for name in chosen[:200] if isinstance(name, str)]
             with open_store(db) as store:
                 done = store.chosen_activities(chosen)
                 overnight = body.get("decoucher") is True
@@ -533,14 +537,14 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                         store, requests,
                         count=3, checks=checks, name=name, base=base(store), name_later=True,
                     )
-                    state = parcours.load(name)
+                    state = parcours.load(name, store)
             self._send_json(HTTPStatus.OK, parcours.soiree_json(name, state))
 
         def _redo(self, name: str, index: int, position: int | None) -> None:
             """Another route in place of route `index`, or another activity at its step `position`."""
             with open_store(db) as store, composing:
                 error = parcours.regenerate(store, base(store), name, index, position, checks=min(checks, 10))
-                state = parcours.load(name)
+                state = parcours.load(name, store)
             if error:
                 return self._send_json(HTTPStatus.CONFLICT, {"error": error})
             self._send_json(HTTPStatus.OK, parcours.soiree_json(name, state))

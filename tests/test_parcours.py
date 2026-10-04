@@ -211,9 +211,82 @@ def test_regenerate_rewrites_the_saved_state(tmp_path, monkeypatch):
     assert parcours.load("essai")["routes"][0].steps[1].start.tzinfo == parcours.PARIS
     assert ("test", "autre") in state["seen"]
     assert parcours.soiree_json("essai", state)["routes"][0]["steps"][1]["title"] == "Parcours sensoriel dans le noir"
-    # The only other evening would repeat a step: the whole route has no other draw.
-    assert parcours.regenerate(None, None, "essai", 0, claude=False) == "aucun autre parcours complet ce soir-là"
-    assert parcours.regenerate(None, None, "absent", 0, claude=False) == "parcours introuvable : relancez la composition"
+    # The only other evening would repeat a step: the whole route has no other draw (from the candidates kept by the first redraw).
+    base = parcours.Base([c.item for c in candidates], {c.key: 35 for c in candidates})
+    assert parcours.regenerate(None, base, "essai", 0, claude=False) == "aucun autre parcours complet ce soir-là"
+    assert parcours.regenerate(None, base, "absent", 0, claude=False) == "parcours introuvable : relancez la composition"
+
+
+def _three_routes(tmp_path, monkeypatch):
+    """An evening composed with three routes, saved with its candidates."""
+    req = request(vibes=["insolite", "fete"], trame=["apero", "insolite"])
+    entries = [
+        item("bar", "Bar à cocktails", ["bar"], kind="permanent", hours="Mo-Su 18:00-02:00", venue="Bar"),
+        item("cave", "Cave à vins", ["bar"], kind="permanent", hours="Mo-Su 18:00-02:00", lat=48.87, venue="Cave"),
+        item("pub", "Pub irlandais", ["bar"], kind="permanent", hours="Mo-Su 18:00-02:00", lat=48.85, venue="Pub"),
+        item("immersif", "Expérience immersive", ["lieu_insolite"], occurrences=[at(20, 15)], lat=48.861, venue="Salle"),
+        item("noir", "Parcours sensoriel dans le noir", ["lieu_insolite"], occurrences=[at(20, 30)], lat=48.869, venue="Noir"),
+        item("illusions", "Musée des illusions", ["lieu_insolite"], occurrences=[at(20, 30)], lat=48.851, venue="Illusions"),
+        item("autre", "Expérience secrète", ["lieu_insolite"], occurrences=[at(21)], lat=48.8605, venue="Secret"),
+    ]
+    candidates = _scored(entries, req)
+    base = parcours.Base(entries, {c.key: 35 for c in candidates})
+    monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
+    routes = parcours.pick([r for r in parcours.compose(candidates, req) if r.steps[1].candidate.key[1] != "autre"], 3)
+    for route in routes:
+        route.request = req
+    state = {"routes": routes, "requests": [req], "seen": {s.candidate.key for r in routes for s in r.steps}}
+    parcours.save("essai", state, candidates=[candidates])
+    return req, base, routes
+
+
+def test_a_redraw_starts_from_the_candidates_kept_at_the_composition(tmp_path, monkeypatch):
+    req, base, routes = _three_routes(tmp_path, monkeypatch)
+    assert len(routes) == 3
+
+    def never(*args):
+        raise AssertionError("the base is not read again")
+
+    monkeypatch.setattr(parcours, "candidates_for", never)
+    assert parcours.regenerate(None, base, "essai", 0, 1, claude=False) is None
+    assert parcours.load("essai")["routes"][0].steps[1].candidate.key == ("test", "autre")
+    # A candidate kept, its activity rejected since (out of the base): not drawn again.
+    with open_store(tmp_path / "s.db") as store:
+        kept = store.soiree_candidates("essai", 0, parcours.CACHE_HOURS)
+    assert {c.key[1] for c in parcours._candidates_from(kept, base)} == {e["external_id"] for e in base.items}
+    smaller = parcours.Base([i for i in base.items if i["external_id"] != "noir"], base.originality)
+    assert ("test", "noir") not in {c.key for c in parcours._candidates_from(kept, smaller)}
+
+
+def test_the_candidates_are_kept_without_their_luck():
+    req, candidates, _ = _night()
+    drawn = parcours.lucky(candidates)
+    assert all(0 <= d.score - c.score <= parcours.VARIETY for c, d in zip(candidates, drawn))
+    base = parcours.Base([c.item for c in candidates], {c.key: 35 for c in candidates})
+    assert parcours._candidates_from(parcours._candidates_json(candidates), base) == candidates
+
+
+def test_a_chosen_route_is_the_evenings_only_one(tmp_path, monkeypatch):
+    req, base, routes = _three_routes(tmp_path, monkeypatch)
+    kept = [s.candidate.key for s in routes[2].steps]
+    assert parcours.choose("essai", 2) is None
+    state = parcours.load("essai")
+    assert state["chosen"] and [[s.candidate.key for s in r.steps] for r in state["routes"]] == [kept]
+    page = parcours.soiree_json("essai", state)
+    assert page["chosen"] and [r["index"] for r in page["routes"]] == [0] and page["routes"][0]["redo"] == "routes/0"
+    with open_store(tmp_path / "s.db") as store:
+        assert store.chosen_activities(["essai", "absente"]) == set(kept)
+        assert store._run("select count(*) from soiree_steps where soiree_id = 'essai'").fetchone() == (len(kept),)
+        assert store.soiree_candidates("essai", 0, parcours.CACHE_HOURS) is None
+    # Chosen again (a retry), nothing changes; another route is no more.
+    assert parcours.choose("essai", 0) is None and len(parcours.load("essai")["routes"]) == 1
+    assert parcours.choose("essai", 1) == "parcours introuvable : relancez la composition"
+    # A step changed later is drawn among candidates found anew, checked live.
+    found = []
+    monkeypatch.setattr(parcours, "candidates_for", lambda store, base_, request_, checks: found.append(checks) or parcours._candidates_from(
+        parcours._candidates_json(_scored(base.items, req)), base))
+    assert parcours.regenerate(None, base, "essai", 0, 1, checks=10, claude=False) is None
+    assert found == [10]
 
 
 def test_no_stag_party_and_no_late_dinner():
@@ -371,7 +444,7 @@ def test_the_activities_of_a_chosen_evening_are_never_proposed_again(tmp_path, m
     route.request = req
     parcours.save("essai", {"routes": [route], "requests": [req], "seen": set()})
     with open_store(tmp_path / "s.db") as store:
-        done = store.chosen_activities([("essai", 0), ("absente", 0)])
+        done = store.chosen_activities(["essai", "absente"])
     assert done == {s.candidate.key for s in route.steps}
     base = parcours.Base([c.item for c in candidates], {c.key: 35 for c in candidates})
     req.done = done
@@ -418,7 +491,7 @@ def test_a_dead_image_is_replaced_by_the_official_sites_before_leaving_the_step_
     assert parcours.unshown(route.steps) == {show.candidate.key}
     assert parcours.images.of(bar.candidate.item) == "https://site.example/new.jpg"
     with open_store(tmp_path / "s.db") as store:
-        assert store.page_checks()["https://example.org/immersif.jpg"] == ("image", True)
+        assert store.page_checks()["https://example.org/immersif.jpg"] == ("image", True, None)
 
 
 def test_secret_title_names_the_quarter_never_the_venue():

@@ -8,6 +8,8 @@ Zenchef…). A link to a venue's home page or information page does not.
 Bars, clubs and restaurants need no booking: a couple can walk in while they are open.
 """
 
+import base64
+import json
 import re
 import threading
 from collections import defaultdict
@@ -112,6 +114,44 @@ def engine_in(text: str) -> str | None:
     return next((name for name, pattern in _ENGINE_PATTERNS.items() if pattern.search(text)), None)
 
 
+# Engines surprise.availability asks for a date, and the activity's id there: in a booking widget…
+_ZENCHEF_ID = re.compile(r"bookings\.zenchef\.com/[^\"'\s<>]*?[?&](?:amp;)?rid=(\d+)|data-restaurant(?:-id)?=[\"'](\d+)")
+_SEVENROOMS_VENUE = re.compile(r"sevenrooms\.com/reservations/([\w-]+)")
+_4ESCAPE_SETTINGS = re.compile(r'class="forescape-[\w-]+"[^>]*data-settings="b64\.([A-Za-z0-9+/=]+)"')
+_4ESCAPE_SUBDOMAIN = re.compile(r'class="forescape"[^>]*data-subdomain="([\w-]+)"')
+_4ESCAPE_DOMAIN = re.compile(r"(?<![\w-])(?!www\.)[\w-]+\.4escape\.io\b")
+# … or a platform's listing, by its link.
+_LISTINGS = {
+    "funbooker": re.compile(r"funbooker\.com/[a-z]{2}/annonce/([\w-]+)"),
+    "wecandoo": re.compile(r"https://wecandoo\.fr/atelier/[\w-]+"),
+    "come_to_paris": re.compile(r"https://www\.cometoparis\.com/[a-z]{3}/[\w-]+/[\w-]+-m\d+"),
+}
+# Engines whose page gives the activity's id (a widget), worth reading for it.
+WIDGET_ENGINES = {"Zenchef", "SevenRooms", "4escape"}
+
+
+def slot_check(text: str, link: bool = False) -> str | None:
+    """The engine surprise.availability asks for a date and the activity's id there ("zenchef:351778",
+    "funbooker:atelier-gravure"): from a booking widget in a page or link, from a platform's listing in a link only."""
+    if match := _ZENCHEF_ID.search(text):
+        return f"zenchef:{match.group(1) or match.group(2)}"
+    if match := _SEVENROOMS_VENUE.search(text):
+        return f"sevenrooms:{match.group(1)}"
+    if match := _4ESCAPE_SETTINGS.search(text):
+        try:
+            return f"4escape:{json.loads(base64.b64decode(match.group(1)))['domain']}"
+        except (ValueError, KeyError):
+            pass
+    if match := _4ESCAPE_SUBDOMAIN.search(text):
+        return f"4escape:{match.group(1)}.4escape.io"
+    if match := _4ESCAPE_DOMAIN.search(text):
+        return f"4escape:{match.group(0)}"
+    for engine, pattern in _LISTINGS.items() if link else ():
+        if match := pattern.search(text):
+            return f"{engine}:{match.group(match.lastindex or 0)}"
+    return None
+
+
 def own_ticketing(url: str) -> str | None:
     """A venue's own ticketing or booking site: "billetterie.opera-comique.com", "booking.revo-partybox.com"."""
     parts = urlsplit(url)
@@ -130,8 +170,12 @@ def booking_form(url: str, page: str) -> str | None:
     return "formulaire de réservation" if (_FORM.search(url) or _FORM.search(page)) and _ASKS_BOOKING.search(page) else None
 
 
-def page_verdict(client: httpx.Client, url: str) -> tuple[str | None, bool] | None:
-    """What a page says: the booking engine it leads to, and whether the place has closed; None if unreachable."""
+# What a page says: the booking engine it leads to, whether the place has closed, and its slot check (slot_check).
+Verdict = tuple[str | None, bool, str | None]
+
+
+def page_verdict(client: httpx.Client, url: str) -> Verdict | None:
+    """What a page says (Verdict); None if unreachable."""
     # Imported here: the enrichment imports the collectors, which check bookings with this module.
     from surprise.enrich import booking_link
 
@@ -143,12 +187,14 @@ def page_verdict(client: httpx.Client, url: str) -> tuple[str | None, bool] | No
         engine_in(str(page.url)) or engine_in(page.text) or booking_form(str(page.url), page.text)
         or ticketing_of_site(str(page.url), page.text)
     )
-    # The site's "Réserver" page ("perpette.com/reserver/") embeds the widget.
-    if not engine and (link := booking_link(str(page.url), page.text)):
-        engine = own_ticketing(link)
-        if not engine and (linked := _get(client, link)):
-            engine = engine_in(str(linked.url)) or engine_in(linked.text) or ticketing_of_site(str(linked.url), linked.text)
-    return engine, closed
+    check = slot_check(str(page.url), link=True) or slot_check(page.text)
+    # The site's "Réserver" page ("perpette.com/reserver/") embeds the widget, or the id of the one the site names.
+    if (not engine or engine in WIDGET_ENGINES and not check) and (link := booking_link(str(page.url), page.text)):
+        engine, check = engine or own_ticketing(link), check or slot_check(link, link=True)
+        if (not engine or engine in WIDGET_ENGINES and not check) and (linked := _get(client, link)):
+            engine = engine or engine_in(str(linked.url)) or engine_in(linked.text) or ticketing_of_site(str(linked.url), linked.text)
+            check = check or slot_check(str(linked.url), link=True) or slot_check(linked.text)
+    return engine, closed, check
 
 
 class PageChecks:
@@ -157,13 +203,13 @@ class PageChecks:
     Shared by threads: one page at a time per site. `known` are verdicts kept in the store; `new` the ones to save.
     """
 
-    def __init__(self, known: dict[str, tuple[str | None, bool]] | None = None) -> None:
-        self.verdicts: dict[str, tuple[str | None, bool] | None] = dict(known or {})
-        self.new: dict[str, tuple[str | None, bool]] = {}
+    def __init__(self, known: dict[str, Verdict] | None = None) -> None:
+        self.verdicts: dict[str, Verdict | None] = dict(known or {})
+        self.new: dict[str, Verdict] = {}
         self._lock = threading.Lock()
         self._hosts: dict[str, threading.Lock] = defaultdict(threading.Lock)
 
-    def get(self, client: httpx.Client, url: str) -> tuple[str | None, bool] | None:
+    def get(self, client: httpx.Client, url: str) -> Verdict | None:
         if url not in self.verdicts:
             with self._lock:
                 host = self._hosts[urlsplit(url).hostname or ""]
@@ -171,20 +217,30 @@ class PageChecks:
                 if url not in self.verdicts:
                     verdict = self.verdicts[url] = page_verdict(client, url)
                     if verdict is not None:
-                        self.new[url] = verdict
+                        with self._lock:
+                            self.new[url] = verdict
         return self.verdicts[url]
 
+    def take_new(self) -> dict[str, Verdict]:
+        """The verdicts read since the last call, to save, while other threads go on reading pages."""
+        with self._lock:
+            new, self.new = self.new, {}
+        return new
 
-def booking_engine(client: httpx.Client, urls: Iterable[str], checks: PageChecks | None = None) -> str | None:
-    """Where the activity can be booked online: in its links first, then in the pages they lead to."""
+
+def booking_found(client: httpx.Client, urls: Iterable[str], checks: PageChecks | None = None) -> tuple[str, str | None] | None:
+    """Where the activity can be booked online, and its slot check when an engine answers for a date (slot_check):
+    in its links first, then in the pages they lead to."""
     urls = list(dict.fromkeys(urls))
-    for url in urls:
-        if engine := engine_in(url) or own_ticketing(url):
-            return engine
     checks = checks or PageChecks()
     for url in urls:
+        if engine := engine_in(url) or own_ticketing(url):
+            # A widget's link without the venue's id ("widget.zenchef.com/…"): its pages may give it.
+            pages = (verdict[2] for u in urls if engine in WIDGET_ENGINES and (verdict := checks.get(client, u)))
+            return engine, slot_check(url, link=True) or next(filter(None, pages), None)
+    for url in urls:
         if (verdict := checks.get(client, url)) and verdict[0]:
-            return verdict[0]
+            return verdict[0], verdict[2]
     return None
 
 

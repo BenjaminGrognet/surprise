@@ -10,7 +10,7 @@ import { upcomingEvenings, type EveningHistoryRow } from '@/lib/account';
 import { eveningDay, shortDay } from '@/lib/dates';
 
 // Above an evening still to come, when several are: the one before, "2 / 3" and its day, the one after.
-export function EveningsNav({ soiree, route }: { soiree: string; route: number }) {
+export function EveningsNav({ soiree }: { soiree: string }) {
   const theme = useTheme();
   const [evenings, setEvenings] = useState<EveningHistoryRow[]>([]);
 
@@ -18,11 +18,11 @@ export function EveningsNav({ soiree, route }: { soiree: string; route: number }
     upcomingEvenings(eveningDay(new Date())).then(setEvenings).catch(() => {});
   }, []);
 
-  const at = evenings.findIndex((e) => e.page_name === soiree && e.route_index === route);
+  const at = evenings.findIndex((e) => e.page_name === soiree);
   if (evenings.length < 2 || at < 0) return null;
 
   const go = (e: EveningHistoryRow | undefined) =>
-    e && router.setParams({ soiree: e.page_name, route: String(e.route_index) });
+    e && router.setParams({ soiree: e.page_name });
   const day = evenings[at].day;
 
   return (

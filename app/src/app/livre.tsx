@@ -20,12 +20,12 @@ import { book, bookOpen, sealPage, type Book, type Fragment, type Page } from '@
 // photo, a note. Once sealed, the route fades from the history and only the memory stays; the other's page
 // shows once one's own is sealed.
 export default function LivreScreen() {
-  const { soiree, route } = useLocalSearchParams<{ soiree?: string; route?: string }>();
+  const { soiree } = useLocalSearchParams<{ soiree?: string }>();
   const [state, setState] = useState<Book | null | 'loading' | 'error'>('loading');
 
   const load = useCallback(
-    () => (soiree && route !== undefined ? book(soiree, Number(route)) : Promise.resolve(null)).then(setState, () => setState('error')),
-    [soiree, route],
+    () => (soiree ? book(soiree) : Promise.resolve(null)).then(setState, () => setState('error')),
+    [soiree],
   );
   useEffect(() => {
     load();
@@ -58,7 +58,7 @@ function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed
   const mine = pages.find((p) => p.mine);
   const theirs = pages.find((p) => !p.mine);
   const open = bookOpen(evening, isoDay(new Date()));
-  const params = { soiree: evening.page_name, route: String(evening.route_index) };
+  const params = { soiree: evening.page_name };
 
   return (
     <Screen gap={Spacing.four}>

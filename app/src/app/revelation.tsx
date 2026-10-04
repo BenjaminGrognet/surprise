@@ -28,32 +28,38 @@ import { curtainFalls } from '@/lib/souvenirs';
 // "La Révélation": the kept evening seen from each account of the couple. The instigateur has the whole timed
 // roadmap; the passager only gets riddles, and a veiled programme that lifts step by step.
 export default function RevelationScreen() {
-  const { soiree, route: index } = useLocalSearchParams<{ soiree?: string; route?: string }>();
+  const { soiree } = useLocalSearchParams<{ soiree?: string }>();
   const [route, setRoute] = useState<SoireeRoute | null | 'missing' | 'offline'>(null);
   const [attempt, setAttempt] = useState(0);
   const [kept, setKept] = useState<string | null>(null);
   const { role } = useCouple();
   const [evening, setEvening] = useState<EveningHistoryRow | null>(null);
   const loadEvening = useCallback(() => {
-    if (soiree && index !== undefined) keptEvening(soiree, Number(index)).then(setEvening).catch(() => {});
-  }, [soiree, index]);
+    if (soiree) keptEvening(soiree).then(setEvening).catch(() => {});
+  }, [soiree]);
 
-  const lost = !soiree || index === undefined;
+  const lost = !soiree;
 
-  useEffect(() => {
-    if (!soiree || index === undefined) return;
-    // Leafing to another evening: the previous one's roadmap goes before the next is unsealed.
+  // Leafing to another evening: the previous one's roadmap goes before the next is unsealed.
+  const [shownFor, setShownFor] = useState(soiree);
+  if (shownFor !== soiree) {
+    setShownFor(soiree);
     setRoute(null);
     setKept(null);
     setEvening(null);
+  }
+
+  useEffect(() => {
+    if (!soiree) return;
     getSoireeState(soiree)
-      .then((s) => setRoute(s.routes.find((r) => String(r.index) === index) ?? 'missing'))
+      // A kept evening is its route alone; one still to choose has no revelation.
+      .then((s) => setRoute((s.chosen && s.routes[0]) || 'missing'))
       // Only a 404 means the evening is gone; anything else is the server not answering, worth another try.
       .catch((e: Error) => setRoute(e.message.endsWith(': 404') ? 'missing' : 'offline'));
     // The name fixed when it was kept; the one the server would give its steps today, for older evenings.
-    keptSecretTitle(soiree, Number(index)).then(setKept).catch(() => {});
+    keptSecretTitle(soiree).then(setKept).catch(() => {});
     loadEvening();
-  }, [soiree, index, loadEvening, attempt]);
+  }, [soiree, loadEvening, attempt]);
 
   if (!lost && route === null) {
     return (
@@ -83,7 +89,7 @@ export default function RevelationScreen() {
   const mode = revealMode(evening?.reveal_mode);
   return (
     <Screen gap={Spacing.four}>
-      <EveningsNav soiree={soiree!} route={route.index} />
+      <EveningsNav soiree={soiree!} />
       {role === 'instigateur' ? (
         <>
           <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} mode={mode} onRoute={setRoute} />
@@ -95,7 +101,7 @@ export default function RevelationScreen() {
           ) : null}
         </>
       ) : (
-        <Surprised route={route} secretTitle={secretTitle} mode={mode} evening={`${soiree}:${route.index}`} />
+        <Surprised route={route} secretTitle={secretTitle} mode={mode} evening={soiree!} />
       )}
       <BookLink route={route} soiree={soiree!} />
     </Screen>
@@ -108,7 +114,7 @@ function BookLink({ route, soiree }: { route: SoireeRoute; soiree: string }) {
   if (!curtainFalls(route, now)) return null;
   return (
     <View style={styles.bookLink}>
-      <TextLink href={{ pathname: '/livre', params: { soiree, route: String(route.index) } }}>
+      <TextLink href={{ pathname: '/livre', params: { soiree } }}>
         Le rideau tombe : ouvrir le Livre des Secrets →
       </TextLink>
     </View>

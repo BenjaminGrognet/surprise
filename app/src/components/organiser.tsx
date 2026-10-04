@@ -38,8 +38,8 @@ export function Organiser({
   const left = toBook.filter((s) => !booked.includes(s.id)).length;
 
   useEffect(() => {
-    bookedSteps(pageName, route.index).then(setBooked).catch(() => {});
-  }, [pageName, route.index]);
+    bookedSteps(pageName).then(setBooked).catch(() => {});
+  }, [pageName]);
 
   // Plan B: another activity in place of an upcoming step, the rest of the evening kept. What was booked for the old one goes.
   async function swap(step: SoireeStep) {
@@ -47,12 +47,12 @@ export function Organiser({
     setSwapping(step.id);
     setSwapNotice('');
     try {
-      const next = (await redoPart(pageName, step.redo)).routes.find((r) => r.index === route.index);
+      const next = (await redoPart(pageName, step.redo)).routes[0];
       if (!next) throw new Error('Cette soirée a changé : rouvrez-la.');
       if (booked.includes(step.id)) {
         const rest = booked.filter((b) => b !== step.id);
         setBooked(rest);
-        saveBookedSteps(pageName, route.index, rest).catch(() => {});
+        saveBookedSteps(pageName, rest).catch(() => {});
       }
       onRoute(next);
       setSwapNotice('Plan B en place. Pensez à refaire la réservation si besoin.');
@@ -68,7 +68,7 @@ export function Organiser({
     const next = booked.includes(id) ? booked.filter((b) => b !== id) : [...booked, id];
     setBooked(next);
     setError('');
-    saveBookedSteps(pageName, route.index, next).catch((e: Error) => {
+    saveBookedSteps(pageName, next).catch((e: Error) => {
       setBooked(before);
       setError(e.message);
     });

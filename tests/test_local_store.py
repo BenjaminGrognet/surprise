@@ -73,8 +73,12 @@ def test_limit_counts_only_pages_read():
 
 def test_page_checks_are_kept(tmp_path):
     with LocalStore(tmp_path / "s.db") as store:
-        store.save_page_checks({"https://club.example/": ("billetterie du lieu", False), "https://ferme.example/": (None, True)})
-        assert store.page_checks() == {"https://club.example/": ("billetterie du lieu", False), "https://ferme.example/": (None, True)}
+        verdicts = {
+            "https://club.example/": ("billetterie du lieu", False, None), "https://ferme.example/": (None, True, None),
+            "https://resto.example/": ("Zenchef", False, "zenchef:351778"),
+        }
+        store.save_page_checks(verdicts)
+        assert store.page_checks() == verdicts
         assert store.page_checks(days=-1) == {}
 
 
@@ -215,9 +219,18 @@ def test_copy_adds_only_missing_rows(tmp_path, monkeypatch):
         source.save_soiree("soiree-a", "[]", 0, [(0, None, "Titre", "Pitch", 1.0)], [_step("12345")])
         assert isinstance(target, LocalStore)
         assert copy(source, target) == {
-            "raw_records": 4, "normalized": 4, "moderation": 1, "enrichment": 1, "keywords": 0, "osm_places": 0,
+            "raw_records": 4, "normalized": 4, "moderation": 1, "enrichment": 1, "keywords": 0, "osm_places": 0, "nominatim_answers": 0,
             "profiles": 0, "soirees": 1, "soiree_routes": 1, "soiree_steps": 1,
         }
         assert target.soiree("soiree-a") == source.soiree("soiree-a") and target.soiree("absente") is None
         assert set(copy(source, target).values()) == {0}
         assert target.list_for_moderation() == source.list_for_moderation()
+
+
+def test_an_older_base_reads_its_widget_pages_again_for_the_venues_id(tmp_path):
+    with closing(sqlite3.connect(tmp_path / "s.db")) as db:
+        db.execute("create table page_checks (url text primary key, engine text, closed boolean not null, checked_at text not null default (datetime('now')))")
+        db.executemany("insert into page_checks (url, engine, closed) values (?, ?, ?)", [("https://resto.example/", "Zenchef", False), ("https://club.example/", "Shotgun", False)])
+        db.commit()
+    with LocalStore(tmp_path / "s.db") as store:
+        assert store.page_checks() == {"https://club.example/": ("Shotgun", False, None)}

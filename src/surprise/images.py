@@ -108,7 +108,7 @@ def check(store_url: str | None = None, refresh: bool = False, limit: int | None
     (og:image), else recorded dead, which leaves the activity out of the evenings (surprise.parcours)."""
     with open_store(store_url) as store:
         items = [i for i in store.list_for_moderation() if i["status"] not in ("rejected", "filtered") and of(i)]
-        known = {url for url, (engine, _) in store.page_checks().items() if engine == CHECK} if not refresh else set()
+        known = {url for url, (engine, *_) in store.page_checks().items() if engine == CHECK} if not refresh else set()
     by_url: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in items:
         if of(item) not in known:
@@ -137,7 +137,7 @@ def check(store_url: str | None = None, refresh: bool = False, limit: int | None
                 if image := replacement(client, item, url):
                     store.save_enrichment(item["source_id"], item["external_id"], {"image_url": image, "image_origin": "site officiel"})
                     replaced += 1
-        store.save_page_checks({url: (CHECK, not ok) for url, ok in verdicts.items()})
+        store.save_page_checks({url: (CHECK, not ok, None) for url, ok in verdicts.items()})
     unknown = len(urls) - len(verdicts)
     print(f"{len(verdicts) - len(dead)} s'affichent, {len(dead)} mortes ({replaced} fiches ont une nouvelle image du site officiel),"
           f" {unknown} sans réponse (revues au prochain passage)")

@@ -57,7 +57,7 @@ export default function AccueilScreen() {
         setToSeal(history.find((r) => !!r.day && r.day < today && r.day >= isoDay(weekAgo) && !r.souvenirs?.length) ?? null);
         if (row) {
           const state = await getSoireeState(row.page_name).catch(() => null);
-          setUpcoming({ row, route: state?.routes.find((r) => r.index === row.route_index) ?? null });
+          setUpcoming({ row, route: state?.routes[0] ?? null });
         }
       }
       setLoaded(true);
@@ -100,7 +100,7 @@ function NextIntrigue({ row, route, role }: { row: EveningHistoryRow; route: Soi
   if (route && curtainFalls(route, now) && !row.souvenirs?.length) return <BookCall row={row} />;
   const start = route ? Date.parse(route.start) : null;
   const under = start != null && !!route && now >= start && now < Date.parse(route.end);
-  const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name, route: String(row.route_index) } });
+  const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name } });
   return (
     <IntrigueCard onPress={open} align="start" label="Ouvrir la révélation">
       <View style={styles.member}>
@@ -138,7 +138,7 @@ function Status({ row, route, role }: { row: EveningHistoryRow; route: SoireeRou
     ? next ? `Votre prochain indice arrive ${inTime(next.at, now)}` : 'Tous vos indices sont dévoilés'
     : row.passager ? 'Complices connectés : votre passager ne voit que les indices' : 'Votre passager n’a pas encore rejoint l’intrigue';
   const dot = invite ? theme.gold : theme.accent;
-  const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name, route: String(row.route_index) } });
+  const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name } });
   return (
     <View style={styles.status}>
       <View style={[styles.statusDot, { backgroundColor: dot, boxShadow: `0 0 8px ${dot}` }]} />
@@ -154,7 +154,7 @@ function Status({ row, route, role }: { row: EveningHistoryRow; route: SoireeRou
 
 // Le Livre des Secrets, at the end of the evening or the days after: a photo, a note, sealed.
 function BookCall({ row }: { row: EveningHistoryRow }) {
-  const open = () => router.push({ pathname: '/livre', params: { soiree: row.page_name, route: String(row.route_index) } });
+  const open = () => router.push({ pathname: '/livre', params: { soiree: row.page_name } });
   return (
     <PageCard
       onPress={open}
@@ -231,7 +231,7 @@ function FirstStep({ row, route, role }: { row: EveningHistoryRow; route: Soiree
   const mode = revealMode(row.reveal_mode);
   const veiled = role === 'passager' && !stepRevealed(route, step, now, mode);
   const tonight = route.day === isoDay(new Date(now));
-  const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name, route: String(row.route_index) } });
+  const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name } });
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>

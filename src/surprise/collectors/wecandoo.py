@@ -10,6 +10,7 @@ Bots get a prerendered page without these props: requests look like a browser's.
 import html
 import json
 import re
+from dataclasses import replace
 from datetime import datetime
 from typing import Any, Iterator
 
@@ -17,7 +18,7 @@ import httpx
 
 from surprise.collectors.common import Normalized, page, run, safe_url, with_reason
 from surprise.collectors.facts import BROWSER_HEADERS, lines, normalize_facts, sitemap, utc_now
-from surprise.models import RawRecord
+from surprise.models import Booking, BookingMode, RawRecord
 
 SOURCE_ID = "wecandoo"
 # Pages read less than this many days ago are not read again: a catalogue of activities, prices and slots change slowly.
@@ -72,7 +73,12 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
     youth = "jeune public" if "duo-parent-enfant" in (payload.get("tags") or []) else None
-    return with_reason(youth, normalize_facts(raw, payload | {"tags": None}, "Wecandoo", now))
+    result = normalize_facts(raw, payload | {"tags": None}, "Wecandoo", now)
+    if result.activity and payload.get("workshop_id"):
+        # Its sessions are asked by the workshop's id (surprise.availability): no page to read for it.
+        booking = Booking(mode=BookingMode.SLOT, engine="Wecandoo", check=f"wecandoo:{payload['workshop_id']}")
+        result = replace(result, activity=result.activity.model_copy(update={"booking": booking}))
+    return with_reason(youth, result)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

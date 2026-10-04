@@ -63,8 +63,8 @@ export type Night = {
   budget: number | null;
   day: string;
   profile: Profile | null;
-  // The evenings the couple chose (its history): their activities are never proposed again.
-  done?: { page_name: string; route_index: number }[];
+  // The evenings the couple chose (its history, by their pages): their activities are never proposed again.
+  done?: string[];
 };
 
 export const getSoiree = () => api<SoireeData>('/api/soiree');
@@ -116,6 +116,7 @@ export type SoireeRoute = {
 export type ComposedSoiree = {
   name: string;
   naming: boolean; // Claude's titles are still coming: poll getSoireeState until it clears
+  chosen: boolean; // the couple kept a route: it is the only one left, the page's name is enough to find it
   days: string[];
   start: string;
   end: string;
@@ -130,3 +131,6 @@ export const composeSoiree = (night: Night) => api<ComposedSoiree>('/api/soirees
 export const getSoireeState = (name: string) => api<ComposedSoiree>(`/api/parcours/${encodeURIComponent(name)}`);
 export const redoPart = (name: string, redo: string) =>
   api<ComposedSoiree>(`/api/parcours/${name}/${redo}`, { method: 'POST', body: '{}' });
+// The route kept: the page keeps it alone from now on (the others go), as its route 0.
+export const chooseRoute = (name: string, index: number) =>
+  api<ComposedSoiree>(`/api/parcours/${name}/routes/${index}/choose`, { method: 'POST', body: '{}' });

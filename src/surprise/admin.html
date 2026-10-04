@@ -269,6 +269,9 @@ function card(it, index) {
     isEvening(it) && h("span", { class: "badge" }, "Soirée"),
     price(offer) && h("span", { class: "badge", title: offer.label || "" }, truncate(price(offer), 40)),
     offer?.online_booking === false && h("span", { class: "badge", title: "Bar, club ou restaurant : sans réservation en ligne, y aller pendant les horaires" }, "Non réservable"),
+    // How it is booked, found at collection (models.py Booking): a slot is checked live for each evening.
+    a.booking?.mode === "creneau" && h("span", { class: "badge", title: `Créneaux pour 2 vérifiés en direct à chaque soirée (${a.booking.check})` }, `Créneau vérifiable · ${a.booking.engine}`),
+    a.booking?.mode === "billetterie" && h("span", { class: "badge", title: "Réservable en ligne ; créneaux non vérifiables" }, a.booking.engine),
     v.arrondissement ? h("span", { class: "badge" }, `${v.arrondissement}${v.arrondissement === 1 ? "er" : "e"}`)
       : v.town && v.town !== "Paris" && h("span", { class: "badge" }, v.town),
   ];

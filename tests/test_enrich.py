@@ -6,6 +6,7 @@ import respx
 
 from surprise import enrich
 from surprise.categories import CATEGORIES, categorize
+from surprise.local_store import LocalStore
 
 SITE = "https://cabaret.example/"
 PAGE = """<html><head>
@@ -43,6 +44,26 @@ def test_osm_place_matches_the_postcode_and_skips_streets():
         "osm_address": "11 Rue Guisarde", "osm_postal_code": "75006", "osm_url": "https://www.openstreetmap.org/node/1",
     }
 
+
+
+@respx.mock
+def test_nominatim_answers_are_kept_in_the_store_not_its_failures(tmp_path):
+    found = {"osm_type": "node", "osm_id": 1, "address": {"postcode": "75011", "house_number": "1", "road": "Rue Oberkampf"}}
+    reverse = respx.get(enrich.NOMINATIM_URL.replace("/search", "/reverse")).mock(side_effect=[
+        httpx.Response(503), httpx.Response(200, json=found), httpx.Response(200, json={"error": "Unable to geocode"}),
+    ])
+    with httpx.Client() as client, LocalStore(tmp_path / "s.db") as store:
+        # Nominatim failed: nothing kept, asked again.
+        assert enrich.osm_address(client, 48.86, 2.37) is None
+        address = enrich.osm_address(client, 48.86, 2.37)
+        assert address == {"osm_address": "1 Rue Oberkampf", "osm_postal_code": "75011", "osm_url": "https://www.openstreetmap.org/node/1"}
+        assert enrich.osm_address(client, 48.0, 2.0) is None
+        enrich.save_answers(store)
+        # Another run: found or not, the stored answers are not asked again.
+        enrich._answers.clear()
+        enrich.load_answers(store)
+        assert (enrich.osm_address(client, 48.86, 2.37), enrich.osm_address(client, 48.0, 2.0)) == (address, None)
+    assert reverse.call_count == 3
 
 def activity(**overrides):
     return {

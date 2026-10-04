@@ -148,9 +148,12 @@ def test_renormalize_applies_the_rules_again(monkeypatch, tmp_path):
     payload = fever.parse_plan("12", ld({"@type": "Event", "name": "Concert", "location": {"address": {"streetAddress": "1 rue X"}}}))
     monkeypatch.setattr(renormalize, "require_booking", lambda client, result, checks: result)
     with LocalStore(tmp_path / "s.db") as store:
+        older = fever.normalize(payload | {"name": "Ancien titre"}, NOW)
         before = fever.normalize(payload, NOW)
-        store.save_raw_records([before.raw])
+        store.save_raw_records([older.raw, before.raw])
         store.save_normalized([(before.raw, before.activity, "ancienne règle")])
         changes = renormalize.renormalize(store, sources=["fever"])
+        # The page's current version only: an older one never replaces it.
         assert changes == {f"ancienne règle → {before.rejection or 'retenue'}": 1}
+        assert [i["activity"]["title"] for i in store.list_for_moderation()] == ["Concert"]
         assert renormalize.renormalize(store, sources=["tiqets"]) == {}

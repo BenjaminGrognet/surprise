@@ -14,37 +14,63 @@ import inspect
 import json
 import sys
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import batched
 
 import httpx
 
+from surprise import enrich
 from surprise.booking import PageChecks
 from surprise.collectors.common import USER_AGENT, require_booking, split_reasons
 from surprise.collectors.facts import utc_now
 from surprise.local_store import LocalStore, open_store
 
+BATCH = 200  # records saved at once
+WORKERS = 32  # records checked at once, one page at a time per site (PageChecks)
+
 
 def renormalize(store: LocalStore, sources: list[str] | None = None, rejections: list[str] | None = None) -> Counter:
-    """Normalizes the chosen records again and saves them; the count of changes ("rejet → retenue")."""
+    """Normalizes the chosen records again and saves them; the count of changes ("rejet → retenue").
+
+    The booking checks run in parallel; the records are saved by batches as they are done, a slow site holding
+    back none of the others.
+    """
     rows = [row for row in store.raw_with_rejection() if (not sources or row[0] in sources) and (not rejections or set(split_reasons(row[2])) & set(rejections))]
-    print(f"{len(rows)} fiches à normaliser de nouveau")
-    now, changes, results, checks = utc_now(), Counter(), [], PageChecks(store.page_checks())
-    with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-        for index, (source_id, payload, before) in enumerate(rows, 1):
-            try:
-                normalize = importlib.import_module(f"surprise.collectors.{source_id}").normalize
-            except (ImportError, AttributeError):
-                continue
-            arguments = (json.loads(payload), now) if "now" in inspect.signature(normalize).parameters else (json.loads(payload),)
-            result = require_booking(client, normalize(*arguments), checks)
-            results.append(result)
-            changes[f"{before or 'retenue'} → {result.rejection or 'retenue'}"] += 1
-            if index % 200 == 0:
-                store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
-                results = []
-                print(f"  {index}/{len(rows)}")
-    store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
-    store.save_page_checks(checks.new)
+    normalizers = {source_id: _normalizer(source_id) for source_id in {row[0] for row in rows}}
+    rows = [row for row in rows if normalizers[row[0]]]
+    print(f"{len(rows)} fiches à normaliser de nouveau", flush=True)
+    now, changes, checks = utc_now(), Counter(), PageChecks(store.page_checks())
+    # The addresses OpenStreetMap gave are not asked again (Nominatim answers one request per second).
+    enrich.load_answers(store)
+
+    def again(row: tuple[str, str, str | None]):
+        source_id, payload, before = row
+        normalize = normalizers[source_id]
+        arguments = (json.loads(payload), now) if "now" in inspect.signature(normalize).parameters else (json.loads(payload),)
+        return before, require_booking(client, normalize(*arguments), checks)
+
+    done = 0
+    with (
+        httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client,
+        ThreadPoolExecutor(WORKERS) as pool,
+    ):
+        for batch in batched(as_completed([pool.submit(again, row) for row in rows]), BATCH):
+            results = [future.result() for future in batch]
+            store.save_normalized([(r.raw, r.activity, r.rejection) for _, r in results])
+            # Saved as it goes: an interrupted run keeps the pages it has read.
+            store.save_page_checks(checks.take_new())
+            enrich.save_answers(store)
+            changes.update(f"{before or 'retenue'} → {r.rejection or 'retenue'}" for before, r in results)
+            done += len(batch)
+            print(f"  {done}/{len(rows)}", flush=True)
     return changes
+
+
+def _normalizer(source_id: str):
+    try:
+        return importlib.import_module(f"surprise.collectors.{source_id}").normalize
+    except (ImportError, AttributeError):
+        return None
 
 
 def main() -> None:
