@@ -12,6 +12,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Veil } from '@/components/veil';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
+import { eveningRole } from '@/lib/couple';
 import { useTheme } from '@/hooks/use-theme';
 import { isoDay, longDay } from '@/lib/dates';
 import { book, bookOpen, sealPage, type Book, type Fragment, type Page } from '@/lib/souvenirs';
@@ -54,7 +55,7 @@ export default function LivreScreen() {
 }
 
 function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed: () => void }) {
-  const { role } = useCouple();
+  const role = eveningRole(evening, useCouple().userId);
   const mine = pages.find((p) => p.mine);
   const theirs = pages.find((p) => !p.mine);
   const open = bookOpen(evening, isoDay(new Date()));

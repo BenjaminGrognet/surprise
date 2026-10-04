@@ -11,6 +11,7 @@ import { Screen } from '@/components/screen';
 import { Waiting } from '@/components/spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
+import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { chooseEvening, currentUser, eveningsHistory, keptEvening } from '@/lib/account';
 import {
@@ -41,6 +42,8 @@ export default function SoireeScreen() {
   // ?soiree=<name>: the evening composed before, so a reload or a shared link shows it again; once a route
   // is kept, the page has that route alone.
   const { soiree: saved } = useLocalSearchParams<{ soiree?: string }>();
+  // A passager composing in turn: the page speaks of the roles reversed.
+  const turn = useCouple().role === 'passager';
   const [data, setData] = useState<SoireeData | null>(null);
   const [vibes, setVibes] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -174,7 +177,9 @@ export default function SoireeScreen() {
           title={chosen ? 'Votre feuille de route' : composed.routes.length > 0 ? 'Trois intrigues se murmurent au salon' : 'Le hasard a fait chou blanc'}
           text={composed.routes.length === 0
             ? "Élargissez les horaires, le budget ou les envies, et relancez l'intrigue."
-            : chosen ? undefined : "Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, votre passager n'en verra que les indices."}>
+            : chosen
+              ? undefined
+              : `Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, ${turn ? "c'est votre instigateur qui n'en verra que les indices" : "votre passager n'en verra que les indices"}.`}>
           {chosen && inHistory ? (
             <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name } }}>Ouvrir la révélation</PrimaryLink>
           ) : null}
@@ -208,15 +213,18 @@ export default function SoireeScreen() {
   const toggleStart = (value: string) => setNight((n) => ({ ...n, start: n.start === value ? null : value }));
   const toggleEnd = (value: string) => setNight((n) => ({ ...n, end: n.end === value ? null : value }));
   const ready = envies.length > 0 && night.diner !== null && !!night.day;
+  const profileLine = profile
+    ? `${profile.names ? `${profile.names}, vos` : 'Vos'} « jamais », votre budget et vos goûts s'appliquent.`
+    : 'On trame avec des réglages par défaut.';
 
   return (
     <Screen gap={Spacing.two}>
       <PageCard
-        badge={profile ? 'Votre profil' : 'Sans profil'}
-        title="Quelle intrigue vous tente ?"
-        text={profile
-          ? `${profile.names ? `${profile.names}, vos` : 'Vos'} « jamais », votre budget et vos goûts s'appliquent.`
-          : 'On trame avec des réglages par défaut.'}>
+        badge={turn ? 'À votre tour' : profile ? 'Votre profil' : 'Sans profil'}
+        title={turn ? 'À votre tour de surprendre' : 'Quelle intrigue vous tente ?'}
+        text={turn
+          ? `Vous avez suivi les indices, à vous de les semer : concoctez une soirée dont votre complice ne saura presque rien. ${profileLine}`
+          : profileLine}>
         <TextLink href="/profil">{profile ? 'Voir le profil →' : 'Faire le quiz →'}</TextLink>
       </PageCard>
 

@@ -23,7 +23,7 @@ const navTheme = {
 };
 
 // Unreadable (offline…): an instigateur, the account's default.
-const readCouple = () => myRole().catch((): CoupleState => ({ role: 'instigateur' }));
+const readCouple = () => myRole().catch((): CoupleState => ({ role: 'instigateur', userId: null }));
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -77,10 +77,12 @@ export default function RootLayout() {
     });
   }, [signedIn]);
 
-  const value = useMemo(() => ({ role: couple?.role ?? 'instigateur', refresh }), [couple, refresh]);
+  const value = useMemo(
+    () => ({ role: couple?.role ?? 'instigateur', userId: couple?.userId ?? null, refresh }),
+    [couple, refresh],
+  );
 
   if (!loaded || signedIn === null || (signedIn && !booted)) return null;
-  const instigateur = signedIn && couple?.role === 'instigateur';
   // The floating bar, for a signed-in account; not on the invitation, where a passager is only on their way in.
   const tabBar = signedIn && path !== '/invitation';
 
@@ -97,11 +99,9 @@ export default function RootLayout() {
                 <Stack.Screen name="revelation" />
                 <Stack.Screen name="historique" />
                 <Stack.Screen name="livre" />
-                {/* The instigateur makes the profile and orders the evenings; the passager only gets the clues. */}
-                <Stack.Protected guard={instigateur}>
-                  <Stack.Screen name="profil" />
-                  <Stack.Screen name="soiree" />
-                </Stack.Protected>
+                {/* The profile and the evenings: the instigateur's, and the passager's once it is their turn to surprise. */}
+                <Stack.Screen name="profil" />
+                <Stack.Screen name="soiree" />
               </Stack.Protected>
               <Stack.Screen name="compte" />
               <Stack.Screen name="invitation" />

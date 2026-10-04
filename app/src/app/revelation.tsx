@@ -10,15 +10,18 @@ import { imageUri, place } from '@/components/route-result';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Veil } from '@/components/veil';
-import { Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { keptEvening, keptSecretTitle, type EveningHistoryRow } from '@/lib/account';
+import { eveningRole } from '@/lib/couple';
 import { PassagerInvite } from '@/components/passager-invite';
 import { RevealModePicker } from '@/components/reveal-mode';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { getSoireeState, type SoireeRoute, type SoireeStep } from '@/lib/api';
-import { cluesFor, inTime, nextClue, revealAt, revealMode, shownClues, stepRevealed, type RevealMode } from '@/lib/clues';
+import {
+  cluesFor, inTime, nextClue, revealAt, revealMode, shownClues, stepRevealed, stepWords, type RevealMode, type StepWord,
+} from '@/lib/clues';
 import { nearStep } from '@/lib/arrival';
 import { arrivedSteps, markArrived } from '@/lib/local-store';
 import { askNotify, notifyState, scheduleReveals, type NotifyState } from '@/lib/notifications';
@@ -26,16 +29,18 @@ import { formatTime, isoDay, longDay } from '@/lib/dates';
 import { curtainFalls } from '@/lib/souvenirs';
 
 // "La Révélation": the kept evening seen from each account of the couple. The instigateur has the whole timed
-// roadmap; the passager only gets riddles, and a veiled programme that lifts step by step.
+// roadmap; the passager only gets riddles, and a veiled programme that lifts step by step. Which of the two the
+// account is, the evening tells (eveningRole): a passager may compose evenings of their own.
 export default function RevelationScreen() {
   const { soiree } = useLocalSearchParams<{ soiree?: string }>();
   const [route, setRoute] = useState<SoireeRoute | null | 'missing' | 'offline'>(null);
   const [attempt, setAttempt] = useState(0);
   const [kept, setKept] = useState<string | null>(null);
-  const { role } = useCouple();
-  const [evening, setEvening] = useState<EveningHistoryRow | null>(null);
+  const { role: accountRole, userId } = useCouple();
+  // undefined while it is read; null when it can't be (offline), then the account's role decides.
+  const [evening, setEvening] = useState<EveningHistoryRow | null | undefined>(undefined);
   const loadEvening = useCallback(() => {
-    if (soiree) keptEvening(soiree).then(setEvening).catch(() => {});
+    if (soiree) keptEvening(soiree).then(setEvening).catch(() => setEvening((e) => e ?? null));
   }, [soiree]);
 
   const lost = !soiree;
@@ -46,7 +51,7 @@ export default function RevelationScreen() {
     setShownFor(soiree);
     setRoute(null);
     setKept(null);
-    setEvening(null);
+    setEvening(undefined);
   }
 
   useEffect(() => {
@@ -61,7 +66,7 @@ export default function RevelationScreen() {
     loadEvening();
   }, [soiree, loadEvening, attempt]);
 
-  if (!lost && route === null) {
+  if (!lost && (route === null || (evening === undefined && route !== 'missing' && route !== 'offline'))) {
     return (
       <Screen>
         <ThemedText themeColor="textSecondary">On décachette l&apos;enveloppe…</ThemedText>
@@ -87,6 +92,7 @@ export default function RevelationScreen() {
 
   const secretTitle = kept ?? route.secret_title;
   const mode = revealMode(evening?.reveal_mode);
+  const role = evening ? eveningRole(evening, userId) : accountRole;
   return (
     <Screen gap={Spacing.four}>
       <EveningsNav soiree={soiree!} />
@@ -125,6 +131,7 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
   const now = useNow();
   const start = Date.parse(route.start);
   const clues = cluesFor(route, mode);
+  const words = stepWords(route, mode);
   const steps = [...route.steps, ...(route.night ? [route.night] : [])];
   const [arrived, setArrived] = useState<string[]>([]);
   const [notify, setNotify] = useState<NotifyState>('unsupported');
@@ -179,6 +186,7 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
             number={i + 1}
             now={now}
             mode={mode}
+            word={words[i]}
             open={stepRevealed(route, step, now, mode, arrived)}
             onArrive={() => arrive(step)}
           />
@@ -214,9 +222,13 @@ function Clues({ clues, now, title }: { clues: ReturnType<typeof cluesFor>; now:
   );
 }
 
+// A step of the passager's programme: veiled, its mystery word once it has come (or when the next one comes), then
+// lifted at its time.
 function VeiledStep({
-  route, step, number, now, mode, open, onArrive,
-}: { route: SoireeRoute; step: SoireeStep; number: number; now: number; mode: RevealMode; open: boolean; onArrive: () => void }) {
+  route, step, number, now, mode, word, open, onArrive,
+}: {
+  route: SoireeRoute; step: SoireeStep; number: number; now: number; mode: RevealMode; word?: StepWord; open: boolean; onArrive: () => void;
+}) {
   const theme = useTheme();
   const [checking, setChecking] = useState(false);
   const [far, setFar] = useState(false);
@@ -250,7 +262,13 @@ function VeiledStep({
           </>
         ) : (
           <>
+            {word && word.at <= now ? (
+              <ThemedText style={[styles.word, { color: theme.gold }]}>« {word.word} »</ThemedText>
+            ) : null}
             <Veil widths={['90%', '60%']} />
+            {word && word.at > now ? (
+              <ThemedText type="small" themeColor="textSecondary">Un mot mystère {inTime(word.at, now)}</ThemedText>
+            ) : null}
             <ThemedText type="small" themeColor="textSecondary">
               {mode === 'arrivee' ? `Scellée jusqu'à votre arrivée (ou ${formatTime(step.start)})` : `Dévoilée ${inTime(at, now)}`}
             </ThemedText>
@@ -276,4 +294,5 @@ const styles = StyleSheet.create({
   thumbImg: { ...StyleSheet.absoluteFill },
   seal: { fontSize: 28, lineHeight: 34, opacity: 0.8 },
   stepBody: { flex: 1, gap: Spacing.one, justifyContent: 'center' },
+  word: { fontFamily: Fonts.headingItalic, fontSize: 22, lineHeight: 27 },
 });

@@ -135,6 +135,66 @@ export function dayHint(route: SoireeRoute, now: number, mode: RevealMode = 'eta
   return shown.length > 1 ? shown[shown.length - 1].text : outfit(route);
 }
 
+// The mystery word of a veiled step: a mood to look forward to, never what or where. The step's most telling vibe
+// first (the rarer ones lead), else its role; a few words each, so two steps of one vibe don't share theirs.
+const WORDS: [string, string[]][] = [
+  ['frisson', ['Vertige', 'Frisson', 'Adrénaline']],
+  ['coquin', ['Audace', 'Velours', 'Interdit']],
+  ['insolite', ['Insolite', 'Énigme', 'Ailleurs']],
+  ['musique', ['Mélodie', 'Vibrations', 'Résonance']],
+  ['rire', ['Malice', 'Fantaisie', 'Éclats de rire']],
+  ['creer', ['Savoir-faire', 'Inspiration', 'Façonner']],
+  ['defi', ['Stratégie', 'Défi', 'Complicité']],
+  ['emerveiller', ['Éblouissement', 'Lumières', 'Merveille']],
+  ['cultiver', ['Curiosité', 'Mémoire', 'Érudition']],
+  ['savourer', ['Gourmandise', 'Saveurs', 'Délice']],
+  ['detente', ['Douceur', 'Lenteur', 'Apaisement']],
+  ['flaner', ['Flânerie', 'Grand air', 'Dérive']],
+  ['bouger', ['Élan', 'Mouvement', 'Énergie']],
+  ['fete', ['Effervescence', 'Ivresse', 'Pétillant']],
+  ['romantique', ['Tendresse', 'Intimité', 'Murmures']],
+];
+const ROLE_WORDS: Record<SoireeStep['role'], string[]> = {
+  repas: ['Gourmandise', 'Saveurs', 'Tablée'],
+  verre: ['Pétillant', 'Tchin', 'Ivresse'],
+  sortie: ['Surprise', 'Mystère', 'Curiosité'],
+  nuit: ['Rêverie', 'Clair de lune', 'Évasion'],
+};
+
+// The same step always draws the same word.
+function seed(text: string) {
+  let h = 0;
+  for (const c of text) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h;
+}
+
+function stepWord(step: SoireeStep, taken: Set<string>) {
+  const pools = [...WORDS.filter(([vibe]) => step.vibes.includes(vibe)).map(([, words]) => words), ROLE_WORDS[step.role]];
+  for (const pool of pools) {
+    const start = seed(step.id) % pool.length;
+    const word = [...pool.slice(start), ...pool.slice(0, start)].find((w) => !taken.has(w));
+    if (word) return word;
+  }
+  return 'Mystère';
+}
+
+export type StepWord = { word: string; at: number }; // at: epoch ms when it shows (0: from the start)
+
+// One mystery word per step, in the programme's order: the first from the start, the others one by one over the last
+// days (three days before, the day before, the afternoon, the last hours), always an hour before their step lifts its veil.
+export function stepWords(route: SoireeRoute, mode: RevealMode = 'etapes'): StepWord[] {
+  const start = Date.parse(route.start);
+  const morning = (daysBefore: number) => Date.parse(`${route.day}T09:00`) - daysBefore * DAY;
+  const moments = [morning(3) + 6 * HOUR, morning(1) + 6 * HOUR, start - 5 * HOUR, start - 2 * HOUR];
+  const taken = new Set<string>();
+  return allSteps(route).map((step, i) => {
+    const word = stepWord(step, taken);
+    taken.add(word);
+    const at = i === 0 ? 0 : Math.min(moments[Math.min(i - 1, moments.length - 1)], revealAt(route, step, mode) - HOUR);
+    return { word, at };
+  });
+}
+
 // When a step lifts its veil for the passager, by mode: a quarter of an hour before its hour (etapes), the day
 // before the evening (veille), at its hour or as soon as they declare arriving (arrivee, `arrived` = step ids).
 export function revealAt(route: SoireeRoute, step: SoireeStep, mode: RevealMode) {

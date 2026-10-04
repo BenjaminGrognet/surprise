@@ -348,8 +348,13 @@ L'instigateur fait le profil, commande les soirées, voit la feuille de route et
 (`soirees_choisies.booked`) ; il invite un passager par soirée, un seul au plus (colonnes `passager*` et `invite_code`
 de `soirees_choisies`), par un lien depuis la révélation de la soirée (`/invitation?code=…`, fonction `join_evening`) ;
 une autre soirée peut avoir un autre passager (`reset_passager` le renvoie et renouvelle le lien). Le passager a son
-propre compte, ne voit que le compte à rebours, les indices et le programme voilé des soirées où il est invité ; le quiz
-et `/soiree` lui sont fermés. Un compte passager d'au moins une soirée est passager, tout autre est instigateur.
+propre compte, ne voit que le compte à rebours, les indices et le programme voilé des soirées où il est invité ; chaque
+étape voilée porte un mot mystère (« Vertige », « Gourmandise »… tiré de ses ambiances, `stepWords` dans
+`app/src/lib/clues.ts`), le premier dès le départ, les autres au fil des derniers jours. À son tour, il peut faire le
+quiz et composer ses propres soirées (« À votre tour de surprendre ») : il en est l'instigateur, et `join_evening`
+accepte un compte qui garde déjà des soirées (migration `20261005000000_passager_composes.sql`). Un compte passager
+d'au moins une soirée est passager (accueil et barre du bas), tout autre est instigateur ; chaque soirée s'affiche du
+côté du compte (`eveningRole`).
 L'instigateur peut supprimer une soirée passée (Mes soirées, livre et photos avec) et chacun son compte
 (`delete_my_account`, photos retirées avant). Limite connue : le passager pourrait lire les données d'une soirée par
 l'API (l'app seule les voile).

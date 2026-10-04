@@ -15,9 +15,9 @@ import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
 import { getSoireeState, type Profile, type SoireeRoute } from '@/lib/api';
-import { cluesFor, dayHint, inTime, nextClue, revealAt, revealMode, stepRevealed } from '@/lib/clues';
+import { cluesFor, dayHint, inTime, nextClue, revealAt, revealMode, stepRevealed, stepWords } from '@/lib/clues';
 import { complicity, type Complicity } from '@/lib/complicity';
-import type { AccountRole } from '@/lib/couple';
+import { eveningRole, type AccountRole } from '@/lib/couple';
 import { formatTime, isoDay, longDay, shortDay } from '@/lib/dates';
 import { forgetProfile, rememberedProfile } from '@/lib/local-store';
 import { curtainFalls } from '@/lib/souvenirs';
@@ -27,10 +27,11 @@ const capitalised = (text: string) => text.charAt(0).toUpperCase() + text.slice(
 
 // "Le Tableau des Complots", cut like a membership: no bar above, the page opens on the next mystery evening as the
 // couple's card — its countdown in gold —, then a status line, the evening's first step, and the complicity gauge.
-// The passager gets the card, the status, the step veiled and the gauge: the instigateur makes the profile and
-// orders the evenings.
+// The passager's page opens on their own card, what being the passager means; then the evening's card, the status,
+// the step veiled (its mystery word) and the gauge, and a way to compose an evening of their own in turn. Each
+// evening is shown from the account's side of it (eveningRole).
 export default function AccueilScreen() {
-  const { role } = useCouple();
+  const { role, userId } = useCouple();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [upcoming, setUpcoming] = useState<{ row: EveningHistoryRow; route: SoireeRoute | null } | null>(null);
@@ -64,22 +65,25 @@ export default function AccueilScreen() {
     })();
   }, []);
 
+  const side = upcoming ? eveningRole(upcoming.row, userId) : role;
   return (
     <Screen gap={Spacing.four}>
+      {role === 'passager' ? <PassagerWelcome awaiting={loaded && !upcoming} /> : null}
       {toSeal ? <BookCall row={toSeal} /> : null}
 
       <View style={styles.cardBlock}>
         {loaded ? (
-          upcoming ? <NextIntrigue {...upcoming} role={role} /> : role === 'passager' ? <AwaitingIntrigue /> : <NoIntrigue />
+          upcoming ? <NextIntrigue {...upcoming} role={side} plain={role === 'passager'} /> : role === 'passager' ? null : <NoIntrigue />
         ) : (
           <IntrigueCard><View style={styles.placeholder} /></IntrigueCard>
         )}
-        {upcoming ? <Status row={upcoming.row} route={upcoming.route} role={role} /> : null}
+        {upcoming ? <Status row={upcoming.row} route={upcoming.route} role={side} /> : null}
         {loaded && !upcoming && role === 'instigateur' ? <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink> : null}
       </View>
 
       {role === 'instigateur' && loaded && !profile ? <ProfileCall /> : null}
-      {upcoming?.route ? <FirstStep row={upcoming.row} route={upcoming.route} role={role} /> : null}
+      {upcoming?.route ? <FirstStep row={upcoming.row} route={upcoming.route} role={side} /> : null}
+      {role === 'passager' && loaded ? <YourTurn /> : null}
       {gauge ? <Gauge gauge={gauge} /> : null}
 
       {role === 'instigateur' && profile ? (
@@ -93,7 +97,11 @@ export default function AccueilScreen() {
 
 // The next evening as the couple's card: its secret name in italics and the account's tier, the clue of the
 // day, then the day on the left and, in gold on the right, the time left.
-function NextIntrigue({ row, route, role }: { row: EveningHistoryRow; route: SoireeRoute | null; role: AccountRole }) {
+// `plain`: under the passager's own card, a lighter one — the night's surface and its hairline, no emblem nor badge,
+// the evening's name under a spaced label.
+function NextIntrigue({
+  row, route, role, plain,
+}: { row: EveningHistoryRow; route: SoireeRoute | null; role: AccountRole; plain?: boolean }) {
   const theme = useTheme();
   const now = useNow();
   // Its last step begun, the evening calls for its book.
@@ -101,29 +109,51 @@ function NextIntrigue({ row, route, role }: { row: EveningHistoryRow; route: Soi
   const start = route ? Date.parse(route.start) : null;
   const under = start != null && !!route && now >= start && now < Date.parse(route.end);
   const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name } });
+  const title = row.secret_title ?? route?.secret_title ?? 'L’Inattendu vous attend…';
+  const body = (
+    <View style={plain ? styles.plainBody : styles.member}>
+      {plain ? (
+        <View style={styles.plainHead}>
+          <ThemedText type="eyebrow">{role === 'passager' ? 'Votre soirée secrète' : 'Votre intrigue'}</ThemedText>
+          <ThemedText style={styles.plainTitle}>{title}</ThemedText>
+        </View>
+      ) : (
+        <CardHead badge={role === 'passager' ? 'Passager' : 'Instigateur'} title={title} />
+      )}
+      {route ? (
+        <ThemedText type="clue" style={[styles.cardClue, { color: theme.creamSoft }]} numberOfLines={3}>
+          <ThemedText type="clue" style={{ color: theme.gold }}>✦ </ThemedText>
+          {dayHint(route, now, revealMode(row.reveal_mode))}
+        </ThemedText>
+      ) : null}
+      <View style={styles.cardFoot}>
+        <View style={styles.cardColumn}>
+          <ThemedText type="eyebrow">{under ? "L'intrigue a commencé" : 'Le jour J'}</ThemedText>
+          <ThemedText style={styles.cardDay}>{row.day ? capitalised(longDay(row.day)) : 'Date à fixer'}</ThemedText>
+        </View>
+        {start != null && route ? (
+          <View style={[styles.cardColumn, styles.cardRight]}>
+            <ThemedText type="eyebrow">{under ? 'Depuis' : 'Dans'}</ThemedText>
+            <ThemedText style={[styles.cardFigure, { color: theme.gold }]}>{under ? formatTime(route.start) : countdownLabel(start, now)}</ThemedText>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+  if (plain) {
+    return (
+      <Pressable
+        onPress={open}
+        accessibilityRole="button"
+        accessibilityLabel="Ouvrir la révélation"
+        style={({ pressed }) => [styles.plainCard, { backgroundColor: theme.backgroundElement, borderColor: theme.line }, pressed && styles.pressed]}>
+        {body}
+      </Pressable>
+    );
+  }
   return (
     <IntrigueCard onPress={open} align="start" label="Ouvrir la révélation">
-      <View style={styles.member}>
-        <CardHead badge={role === 'passager' ? 'Passager' : 'Instigateur'} title={row.secret_title ?? route?.secret_title ?? 'L’Inattendu vous attend…'} />
-        {route ? (
-          <ThemedText type="clue" style={[styles.cardClue, { color: theme.creamSoft }]} numberOfLines={3}>
-            <ThemedText type="clue" style={{ color: theme.gold }}>✦ </ThemedText>
-            {dayHint(route, now, revealMode(row.reveal_mode))}
-          </ThemedText>
-        ) : null}
-        <View style={styles.cardFoot}>
-          <View style={styles.cardColumn}>
-            <ThemedText type="eyebrow">{under ? "L'intrigue a commencé" : 'Le jour J'}</ThemedText>
-            <ThemedText style={styles.cardDay}>{row.day ? capitalised(longDay(row.day)) : 'Date à fixer'}</ThemedText>
-          </View>
-          {start != null && route ? (
-            <View style={[styles.cardColumn, styles.cardRight]}>
-              <ThemedText type="eyebrow">{under ? 'Depuis' : 'Dans'}</ThemedText>
-              <ThemedText style={[styles.cardFigure, { color: theme.gold }]}>{under ? formatTime(route.start) : countdownLabel(start, now)}</ThemedText>
-            </View>
-          ) : null}
-        </View>
-      </View>
+      {body}
     </IntrigueCard>
   );
 }
@@ -187,39 +217,62 @@ function NoIntrigue() {
   );
 }
 
-// The passager, before any evening is kept: nothing to see yet, and that's the point.
-function AwaitingIntrigue() {
+// The passager's welcome, their card as the instigateur has theirs: what their part is — to be surprised —, set tight.
+// Before any evening is kept for them, the middle lines say where it will show.
+const PASSAGER_PITCH = [
+  'Bonsoir, cher passager.\nQuelqu’un a imaginé pour vous une soirée parisienne dont vous ne saurez presque rien.',
+  'Jusqu’au jour J, des indices vous parviendront un à un : l’heure, la tenue, un mot pour chaque étape. Assez pour rêver, jamais assez pour deviner.',
+  'À votre instigateur le secret, à vous l’émerveillement.',
+];
+const PASSAGER_AWAITING = 'Dès qu’une soirée sera scellée pour vous, son compte à rebours et ses premiers indices apparaîtront ici.';
+
+function PassagerWelcome({ awaiting }: { awaiting: boolean }) {
   const theme = useTheme();
+  const stanzas = awaiting ? [PASSAGER_PITCH[0], PASSAGER_AWAITING, PASSAGER_PITCH[2]] : PASSAGER_PITCH;
   return (
-    <IntrigueCard align="start">
-      <View style={styles.member}>
-        <CardHead badge="Passager" title="Quelque chose se trame…" />
-        <ThemedText style={{ color: theme.creamSoft }}>
-          Dès que votre instigateur aura scellé une soirée, son compte à rebours et ses indices apparaîtront ici.
-        </ThemedText>
+    <PageCard badge="Passager" title={awaiting ? 'Quelque chose se trame…' : 'Laissez-vous emporter…'}>
+      <View style={styles.pitch}>
+        {stanzas.map((stanza) => (
+          <ThemedText key={stanza} type="small" style={{ color: theme.creamSoft }}>{stanza}</ThemedText>
+        ))}
       </View>
-    </IntrigueCard>
+    </PageCard>
   );
 }
 
-// No profile yet: the quiz first, two minutes, so the evenings fit the couple.
-function ProfileCall() {
+// A tile calling to a page: an emerald icon, a line, its aside.
+function Call({ icon, title, text, onPress }: { icon: string; title: string; text: string; onPress: () => void }) {
   const theme = useTheme();
   return (
     <Pressable
-      onPress={() => router.push('/profil')}
+      onPress={onPress}
       style={({ pressed }) => [styles.call, { backgroundColor: theme.backgroundElement, borderColor: theme.line }, pressed && styles.pressed]}>
       <View style={[styles.callIcon, { backgroundColor: theme.backgroundSelected }]}>
-        <Icon name="coeur" size={20} color={theme.accent} />
+        <Icon name={icon} size={20} color={theme.accent} />
       </View>
       <View style={styles.callText}>
-        <ThemedText type="smallBold">D&apos;abord, faire notre profil</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">Deux minutes, pour des soirées à votre image</ThemedText>
+        <ThemedText type="smallBold">{title}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">{text}</ThemedText>
       </View>
       <Icon name="suite" size={18} color={theme.textSecondary} />
     </Pressable>
   );
 }
+
+// No profile yet: the quiz first, two minutes, so the evenings fit the couple.
+const ProfileCall = () => (
+  <Call icon="coeur" title="D’abord, faire notre profil" text="Deux minutes, pour des soirées à votre image" onPress={() => router.push('/profil')} />
+);
+
+// The passager's turn: an evening of their own, whose secret they keep this time.
+const YourTurn = () => (
+  <Call
+    icon="diamant"
+    title="À votre tour de surprendre"
+    text="Concoctez une soirée en secret : cette fois, c’est vous qui gardez le mystère."
+    onPress={() => router.push('/soiree')}
+  />
+);
 
 // The evening's step to come, in a photo: its hour in gold. The passager sees it veiled until it is revealed.
 function FirstStep({ row, route, role }: { row: EveningHistoryRow; route: SoireeRoute; role: AccountRole }) {
@@ -230,6 +283,8 @@ function FirstStep({ row, route, role }: { row: EveningHistoryRow; route: Soiree
   if (!step) return null;
   const mode = revealMode(row.reveal_mode);
   const veiled = role === 'passager' && !stepRevealed(route, step, now, mode);
+  // Its mystery word, once it has come: something to look forward to, never the place.
+  const word = stepWords(route, mode).find((w, i) => i === steps.indexOf(step) && w.at <= now)?.word ?? null;
   const tonight = route.day === isoDay(new Date(now));
   const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name } });
   return (
@@ -240,7 +295,7 @@ function FirstStep({ row, route, role }: { row: EveningHistoryRow; route: Soiree
       </View>
       <Pressable
         onPress={open}
-        accessibilityLabel={veiled ? 'Une étape encore voilée' : step.title}
+        accessibilityLabel={veiled ? `Une étape encore voilée${word ? ` : ${word}` : ''}` : step.title}
         style={({ pressed }) => [styles.photoCard, { backgroundColor: theme.backgroundElement, borderColor: theme.line }, pressed && styles.pressed]}>
         {step.image_url ? (
           <Image source={{ uri: imageUri(step.image_url) }} blurRadius={veiled ? 30 : 0} style={StyleSheet.absoluteFill} />
@@ -261,7 +316,8 @@ function FirstStep({ row, route, role }: { row: EveningHistoryRow; route: Soiree
         <View style={styles.photoFoot}>
           {veiled ? (
             <>
-              <ThemedText style={styles.photoTitle}>Une étape encore voilée</ThemedText>
+              {word ? <ThemedText style={[styles.photoWord, { color: theme.gold }]}>« {word} »</ThemedText> : null}
+              <ThemedText style={word ? styles.photoAside : styles.photoTitle}>Une étape encore voilée</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">Dévoilée {inTime(Math.max(revealAt(route, step, mode), now), now)}</ThemedText>
             </>
           ) : (
@@ -301,6 +357,10 @@ const styles = StyleSheet.create({
   placeholder: { height: 196 },
   cardBlock: { gap: Spacing.three },
   member: { minHeight: 196, justifyContent: 'space-between', gap: Spacing.three },
+  plainCard: { borderRadius: Radius.card, borderWidth: 1 },
+  plainBody: { padding: Spacing.three + 2, gap: Spacing.three },
+  plainHead: { gap: Spacing.one },
+  plainTitle: { fontFamily: Fonts.headingItalic, fontSize: 26, lineHeight: 31 },
   pitch: { gap: Spacing.two },
   cardClue: { fontSize: 17, lineHeight: 23 },
   cardFoot: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: Spacing.three },
@@ -320,6 +380,8 @@ const styles = StyleSheet.create({
   photoTime: { fontFamily: Fonts.sansBold, fontSize: 14, lineHeight: 18, letterSpacing: 1.2, margin: Spacing.three + 2 },
   photoFoot: { padding: Spacing.three + 2, gap: 2 },
   photoTitle: { fontFamily: Fonts.heading, fontSize: 22, lineHeight: 27 },
+  photoWord: { fontFamily: Fonts.headingItalic, fontSize: 28, lineHeight: 34 },
+  photoAside: { fontFamily: Fonts.heading, fontSize: 17, lineHeight: 22 },
   gauge: { gap: Spacing.two, padding: Spacing.three + 2, borderRadius: Radius.tile, borderWidth: 1 },
   level: { fontFamily: Fonts.headingItalic, fontSize: 24, lineHeight: 30 },
   track: { height: 3, borderRadius: 2, overflow: 'hidden', marginVertical: Spacing.one },

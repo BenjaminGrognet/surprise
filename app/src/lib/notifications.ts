@@ -1,9 +1,9 @@
-// Local notifications for the passager: one at each clue still to come and at each step still to lift its veil,
-// scheduled on the device (no server). Not available on the web, where everything below does nothing.
+// Local notifications for the passager: one at each clue still to come, at each mystery word and at each step still
+// to lift its veil, scheduled on the device (no server). Not available on the web, where everything below does nothing.
 import { Platform } from 'react-native';
 
 import type { SoireeRoute } from '@/lib/api';
-import { cluesFor, revealAt, type RevealMode } from '@/lib/clues';
+import { cluesFor, revealAt, stepWords, type RevealMode } from '@/lib/clues';
 
 const supported = Platform.OS !== 'web';
 const CHANNEL = 'indices';
@@ -45,6 +45,7 @@ export async function scheduleReveals(evening: string, route: SoireeRoute, mode:
 
   const items: { id: string; at: number; title: string; body: string }[] = [];
   cluesFor(route, mode).forEach((c, i) => items.push({ id: `${evening}:clue:${i}`, at: c.at, title: `Nouvel indice · ${secretTitle}`, body: c.text }));
+  stepWords(route, mode).forEach((w, i) => items.push({ id: `${evening}:word:${i}`, at: w.at, title: `Un mot mystère · ${secretTitle}`, body: `« ${w.word} » : une étape se laisse deviner.` }));
   [...route.steps, ...(route.night ? [route.night] : [])].forEach((step, i) => {
     if (mode === 'arrivee') return; // lifted on arrival, or at the hour: the hour is the one to announce
     items.push({ id: `${evening}:step:${i}`, at: revealAt(route, step, mode), title: `Un voile se lève · ${secretTitle}`, body: i === 0 || mode === 'veille' ? 'Une étape de votre soirée vient de se dévoiler.' : 'La prochaine étape se dévoile.' });

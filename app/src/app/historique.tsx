@@ -11,6 +11,7 @@ import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { deleteEvening, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
+import { eveningRole } from '@/lib/couple';
 import { isoDay, longDay } from '@/lib/dates';
 import { photoUrls } from '@/lib/souvenirs';
 import { supabaseConfigured } from '@/lib/supabase';
@@ -84,10 +85,10 @@ function Empty() {
     <>
       <ThemedText themeColor="textSecondary">
         {role === 'passager'
-          ? 'Pas encore de secret : votre instigateur trame le premier.'
+          ? 'Pas encore de secret : votre instigateur trame le premier. À moins que vous ne le preniez de vitesse…'
           : 'Pas encore de secret : lancez une intrigue, vivez-la, et scellez-en le souvenir.'}
       </ThemedText>
-      {role === 'instigateur' ? <PrimaryLink href="/soiree">Lancer une intrigue</PrimaryLink> : null}
+      <PrimaryLink href="/soiree">{role === 'passager' ? 'À votre tour de surprendre' : 'Lancer une intrigue'}</PrimaryLink>
     </>
   );
 }
@@ -148,7 +149,7 @@ function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: n
 // Not a relic yet: an evening to come (its revelation), or one whose book still waits to be sealed.
 function Anchor({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => void }) {
   const theme = useTheme();
-  const { role } = useCouple();
+  const role = eveningRole(row, useCouple().userId);
   const ahead = !!row.day && row.day >= isoDay(new Date());
   const href = { pathname: ahead ? '/revelation' : '/livre', params: { soiree: row.page_name } } as const;
   // To the passager, an evening to come keeps its secret here too: only its secret name, never its plain title.
@@ -170,7 +171,7 @@ function Anchor({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => v
 
 // A past evening can be struck from the archives (its instigateur only), after a confirmation.
 function DeleteEvening({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => void }) {
-  const { role } = useCouple();
+  const role = eveningRole(row, useCouple().userId);
   const theme = useTheme();
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);

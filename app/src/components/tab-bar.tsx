@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
 import { upcomingEvenings, type EveningHistoryRow } from '@/lib/account';
+import { eveningRole } from '@/lib/couple';
 import { eveningDay } from '@/lib/dates';
 
 const BAR_HEIGHT = 68;
@@ -22,17 +23,19 @@ export const useTabBar = () => useContext(TabBarContext);
 
 type Item = { icon: string; label: string; href: Href | null; active: boolean; center?: boolean };
 
-// The floating bar at the foot of every screen: home, the evenings' grimoire, the emerald jewel in the middle — a new
+// The floating bar at the foot of every screen: home, the evenings' grimoire, the jewel in the middle — a new
 // intrigue for the instigateur, the next evening's clues for the passager —, the instigateur's compass to the next
-// evening (its guide on the day), and the account, where the couple's profile now lives.
+// evening (its guide on the day) or the passager's own new intrigue, and the account, where the couple's profile now
+// lives. Only the tab one is on is lit: the jewel turns emerald there, like the others turn gold.
 export function TabBar() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const path = usePathname();
   const params = useGlobalSearchParams<{ soiree?: string }>();
-  const { role } = useCouple();
+  const { role, userId } = useCouple();
   const [upcoming, setUpcoming] = useState<EveningHistoryRow[]>([]);
-  const next = upcoming[0] ?? null;
+  // The passager's key opens the next evening they are surprised by, else the next one they compose.
+  const next = (role === 'passager' ? upcoming.find((e) => eveningRole(e, userId) === 'passager') : null) ?? upcoming[0] ?? null;
 
   // The next evening, behind the compass and the passager's jewel: looked up again on each move, one may just have
   // been kept. Past midnight, the evening under way is still the one.
@@ -48,7 +51,8 @@ export function TabBar() {
       { icon: 'maison', label: 'Accueil', href: '/', active: path === '/' },
       { icon: 'grimoire', label: 'Mes soirées', href: '/historique', active: path === '/historique' || path === '/livre' },
       { icon: 'cle', label: next ? 'Vos indices' : 'Pas encore de soirée', center: true, active: onEvening, href: evening },
-      { icon: 'profil', label: 'Mon compte', href: '/compte', active: path === '/compte' },
+      { icon: 'diamant', label: 'À votre tour : une nouvelle intrigue', href: '/soiree', active: path === '/soiree' },
+      { icon: 'profil', label: 'Mon compte', href: '/compte', active: path === '/compte' || path === '/profil' },
     ]
     : [
       { icon: 'maison', label: 'Accueil', href: '/', active: path === '/' },
@@ -91,10 +95,10 @@ export function TabBar() {
               accessibilityLabel={item.label}
               accessibilityState={{ selected: item.active, disabled: !item.href }}
               style={({ pressed }) => [
-                item.center ? styles.jewel : styles.item,
-                item.center
+                item.center ? [styles.jewel, { borderColor: item.active ? theme.accent : theme.line }] : styles.item,
+                item.active && (item.center
                   ? { backgroundColor: theme.accent, boxShadow: `0 6px 18px ${theme.glow}` }
-                  : item.active && { backgroundColor: theme.backgroundSelected },
+                  : { backgroundColor: theme.backgroundSelected }),
                 !item.href && styles.off,
                 pressed && styles.pressed,
               ]}>
@@ -102,7 +106,7 @@ export function TabBar() {
                 name={item.icon}
                 size={item.center ? 24 : 22}
                 strokeWidth={item.center ? 1.8 : 1.6}
-                color={item.center ? theme.onAccent : item.active ? theme.gold : theme.textSecondary}
+                color={item.active ? (item.center ? theme.onAccent : theme.gold) : theme.textSecondary}
               />
             </Pressable>
           ))}
@@ -121,7 +125,7 @@ const styles = StyleSheet.create({
     boxShadow: '0 14px 34px rgba(0, 0, 0, 0.55)',
   },
   item: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  jewel: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+  jewel: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   off: { opacity: 0.4 },
   pressed: { opacity: 0.75 },
 });

@@ -83,10 +83,10 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
         badge={role === 'passager' ? 'Passager' : 'Instigateur'}
         title="Mon compte"
         text={role === 'passager'
-          ? `${who}\nVous recevez les indices des soirées auxquelles on vous invite, le reste vous sera révélé le jour J.`
+          ? `${who}\nVous recevez les indices des soirées auxquelles on vous invite, le reste vous sera révélé le jour J. À votre tour, vous pouvez en tramer une : votre profil s'y appliquera.`
           : who}
       />
-      {role === 'passager' ? null : <CoupleProfile />}
+      <CoupleProfile />
       <TextLink href="/historique">Mes soirées →</TextLink>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
       <DeleteAccount onDeleted={onSignOut} />
@@ -94,7 +94,7 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
   );
 }
 
-// The couple's profile, which only the instigateur makes (the quiz), in full: it lives in the account.
+// The couple's profile, made by whoever composes the evenings (the quiz), in full: it lives in the account.
 function CoupleProfile() {
   const [profile, setProfile] = useState<AccountProfile | null | 'loading' | 'error'>('loading');
   const [quiz, setQuiz] = useState<QuizData | null>(null);
