@@ -36,9 +36,14 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
+    "jest": "~29.7.0",
+    "jest-expo": "~57.0.5",
+    "supabase": "^2.119.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -48,7 +53,12 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:web": "expo export -p web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "jest",
+    "build:e2e": "node scripts/build-e2e.js",
+    "e2e": "playwright test",
+    "db:start": "supabase start --workdir .. -x studio,postgres-meta,realtime,edge-runtime,imgproxy,logflare,vector,supavisor,mailpit",
+    "db:stop": "supabase stop --workdir .."
   },
   "private": true
 }

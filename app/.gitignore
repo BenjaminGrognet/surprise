@@ -42,3 +42,8 @@ example
 # generated native folders
 /ios
 /android
+
+# Browser tests (npm run build:e2e, npm run e2e)
+dist-e2e/
+test-results/
+playwright-report/

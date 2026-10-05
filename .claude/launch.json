@@ -18,6 +18,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "app", "run", "web"],
       "port": 8081
+    },
+    {
+      "name": "e2e",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "tests/e2e_server.py", "--port", "8011"],
+      "port": 8011
     }
   ]
 }
