@@ -26,7 +26,8 @@ type Item = { icon: string; label: string; href: Href | null; active: boolean; c
 // The floating bar at the foot of every screen: home, the evenings' grimoire, the jewel in the middle — a new
 // intrigue for the instigateur, the next evening's clues for the passager —, the instigateur's compass to the next
 // evening (its guide on the day) or the passager's own new intrigue, and the account, where the couple's profile now
-// lives. Only the tab one is on is lit: the jewel turns emerald there, like the others turn gold.
+// lives. Every icon is drawn in emerald, as the home's calls; only the tab one is on is lit, as the jewel: an emerald
+// disc, its icon in the night's ink, a halo under it.
 export function TabBar() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -93,12 +94,12 @@ export function TabBar() {
               disabled={!item.href}
               accessibilityRole="tab"
               accessibilityLabel={item.label}
-              accessibilityState={{ selected: item.active, disabled: !item.href }}
+              // aria-*, not accessibilityState: react-native-web leaves the latter out of the page.
+              aria-selected={item.active}
+              aria-disabled={!item.href}
               style={({ pressed }) => [
                 item.center ? [styles.jewel, { borderColor: item.active ? theme.accent : theme.line }] : styles.item,
-                item.active && (item.center
-                  ? { backgroundColor: theme.accent, boxShadow: `0 6px 18px ${theme.glow}` }
-                  : { backgroundColor: theme.backgroundSelected }),
+                item.active && { backgroundColor: theme.accent, boxShadow: `0 6px 18px ${theme.glow}` },
                 !item.href && styles.off,
                 pressed && styles.pressed,
               ]}>
@@ -106,7 +107,7 @@ export function TabBar() {
                 name={item.icon}
                 size={item.center ? 24 : 22}
                 strokeWidth={item.center ? 1.8 : 1.6}
-                color={item.active ? (item.center ? theme.onAccent : theme.gold) : theme.textSecondary}
+                color={item.active ? theme.onAccent : theme.accent}
               />
             </Pressable>
           ))}

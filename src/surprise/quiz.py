@@ -315,6 +315,22 @@ def valid_profile(value: Any) -> dict[str, Any] | None:
         return None
 
 
+MAX_VOTES = 500
+
+
+def valid_votes(value: Any) -> dict[tuple[str, str], int]:
+    """The couple's votes as the page sends them ({"source_id:external_id": 1 or -1}), by activity key; anything
+    else dropped."""
+    if not isinstance(value, dict):
+        return {}
+    votes = {}
+    for name, vote in list(value.items())[:MAX_VOTES]:
+        source_id, _, external_id = str(name).partition(":")
+        if source_id and external_id and vote in (1, -1) and not isinstance(vote, bool):
+            votes[(source_id, external_id)] = vote
+    return votes
+
+
 ENVIE_KEYS = {envie["value"]: envie for envie in ENVIES}
 OCCASION_KEYS = {occasion["value"]: occasion for occasion in OCCASIONS}
 START_KEYS = {option["value"]: option for option in START_OPTIONS}
@@ -532,8 +548,13 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
             # The evenings the couple chose (its history, by their pages): their activities are never proposed again.
             chosen = body.get("done") if isinstance(body.get("done"), list) else []
             chosen = [name for name in chosen[:200] if isinstance(name, str)]
+            # Their votes on the steps of evenings before: the kinds liked come first, those voted out never.
+            votes = valid_votes(body.get("votes"))
             with open_store(db) as store:
-                done = store.chosen_activities(chosen)
+                found = base(store)
+                # Never again: the activities of the evenings chosen, and those voted down.
+                done = store.chosen_activities(chosen) | {key for key, vote in votes.items() if vote < 0}
+                tastes = parcours.tastes_from(found, votes)
                 overnight = body.get("decoucher") is True
                 name = f"soiree-{new_id()}-{'-'.join(envies)}-{'diner' if body['diner'] else 'sans-diner'}"
                 name += "-nuit" if overnight else ""
@@ -541,9 +562,10 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                     requests = requests_for(profile, days, envies, occasion, body["diner"], overnight, start, end, budget)
                     for request in requests:
                         request.done = done
+                        request.tastes = tastes
                     _, name = parcours.generate(
                         store, requests,
-                        count=3, checks=checks, name=name, base=base(store), name_later=True,
+                        count=3, checks=checks, name=name, base=found, name_later=True,
                     )
                     state = parcours.load(name, store)
             self._send_json(HTTPStatus.OK, parcours.soiree_json(name, state))

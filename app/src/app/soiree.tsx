@@ -12,8 +12,9 @@ import { Waiting } from '@/components/spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
+import { useTastes } from '@/hooks/use-tastes';
 import { useTheme } from '@/hooks/use-theme';
-import { chooseEvening, currentUser, eveningsHistory, keptEvening } from '@/lib/account';
+import { chooseEvening, currentUser, eveningsHistory, keptEvening, myTastes, votesOf } from '@/lib/account';
 import {
   chooseRoute, composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart, refusal,
   type ComposedSoiree, type Night, type Profile, type SoireeData,
@@ -57,6 +58,7 @@ export default function SoireeScreen() {
   const [busyRedo, setBusyRedo] = useState<string | null>(null);
   // 'signin': not signed in, needs a link to /compte. A string: a plain error message.
   const [notice, setNotice] = useState<'signin' | string | null>(null);
+  const tastes = useTastes();
 
   useEffect(() => {
     (async () => {
@@ -117,8 +119,9 @@ export default function SoireeScreen() {
   async function compose() {
     setStatus('composing');
     try {
-      const history = (await currentUser()) ? await eveningsHistory().catch(() => []) : [];
-      const fresh = await composeSoiree({ ...night, envies, done: history.map((h) => h.page_name) });
+      const signedIn = !!(await currentUser());
+      const [history, votes] = signedIn ? await Promise.all([eveningsHistory().catch(() => []), myTastes().catch(() => [])]) : [[], []];
+      const fresh = await composeSoiree({ ...night, envies, done: history.map((h) => h.page_name), votes: votesOf(votes) });
       setComposed(fresh);
       router.setParams({ soiree: fresh.name });
       setStatus('idle');
@@ -179,7 +182,7 @@ export default function SoireeScreen() {
             ? "Élargissez les horaires, le budget ou les envies, et relancez l'intrigue."
             : chosen
               ? undefined
-              : `Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, ${turn ? "c'est votre instigateur qui n'en verra que les indices" : "votre passager n'en verra que les indices"}.`}>
+              : `Une étape ne vous plaît pas ? Changez-la ou retirez-la, et d'un pouce dites-nous si son genre vous plaît : les prochaines soirées en tiendront compte. Une fois gardée, ${turn ? "c'est votre instigateur qui n'en verra que les indices" : "votre passager n'en verra que les indices"}.`}>
           {chosen && inHistory ? (
             <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name } }}>Ouvrir la révélation</PrimaryLink>
           ) : null}
@@ -193,6 +196,7 @@ export default function SoireeScreen() {
         ) : notice ? (
           <ThemedText themeColor="danger">{notice}</ThemedText>
         ) : null}
+        {tastes.error ? <ThemedText themeColor="danger">{tastes.error}</ThemedText> : null}
         {shown.map((route) => (
           <RouteResult
             key={route.index}
@@ -201,6 +205,8 @@ export default function SoireeScreen() {
             busyRedo={busyRedo}
             onRedo={redo}
             onChoose={() => choose(route)}
+            votes={tastes.votes}
+            onVote={tastes.vote}
           />
         ))}
       </Screen>

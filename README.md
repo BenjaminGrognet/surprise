@@ -343,6 +343,12 @@ la plus tardive, et ce qu'une envie écarte revient si une autre le demande (coc
 Les refus, le budget, l'audace et les goûts sont ceux du profil, ou des réglages par défaut sans profil. Les refus
 (« être en maillot de bain », « le vide », « la foule »…) visent des tags, des mots-clés ou des catégories.
 
+Sur chaque étape proposée ou gardée, l'instigateur vote d'un pouce : « on aime ce genre » ou « pas pour nous »
+(table `gouts`, migration `20261006000000_gouts.sql`, un vote par activité et par compte, revus et retirés depuis le
+compte). Chaque nouvelle soirée les envoie (`votes`) : le genre d'une activité (ses tags « activité », sinon ses
+catégories) gagne 1 point par vote pour (2,5 au plus) et en perd 2 par vote contre (5 au plus) ; à −2 net (deux « pas
+pour nous »), il n'est plus proposé. L'activité votée contre elle-même ne revient jamais (`surprise.parcours.taste`).
+
 ```bash
 uv run python -m surprise.quiz    # http://127.0.0.1:8001
 uv run python -m surprise.quiz --host 0.0.0.0    # + accessible depuis un téléphone sur le même Wi-Fi

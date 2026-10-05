@@ -1,4 +1,7 @@
+import json
 from datetime import date, datetime, timedelta
+
+import pytest
 
 from surprise import availability, parcours
 from surprise.local_store import open_store
@@ -577,3 +580,49 @@ def test_concerts_keep_to_the_couple_music():
     assert scores["techno"] == float("-inf")
     assert min(scores["jazz"], scores["bougies"], scores["inconnu"]) > float("-inf")
     assert scores["jazz"] > scores["inconnu"]  # their music comes first
+
+
+def test_the_couples_votes_favour_a_kind_and_leave_out_one_voted_down_twice():
+    entries = [
+        item("pirates", "Escape game des pirates", ["jeux"], occurrences=[at(20)]),
+        item("louvre", "Escape game du Louvre", ["jeux"], occurrences=[at(20)]),  # an escape game, and art
+        item("quiz", "Quiz au pub", ["jeux"], occurrences=[at(20)]),
+        item("blind", "Blind test du jeudi", ["jeux"], occurrences=[at(20)]),
+        item("annees80", "Blind test des années 80", ["jeux"], occurrences=[at(20)]),
+    ]
+    base = parcours.Base(entries, {(e["source_id"], e["external_id"]): 35 for e in entries})
+
+    def scores(votes):
+        req = request(vibes=["defi"], tastes=parcours.tastes_from(base, {("test", key): vote for key, vote in votes.items()}))
+        return {c.key[1]: parcours.score(c, req) for c in (parcours.build_candidate(e, req, None) for e in entries)}
+
+    plain = scores({})
+    assert parcours.tastes_from(base, {("test", "louvre"): 1}) == {"escape_game": 1, "art": 1}
+    # An escape game liked: the other one comes first, the quizzes do not move.
+    liked = scores({"pirates": 1})
+    assert liked["louvre"] == pytest.approx(plain["louvre"] + parcours.TASTE_UP)
+    assert liked["quiz"] == plain["quiz"]
+    # Liked again and again: no more than TASTE_MAX.
+    many = parcours.taste({"escape_game"}, request(tastes={"escape_game": 9}))
+    assert many == parcours.TASTE_MAX
+    # A quiz voted down: the others weigh less, a "no" more than a "yes"; liked and not liked, it is even.
+    once = scores({"quiz": -1})
+    assert once["blind"] == pytest.approx(plain["blind"] - parcours.TASTE_DOWN)
+    assert parcours.tastes_from(base, {("test", "quiz"): -1, ("test", "blind"): 1}) == {}
+    # Two voted down: no quiz at all any more, the escape games still.
+    out = scores({"quiz": -1, "blind": -1})
+    assert out["annees80"] == float("-inf") and out["pirates"] == plain["pirates"]
+    # Before any check, the engines are asked for a kind voted out last, not never.
+    req = request(vibes=["defi"], tastes={"quiz": -2})
+    assert parcours.quick_score(entries[4], req) == pytest.approx(parcours.quick_score(entries[4], request(vibes=["defi"])) - parcours.TASTE_MIN)
+    # An activity that left the base since is not counted.
+    assert parcours.tastes_from(base, {("test", "absente"): -1}) == {}
+
+
+def test_the_tastes_are_kept_with_the_evening_for_its_redraws():
+    req = request(tastes={"quiz": -2.0, "escape_game": 1.0})
+    assert parcours._decode(json.loads(parcours._json([req])))[0].tastes == {"quiz": -2.0, "escape_game": 1.0}
+    # An evening saved before the votes: none.
+    data = parcours._encode(request())
+    del data["tastes"]
+    assert parcours._decode(data).tastes == {}

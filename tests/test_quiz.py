@@ -126,6 +126,13 @@ def test_valid_profile_rejects_the_wrong_shape():
     assert clamped["vibes"] == ["romantique"] and clamped["audace"] == 1.0 and clamped["avoid"] == [] and clamped["budget"] == 1000.0
 
 
+def test_valid_votes_keeps_an_activity_and_a_plus_or_minus_one():
+    votes = {"fever:12": 1, "osm_loisirs:node:5": -1, "sans-source": 1, ":15": -1, "fever:13": 2, "fever:14": True, "fever:16": "1"}
+    assert quiz.valid_votes(votes) == {("fever", "12"): 1, ("osm_loisirs", "node:5"): -1}
+    assert quiz.valid_votes(["fever:12"]) == {} and quiz.valid_votes(None) == {}
+    assert len(quiz.valid_votes({f"fever:{n}": 1 for n in range(2 * quiz.MAX_VOTES)})) == quiz.MAX_VOTES
+
+
 def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
     # The site is the app's web build: a stand-in for app/dist.
     web = tmp_path / "dist"

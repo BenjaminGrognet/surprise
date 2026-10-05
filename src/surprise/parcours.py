@@ -133,6 +133,7 @@ class Request:
     overnight: bool = False  # the evening ends in a hotel ("découcher")
     night_budget: float | None = None  # euros for the room, added to the evening's budget (night_budget_for by default)
     done: set[tuple[str, str]] = field(default_factory=set)  # activities of evenings the couple chose: never again
+    tastes: dict[str, float] = field(default_factory=dict)  # the couple's votes by kind of outing (tastes_from): + liked, − not for them
 
     @property
     def room_budget(self) -> float:
@@ -480,6 +481,40 @@ def _platform(url: str | None) -> str:
     return (engine_in(url) if url else None) or "billetterie en ligne"
 
 
+# The couple's votes on the steps they were proposed (app: « on aime ce genre », « pas pour nous »), by kind of outing.
+TASTE_UP = 1.0  # score gained per vote for one of the activity's kinds, up to TASTE_MAX
+TASTE_MAX = 2.5
+TASTE_DOWN = 2.0  # score lost per vote against, down to -TASTE_MIN: a "no" weighs more than a "yes"
+TASTE_MIN = 5.0
+VOTED_OUT = -2  # votes against an activity's kinds (net) from which it is never proposed
+
+
+def kinds(item: dict[str, Any], tags: list[str] | None = None) -> set[str]:
+    """What kind of outing an activity is, for the couple's votes: its activity tags ("escape_game", "jazz"), else its
+    categories ("bar", "humour"). `tags`: the activity's, when already read."""
+    tags = describe(item["activity"])["tags"] if tags is None else tags
+    return {t for t in tags if TAGS[t]["facet"] == "activite"} or set(item["activity"].get("categories") or [])
+
+
+def tastes_from(base: "Base", votes: dict[tuple[str, str], int]) -> dict[str, float]:
+    """The kinds of outing the couple voted for (+) or against (−), from the activities they voted on (+1 or -1 each);
+    an activity that left the base since is not counted."""
+    weights: Counter = Counter()
+    for key, vote in votes.items():
+        if (item := base.by_key.get(key)) is not None:
+            for kind in kinds(item):
+                weights[kind] += vote
+    return {kind: weight for kind, weight in weights.items() if weight}
+
+
+def taste(found: set[str], request: Request) -> float:
+    """What the couple's votes say of an activity of these kinds: a bonus, a malus, or -inf once voted out."""
+    total = sum(request.tastes.get(kind, 0) for kind in found)
+    if total <= VOTED_OUT:
+        return -math.inf
+    return min(TASTE_MAX, TASTE_UP * total) if total > 0 else max(-TASTE_MIN, TASTE_DOWN * total)
+
+
 def score(candidate: Candidate, request: Request) -> float:
     """How well the activity answers the request, on its own."""
     item, activity = candidate.item, candidate.item["activity"]
@@ -490,6 +525,9 @@ def score(candidate: Candidate, request: Request) -> float:
         return -math.inf  # an outing must answer one of the wishes
     if request.avoid & (set(candidate.tags) | set(candidate.keywords) | set(activity.get("categories") or [])):
         return -math.inf  # the couple said no
+    value += taste(kinds(item, candidate.tags), request)
+    if value == -math.inf:
+        return -math.inf  # a kind of outing they voted out
     if request.no_dinner and candidate.role == "repas":
         return -math.inf  # they will have eaten
     if candidate.role == "sortie" and genres.off_key(candidate.genres, set(activity.get("categories") or []), request.genres):
@@ -601,6 +639,7 @@ def quick_score(item: dict[str, Any], request: Request, originality: int = 35) -
     value += 0.5 * len(_ROMANTIC_TAGS & set(found["tags"]))
     value += 0.6 * bool(item["enrichment"].get("image_url") or item["activity"].get("image"))
     value += (originality - 35) / 25 * (0.5 + request.audace)
+    value += max(-TASTE_MIN, taste(kinds(item, found["tags"]), request))
     return value
 
 

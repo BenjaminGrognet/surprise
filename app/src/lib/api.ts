@@ -82,6 +82,8 @@ export type Night = {
   profile: Profile | null;
   // The evenings the couple chose (its history, by their pages): their activities are never proposed again.
   done?: string[];
+  // Their votes on steps (lib/account.ts votesOf): the kinds of outing liked come first, those voted out never.
+  votes?: Record<string, 1 | -1>;
 };
 
 export const getSoiree = () => api<SoireeData>('/api/soiree');

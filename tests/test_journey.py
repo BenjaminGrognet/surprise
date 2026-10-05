@@ -148,6 +148,30 @@ def test_a_route_is_drawn_again_without_its_activities(api):
     assert api(f"/api/parcours/{name}") == redrawn
 
 
+# The stand-ups of the catalogue: one kind of outing (surprise.parcours.kinds).
+STAND_UPS = {f"test:{i['external_id']}" for i in CATALOGUE if "stand_up" in parcours.kinds(i)}
+
+
+def test_the_couples_votes_shape_their_next_evenings(api):
+    evening = {"envies": ["rire", "jouer"], "diner": False, "day": DAY.isoformat()}
+    page = api("/api/soirees", evening)
+    proposed = {key for route in _keys(page) for key in route}
+    assert proposed & STAND_UPS
+    # One activity voted down: never proposed again.
+    down = sorted(proposed)[0]
+    following = api("/api/soirees", {**evening, "votes": {down: -1}})
+    assert following["routes"] and down not in {key for route in _keys(following) for key in route}
+    # Two stand-ups voted down: no stand-up any more, the games stay. The tastes are kept with the evening, for the
+    # steps drawn again once it is kept (plan B).
+    votes = {"test:standup": -1, "test:comedy": -1, "test:pirates": 1}
+    page = api("/api/soirees", {**evening, "votes": votes})
+    assert page["routes"] and not {key for route in _keys(page) for key in route} & STAND_UPS
+    assert parcours.load(page["name"])["requests"][0].tastes == {"stand_up": -2, "comedie": -1, "escape_game": 1}
+    # Votes the page could not have sent are dropped, the evening composed all the same.
+    assert api("/api/soirees", {**evening, "votes": ["test:standup"]})["routes"]
+    assert api("/api/soirees", {**evening, "votes": {"test:standup": 5, "standup": -1}})["routes"]
+
+
 def test_the_api_refuses_what_it_cannot_do(api):
     assert api("/api/parcours/absente") == (404, "introuvable")
     assert api("/api/parcours/absente/routes/0/steps/1", {}) == (409, "parcours introuvable : relancez la composition")

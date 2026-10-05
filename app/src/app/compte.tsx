@@ -9,10 +9,13 @@ import { PageCard } from '@/components/intrigue-card';
 import { PersonaCard } from '@/components/persona-card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
+import { Icon } from '@/components/ui-icons';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useTheme } from '@/hooks/use-theme';
-import { accountProfile, currentUser, signOut, deleteMyAccount, type AccountProfile } from '@/lib/account';
+import {
+  accountProfile, currentUser, signOut, deleteMyAccount, myTastes, saveTaste, type AccountProfile, type TasteRow,
+} from '@/lib/account';
 import { getQuiz, type QuizData } from '@/lib/api';
 import { supabaseConfigured } from '@/lib/supabase';
 
@@ -87,6 +90,7 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
           : who}
       />
       <CoupleProfile />
+      <CoupleTastes />
       <TextLink href="/historique">Mes soirées →</TextLink>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
       <DeleteAccount onDeleted={onSignOut} />
@@ -122,6 +126,57 @@ function CoupleProfile() {
           <PrimaryLink href="/profil">Faire notre profil</PrimaryLink>
         </>
       )}
+    </View>
+  );
+}
+
+const TASTES_SHOWN = 8;
+
+// The votes cast on steps, the latest first: the kinds of outing the evenings to come favour or leave out. One
+// withdrawn at a touch, as a « pas pour nous » left out a whole kind.
+function CoupleTastes() {
+  const theme = useTheme();
+  const [rows, setRows] = useState<TasteRow[] | null>(null);
+  const [all, setAll] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    myTastes().then(setRows).catch(() => setRows([]));
+  }, []);
+
+  if (rows === null) return null;
+  const withdraw = (row: TasteRow) => {
+    setError('');
+    saveTaste({ id: row.activity_id, title: row.title }, null)
+      .then(() => setRows((rows) => (rows ?? []).filter((r) => r.activity_id !== row.activity_id)))
+      .catch((e: Error) => setError(e.message));
+  };
+  const shown = all ? rows : rows.slice(0, TASTES_SHOWN);
+  return (
+    <View style={styles.section}>
+      <ThemedText type="eyebrow">Nos goûts</ThemedText>
+      {rows.length === 0 ? (
+        <Notice>Aucun vote pour l&apos;instant : sur chaque étape d&apos;une soirée, un pouce levé ou baissé nous dit si son genre vous plaît.</Notice>
+      ) : (
+        <View testID="nos-gouts" style={[styles.tastes, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
+          {shown.map((row) => (
+            <View key={row.activity_id} style={styles.taste}>
+              <Icon
+                name={row.vote === 1 ? 'pouce_haut' : 'pouce_bas'}
+                size={16}
+                strokeWidth={1.8}
+                color={row.vote === 1 ? theme.accent : theme.danger}
+              />
+              <ThemedText type="small" style={styles.tasteTitle} numberOfLines={1}>{row.title || 'Une étape'}</ThemedText>
+              <TextButton onPress={() => withdraw(row)}>Retirer</TextButton>
+            </View>
+          ))}
+          {rows.length > TASTES_SHOWN ? (
+            <TextButton onPress={() => setAll(!all)}>{all ? 'Moins' : `Tout voir (${rows.length})`}</TextButton>
+          ) : null}
+        </View>
+      )}
+      {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
     </View>
   );
 }
@@ -171,4 +226,7 @@ const styles = StyleSheet.create({
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
   notice: { padding: Spacing.three, borderRadius: Radius.tile, borderWidth: 1 },
   section: { gap: Spacing.three, marginVertical: Spacing.two },
+  tastes: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, borderRadius: Radius.tile, borderWidth: 1 },
+  taste: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, minHeight: 36 },
+  tasteTitle: { flex: 1 },
 });

@@ -6,13 +6,15 @@ import { CompassGuide } from '@/components/compass-guide';
 import { Countdown, PageCard } from '@/components/intrigue-card';
 import { formatPrice, place } from '@/components/route-result';
 import { StepImage } from '@/components/step-image';
+import { TasteVote } from '@/components/taste-vote';
 import { ThemedText } from '@/components/themed-text';
 import { busyStyle } from '@/components/spinner';
 import { Veil } from '@/components/veil';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
+import { useTastes } from '@/hooks/use-tastes';
 import { useTheme } from '@/hooks/use-theme';
-import { bookedSteps, saveBookedSteps } from '@/lib/account';
+import { bookedSteps, saveBookedSteps, type Vote } from '@/lib/account';
 import { redoPart, refusal, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { cluesFor, inTime, nextClue, shownClues, type RevealMode } from '@/lib/clues';
 import { formatTime, longDay } from '@/lib/dates';
@@ -33,6 +35,7 @@ export function Organiser({
   const [error, setError] = useState('');
   const [swapping, setSwapping] = useState<string | null>(null);
   const [swapNotice, setSwapNotice] = useState('');
+  const tastes = useTastes();
   const start = Date.parse(route.start);
   const steps = [...route.steps, ...(route.night ? [route.night] : [])];
   const toBook = steps.filter((s) => s.booking_action === 'reserver' && s.booking_url);
@@ -87,7 +90,7 @@ export function Organiser({
       <Tabs tab={tab} onTab={setTab} pending={left} />
 
       {tab === 'aventure' ? (
-        <Aventure route={route} steps={steps} now={now} swapping={swapping} notice={swapNotice} onSwap={swap} />
+        <Aventure route={route} steps={steps} now={now} swapping={swapping} notice={swapNotice || tastes.error} onSwap={swap} votes={tastes.votes} onVote={tastes.vote} />
       ) : (
         <Coulisses route={route} secretTitle={secretTitle} toBook={toBook} booked={booked} onToggle={toggle} error={error} now={now} mode={mode} />
       )}
@@ -122,23 +125,26 @@ function Tabs({ tab, onTab, pending }: { tab: Tab; onTab: (tab: Tab) => void; pe
   );
 }
 
+// The instigateur's votes on the steps (hooks/use-tastes.ts), for the evenings to come.
+type Votes = { votes: Record<string, Vote>; onVote: (step: SoireeStep, vote: Vote) => void };
+
 // L'Aventure: the evening as a silk thread, a fine gold line with each step hung on a glowing anchor.
 function Aventure({
-  route, steps, now, swapping, notice, onSwap,
-}: { route: SoireeRoute; steps: SoireeStep[]; now: number; swapping: string | null; notice: string; onSwap: (step: SoireeStep) => void }) {
+  route, steps, now, swapping, notice, onSwap, votes, onVote,
+}: { route: SoireeRoute; steps: SoireeStep[]; now: number; swapping: string | null; notice: string; onSwap: (step: SoireeStep) => void } & Votes) {
   return (
     <View style={styles.section}>
       {/* The title alone: the pitch would repeat the steps and the price shown below. */}
       <ThemedText type="subtitle">{route.title}</ThemedText>
       {notice ? <ThemedText type="small" themeColor="accentInk">{notice}</ThemedText> : null}
-      <SilkThread steps={steps} now={now} swapping={swapping} onSwap={onSwap} />
+      <SilkThread steps={steps} now={now} swapping={swapping} onSwap={onSwap} votes={votes} onVote={onVote} />
     </View>
   );
 }
 
 function SilkThread({
-  steps, now, swapping, onSwap,
-}: { steps: SoireeStep[]; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void }) {
+  steps, now, swapping, onSwap, votes, onVote,
+}: { steps: SoireeStep[]; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void } & Votes) {
   const theme = useTheme();
   return (
     <View style={styles.thread}>
@@ -146,14 +152,22 @@ function SilkThread({
       {steps.map((step, i) => (
         <View key={step.id + i}>
           {i > 0 ? <Hop previous={steps[i - 1]} step={step} /> : null}
-          <ThreadStep step={step} busy={swapping === step.id} onSwap={step.redo && Date.parse(step.start) > now && swapping === null ? () => onSwap(step) : null} />
+          <ThreadStep
+            step={step}
+            busy={swapping === step.id}
+            onSwap={step.redo && Date.parse(step.start) > now && swapping === null ? () => onSwap(step) : null}
+            vote={votes[step.id]}
+            onVote={step.role === 'nuit' ? null : (v) => onVote(step, v)}
+          />
         </View>
       ))}
     </View>
   );
 }
 
-function ThreadStep({ step, busy, onSwap }: { step: SoireeStep; busy: boolean; onSwap: (() => void) | null }) {
+function ThreadStep({
+  step, busy, onSwap, vote, onVote,
+}: { step: SoireeStep; busy: boolean; onSwap: (() => void) | null; vote?: Vote; onVote: ((vote: Vote) => void) | null }) {
   const theme = useTheme();
   const [more, setMore] = useState(false);
   const [photo, setPhoto] = useState(false);
@@ -198,6 +212,8 @@ function ThreadStep({ step, busy, onSwap }: { step: SoireeStep; busy: boolean; o
             {onSwap || busy ? <TextButton busy={busy} onPress={onSwap ?? (() => {})}>{busy ? 'On cherche un plan B…' : '↻ Plan B'}</TextButton> : null}
           </View>
         </View>
+        {/* For the evenings to come: whether this kind of outing is theirs. */}
+        {onVote ? <TasteVote vote={vote} onVote={onVote} said /> : null}
       </View>
     </View>
   );

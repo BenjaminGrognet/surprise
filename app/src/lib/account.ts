@@ -144,6 +144,33 @@ export async function saveBookedSteps(pageName: string, booked: string[]) {
   if (!data?.length) throw new Error("Cette soirée n'est pas gardée sur votre compte.");
 }
 
+// The couple's tastes (table gouts): on a step, « on aime ce genre » (1) or « pas pour nous » (-1), one vote per
+// activity. Sent with each new evening (Night.votes): the server favours the kinds liked and leaves out the others.
+export type Vote = 1 | -1;
+export type TasteRow = { activity_id: string; vote: Vote; title: string; voted_at: string };
+
+export async function myTastes(): Promise<TasteRow[]> {
+  const { data, error } = await supabase.from('gouts').select('activity_id,vote,title,voted_at').order('voted_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TasteRow[];
+}
+
+// A vote on a step (its id: source_id:external_id), or withdrawn (null).
+export async function saveTaste(step: { id: string; title: string }, vote: Vote | null) {
+  const user = await currentUser();
+  if (!user) throw new Error('Connectez-vous pour garder vos goûts.');
+  const { error } = vote === null
+    ? await supabase.from('gouts').delete().eq('activity_id', step.id)
+    : await supabase.from('gouts').upsert(
+      { user_id: user.id, activity_id: step.id, vote, title: step.title, voted_at: new Date().toISOString() },
+      { onConflict: 'user_id,activity_id' },
+    );
+  if (error) throw new Error(error.message);
+}
+
+// The votes as the server reads them with a new evening.
+export const votesOf = (rows: TasteRow[]): Record<string, Vote> => Object.fromEntries(rows.map((r) => [r.activity_id, r.vote]));
+
 // A past evening removed from the archives, its book and photos with it (instigateur only, RLS: day is over).
 export async function deleteEvening(id: string) {
   await removePhotos([id]);

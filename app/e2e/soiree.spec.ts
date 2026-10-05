@@ -3,7 +3,7 @@
 // sees only its clues.
 import { expect, type Page, test } from '@playwright/test';
 
-import type { ComposedSoiree, SoireeStep } from '@/lib/api';
+import type { ComposedSoiree, Night, SoireeStep } from '@/lib/api';
 
 // The activities' images are the sites' own, loaded live as the couple's browser does: a slow site has some time.
 const IMAGE_TIMEOUT = 30_000;
@@ -37,6 +37,25 @@ async function createAccount(page: Page, label: string, button = 'Créer notre c
 
 const posted = (page: Page, path: RegExp) =>
   page.waitForResponse((r) => r.request().method() === 'POST' && path.test(new URL(r.url()).pathname));
+
+// An evening composed from the form: to laugh, having eaten. What the server answered, and what the page sent it.
+async function compose(page: Page) {
+  await page.getByText('Rire aux éclats').click();
+  await page.getByText('Non, déjà mangé').click();
+  const composing = posted(page, /^\/api\/soirees$/);
+  await page.getByText('Tramer nos intrigues').click();
+  const response = await composing;
+  // The screen just opened: one composed before may stay under it, hidden.
+  await expect(page.getByText('Trois intrigues se murmurent au salon').filter({ visible: true })).toBeVisible();
+  return { composed: (await response.json()) as ComposedSoiree, sent: response.request().postDataJSON() as Night };
+}
+
+// A vote written to Supabase (table gouts): cast, changed or withdrawn.
+const voted = (page: Page, method: 'POST' | 'DELETE') =>
+  page.waitForResponse((r) => r.request().method() === method && new URL(r.url()).pathname === '/rest/v1/gouts');
+
+const EMERALD = 'rgb(61, 183, 135)';
+const NIGHT_INK = 'rgb(3, 20, 13)';
 
 test('signed out, every screen leads to the account page', async ({ page }) => {
   for (const path of ['/', '/soiree', '/historique']) {
@@ -186,4 +205,69 @@ test("a photo the sites do not give is asked again, reported, and the step shows
   await expect
     .poll(() => page.evaluate(() => [...document.images].filter((i) => i.complete && i.naturalWidth > 0 && i.src.includes('/bannieres/')).length))
     .toBeGreaterThanOrEqual(sites.length);
+});
+
+test('the tab bar: every icon in emerald, only the tab one is on lit like the jewel', async ({ page }) => {
+  await page.goto('/');
+  await createAccount(page, 'onglets');
+  await expect(page.getByText('Bonjour, cher instigateur.')).toBeVisible();
+  const tabs = ['Accueil', 'Mes soirées', 'Nouvelle intrigue', 'Pas encore de soirée', 'Mon compte'];
+  const look = (name: string) =>
+    page.getByRole('tab', { name, exact: true }).evaluate((tab) => ({
+      disc: getComputedStyle(tab).backgroundColor,
+      ink: getComputedStyle(tab.querySelector('path')!).stroke,
+      selected: tab.getAttribute('aria-selected'),
+    }));
+  for (const [path, lit] of [['/', 'Accueil'], ['/historique', 'Mes soirées'], ['/soiree', 'Nouvelle intrigue'], ['/compte', 'Mon compte']]) {
+    await page.goto(path);
+    await expect(page.getByRole('tab', { name: lit, exact: true })).toHaveAttribute('aria-selected', 'true');
+    for (const name of tabs) {
+      expect(await look(name), `${name} sur ${path}`).toEqual(
+        name === lit ? { disc: EMERALD, ink: NIGHT_INK, selected: 'true' } : { disc: 'rgba(0, 0, 0, 0)', ink: EMERALD, selected: 'false' },
+      );
+    }
+  }
+});
+
+test('the instigateur votes on steps: kept on the account, sent with the next evening, which leaves out the one voted down', async ({ page }) => {
+  await page.goto('/');
+  await createAccount(page, 'gouts');
+  await page.getByText('Lancer une nouvelle intrigue').click();
+  const { composed, sent } = await compose(page);
+  expect(sent.votes).toEqual({});
+  // The thumbs of each step, in the routes' order (the night is not voted on).
+  const steps = composed.routes.flatMap((r) => r.steps);
+  const ups = page.getByRole('checkbox', { name: 'On aime ce genre', exact: true });
+  const downs = page.getByRole('checkbox', { name: 'Pas pour nous', exact: true });
+  await expect(ups).toHaveCount(steps.length);
+  await expect(downs).toHaveCount(steps.length);
+  const [down, up] = steps;
+
+  let saving = voted(page, 'POST');
+  await downs.nth(0).click();
+  await saving;
+  await expect(downs.nth(0)).toBeChecked();
+  saving = voted(page, 'POST');
+  await ups.nth(1).click();
+  await saving;
+  await expect(ups.nth(1)).toBeChecked();
+  await expect(downs.nth(1)).not.toBeChecked();
+
+  // On the account: both, the latest first; one withdrawn.
+  await page.getByRole('tab', { name: 'Mon compte', exact: true }).click();
+  await expect(page.getByText('Nos goûts')).toBeVisible();
+  const tastes = page.getByTestId('nos-gouts');
+  await expect(tastes.getByText(down.title, { exact: true })).toBeVisible();
+  await expect(tastes.getByText(up.title, { exact: true })).toBeVisible();
+  const withdrawing = voted(page, 'DELETE');
+  await tastes.getByText('Retirer', { exact: true }).first().click();
+  await withdrawing;
+  await expect(tastes.getByText(up.title, { exact: true })).toHaveCount(0);
+  await expect(tastes.getByText(down.title, { exact: true })).toBeVisible();
+
+  // The next evening is sent the vote left, and never proposes the step voted down.
+  await page.getByRole('tab', { name: 'Nouvelle intrigue', exact: true }).click();
+  const next = await compose(page);
+  expect(next.sent.votes).toEqual({ [down.id]: -1 });
+  expect(next.composed.routes.flatMap((r) => r.steps).map((s) => s.id)).not.toContain(down.id);
 });

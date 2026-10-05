@@ -33,6 +33,7 @@ const brand = {
   creamSoft: 'rgba(241, 237, 225, 0.62)', // the cream of an intimate aside
   creamFaint: 'rgba(241, 237, 225, 0.36)', // a placeholder, a whisper
   danger: '#E8857A',
+  dangerFaint: 'rgba(232, 133, 122, 0.14)', // a "no" chosen: the thumb down's disc
   ok: '#6FD3A8',
   info: '#8DB8E8',
   warn: '#E6B866',

@@ -6,7 +6,9 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import { Spinner, busyStyle } from '@/components/spinner';
 import { StepImage } from '@/components/step-image';
+import { TasteVote } from '@/components/taste-vote';
 import { useTheme } from '@/hooks/use-theme';
+import type { Vote } from '@/lib/account';
 import { type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { formatTime } from '@/lib/dates';
 
@@ -38,12 +40,17 @@ export function RouteResult({
   onRedo,
   onChoose,
   busyRedo,
+  votes,
+  onVote,
 }: {
   route: SoireeRoute;
   chosen?: boolean;
   onRedo?: (redo: string) => void;
   onChoose?: () => void;
   busyRedo?: string | null;
+  // The instigateur's votes on the steps (hooks/use-tastes.ts), for the evenings to come; the night is not voted on.
+  votes?: Record<string, Vote>;
+  onVote?: (step: SoireeStep, vote: Vote) => void;
 }) {
   const theme = useTheme();
   // A route keeps one step at least: the last one cannot be taken out.
@@ -63,7 +70,7 @@ export function RouteResult({
         {route.steps.map((step, i) => (
           <View key={i}>
             {i > 0 ? <Hop previous={route.steps[i - 1]} step={step} /> : null}
-            <StepRow step={step} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={removable} />
+            <StepRow step={step} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={removable} vote={votes?.[step.id]} onVote={onVote} />
           </View>
         ))}
         {route.night ? (
@@ -97,11 +104,15 @@ function StepRow({
   busyRedo,
   onRedo,
   removable,
+  vote,
+  onVote,
 }: {
   step: SoireeStep;
   busyRedo: string | null;
   onRedo?: (redo: string) => void;
   removable: boolean;
+  vote?: Vote;
+  onVote?: (step: SoireeStep, vote: Vote) => void;
 }) {
   const theme = useTheme();
   const remove = step.redo ? `${step.redo}/remove` : null;
@@ -118,6 +129,7 @@ function StepRow({
         </View>
         {onRedo && step.redo ? <Pressable onPress={busyRedo ? undefined : () => onRedo(step.redo!)} style={styles.redoRow}>{busyRedo === step.redo ? <Spinner size={11} /> : null}<ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === step.redo ? 'Recherche…' : '↻ Changer'}</ThemedText></Pressable> : null}
         {onRedo && removable && remove ? <Pressable onPress={() => onRedo(remove)}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === remove ? 'Retrait…' : '✕ Retirer'}</ThemedText></Pressable> : null}
+        {onVote ? <View style={styles.vote}><TasteVote vote={vote} onVote={(v) => onVote(step, v)} /></View> : null}
       </View>
       <View style={styles.body}>
         <ThemedText type="small" style={{ color: INK_SOFT }} numberOfLines={1}>
@@ -162,5 +174,6 @@ const styles = StyleSheet.create({
   body: { flex: 1, gap: 1 },
   line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap', marginTop: 2 },
   side: { width: 72, gap: 2 },
+  vote: { marginTop: Spacing.one },
   book: { borderRadius: 999, paddingVertical: Spacing.one + 2, paddingHorizontal: Spacing.three },
 });
