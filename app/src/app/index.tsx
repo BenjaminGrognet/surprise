@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { PrimaryLink, TextButton } from '@/components/buttons';
 import { CardHead, countdownLabel, IntrigueCard, PageCard } from '@/components/intrigue-card';
-import { imageUri, place } from '@/components/route-result';
+import { place } from '@/components/route-result';
+import { StepImage } from '@/components/step-image';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui-icons';
@@ -303,9 +304,7 @@ function FirstStep({ row, route, role }: { row: EveningHistoryRow; route: Soiree
         onPress={open}
         accessibilityLabel={veiled ? `Une étape encore voilée${word ? ` : ${word}` : ''}` : step.title}
         style={({ pressed }) => [styles.photoCard, { backgroundColor: theme.backgroundElement, borderColor: theme.line }, pressed && styles.pressed]}>
-        {step.image_url ? (
-          <Image source={{ uri: imageUri(step.image_url) }} blurRadius={veiled ? 30 : 0} style={StyleSheet.absoluteFill} />
-        ) : null}
+        <StepImage step={step} blurRadius={veiled ? 30 : 0} style={StyleSheet.absoluteFill} />
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 1 1">
             <Defs>

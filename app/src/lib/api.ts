@@ -146,6 +146,10 @@ export type ComposedSoiree = {
 
 export const composeSoiree = (night: Night) => api<ComposedSoiree>('/api/soirees', { method: 'POST', body: JSON.stringify(night) });
 export const getSoireeState = (name: string) => api<ComposedSoiree>(`/api/parcours/${encodeURIComponent(name)}`);
+// A step's image the page could not show, even on a second try: the server checks it, and answers with another (the
+// official site's) or null.
+export const reportBrokenImage = (id: string, url: string) =>
+  api<{ image_url: string | null }>('/api/images/broken', { method: 'POST', body: JSON.stringify({ id, url }) });
 export const redoPart = (name: string, redo: string) =>
   api<ComposedSoiree>(`/api/parcours/${name}/${redo}`, { method: 'POST', body: '{}' });
 // The route kept: the page keeps it alone from now on (the others go), as its route 0.

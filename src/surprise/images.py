@@ -63,12 +63,22 @@ def loads(client: httpx.Client, url: str) -> bool | None:
         return None
 
 
-def local_copy(url: str, client: httpx.Client | None = None, directory: Path = DIRECTORY) -> Path | None:
-    """The image's file in the directory, downloaded if it is not there yet; None if it cannot be had."""
-    stem = hashlib.sha1(url.encode()).hexdigest()[:20]
-    for suffix in MEDIA_TYPES:
-        if (path := directory / f"{stem}{suffix}").exists():
-            return path
+def _stem(url: str) -> str:
+    return hashlib.sha1(url.encode()).hexdigest()[:20]
+
+
+def copied(url: str, directory: Path | None = None) -> Path | None:
+    """The image's file in the directory (DIRECTORY by default), if it was copied there."""
+    directory = directory or DIRECTORY
+    return next((path for suffix in MEDIA_TYPES if (path := directory / f"{_stem(url)}{suffix}").exists()), None)
+
+
+def local_copy(url: str, client: httpx.Client | None = None, directory: Path | None = None) -> Path | None:
+    """The image's file in the directory (DIRECTORY by default), downloaded if it is not there yet; None if it
+    cannot be had."""
+    directory = directory or DIRECTORY
+    if path := copied(url, directory):
+        return path
     try:
         if client is None:
             with httpx.Client(timeout=30, follow_redirects=True, headers=BROWSER_HEADERS) as own:
@@ -82,7 +92,7 @@ def local_copy(url: str, client: httpx.Client | None = None, directory: Path = D
     if not suffix:
         return None
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{stem}{suffix}"
+    path = directory / f"{_stem(url)}{suffix}"
     path.write_bytes(response.content)
     return path
 

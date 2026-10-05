@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { TextButton } from '@/components/buttons';
 import { CompassGuide } from '@/components/compass-guide';
 import { Countdown, PageCard } from '@/components/intrigue-card';
-import { formatPrice, imageUri, place } from '@/components/route-result';
+import { formatPrice, place } from '@/components/route-result';
+import { StepImage } from '@/components/step-image';
 import { ThemedText } from '@/components/themed-text';
 import { busyStyle } from '@/components/spinner';
 import { Veil } from '@/components/veil';
@@ -174,15 +175,13 @@ function ThreadStep({ step, busy, onSwap }: { step: SoireeStep; busy: boolean; o
             <ThemedText type="small" themeColor="textSecondary">{place(step)}</ThemedText>
           </View>
           {/* The instigateur sees each place at a glance; a touch opens it wide. */}
-          {step.image_url ? (
-            <Pressable onPress={() => setPhoto(!photo)} accessibilityLabel={photo ? "Réduire l'image" : "Agrandir l'image"}>
-              <Image source={{ uri: imageUri(step.image_url) }} style={[styles.thumb, { borderColor: theme.accentFaint }]} />
-            </Pressable>
-          ) : null}
+          <Pressable onPress={() => setPhoto(!photo)} accessibilityLabel={photo ? "Réduire l'image" : "Agrandir l'image"}>
+            <StepImage step={step} style={[styles.thumb, { borderColor: theme.accentFaint }]} />
+          </Pressable>
         </View>
-        {photo && step.image_url ? (
+        {photo ? (
           <Pressable onPress={() => setPhoto(false)} accessibilityLabel="Réduire l'image">
-            <Image source={{ uri: imageUri(step.image_url) }} style={styles.photo} />
+            <StepImage step={step} style={styles.photo} />
           </Pressable>
         ) : null}
         {step.text ? (

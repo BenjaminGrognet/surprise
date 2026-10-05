@@ -52,11 +52,16 @@ JSON_HEADERS = {"Content-Type": "application/json"}
 
 
 @pytest.fixture
-def api(tmp_path, monkeypatch):
-    """The server, on a store of its own, with CATALOGUE for its activities and no live check nor Claude."""
+def base():
+    """The activities the server composes from (test_real_catalogue: real ones)."""
+    return parcours.Base(CATALOGUE, {(i["source_id"], i["external_id"]): 35 for i in CATALOGUE})
+
+
+@pytest.fixture
+def api(tmp_path, monkeypatch, base):
+    """The server, on a store of its own, with `base` for its activities and no live check nor Claude."""
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")  # make_handler sets it: put back after
-    base = parcours.Base(CATALOGUE, {(i["source_id"], i["external_id"]): 35 for i in CATALOGUE})
     monkeypatch.setattr(parcours.Base, "load", classmethod(lambda cls, store: base))
     server = ThreadingHTTPServer(("127.0.0.1", 0), quiz.make_handler(tmp_path / "s.db", checks=0))
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -70,6 +75,7 @@ def api(tmp_path, monkeypatch):
         except HTTPError as error:
             return error.code, json.load(error)["error"]
 
+    call.url = url
     yield call
     server.shutdown()
 
@@ -93,7 +99,7 @@ def test_a_couple_composes_changes_and_keeps_an_evening(api):
     shown = {key for route in _keys(page) for key in route}
     for route in page["routes"]:
         _chains(route)
-        assert route["title"] and route["secret_title"] and all(step["title"] and step["image_url"] for step in route["steps"])
+        assert route["title"] and route["secret_title"] and all(step["title"] and step["image_url"] and step["text"] for step in route["steps"])
     # No activity in two routes of the evening.
     assert sum(map(len, _keys(page))) == len(shown)
 

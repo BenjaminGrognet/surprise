@@ -5,5 +5,7 @@ module.exports = {
   roots: ['<rootDir>/tests'],
   globalSetup: '<rootDir>/tests/supabase-local.js',
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  // As tsconfig.json: the app's images are outside src/.
+  moduleNameMapper: { '^@/assets/(.*)$': '<rootDir>/assets/$1' },
   testTimeout: 30000,
 };

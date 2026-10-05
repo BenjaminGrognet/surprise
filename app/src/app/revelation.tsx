@@ -1,12 +1,13 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Image, Linking, StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 
 import { GhostButton, PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { EveningsNav } from '@/components/evenings-nav';
 import { Countdown, PageCard } from '@/components/intrigue-card';
 import { Organiser } from '@/components/organiser';
-import { imageUri, place } from '@/components/route-result';
+import { place } from '@/components/route-result';
+import { StepImage } from '@/components/step-image';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Veil } from '@/components/veil';
@@ -247,7 +248,7 @@ function VeiledStep({
   return (
     <View style={[styles.step, { borderColor: open ? theme.accentSoft : theme.line }]}>
       <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
-        {step.image_url ? <Image source={{ uri: imageUri(step.image_url) }} blurRadius={open ? 0 : 28} style={styles.thumbImg} /> : null}
+        <StepImage step={step} blurRadius={open ? 0 : 28} style={styles.thumbImg} />
         {open ? null : <ThemedText style={[styles.seal, { color: theme.cream }]}>?</ThemedText>}
       </View>
       <View style={styles.stepBody}>

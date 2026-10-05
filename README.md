@@ -15,6 +15,14 @@ npm test
 npm run e2e
 ```
 
+Les tests de l'API et du navigateur composent aussi sur de vraies activités de la base, un quartier
+(`tests/fixtures/catalogue.json`, sans les textes des médias), avec leurs images chargées en direct depuis les sites.
+Les dates sont décalées au jour du test. Pour reprendre l'extrait quand la base a changé (lecture seule) :
+
+```bash
+uv run --env-file .env python tests/snapshot_catalogue.py
+```
+
 ## Collecteurs
 
 ```bash
@@ -194,6 +202,11 @@ moteur `image`, revue après un mois) : l'activité n'est plus proposée dans le
 moins d'un mois sont passées (`--refresh` pour tout revoir). Les parcours vérifient en plus les images de leurs étapes
 avant de les proposer, de la même façon : une image morte y est d'abord remplacée par celle du site officiel ;
 sans elle, ou si l'image ne répond pas, l'étape est remplacée.
+
+Dans l'app, une image d'étape qui ne charge pas est redemandée après 2 s, puis signalée au serveur
+(`POST /api/images/broken`), qui la revérifie et la remplace ou la note morte de la même façon ; à défaut, l'étape
+montre une bannière de l'app selon son genre, jamais un blanc. Les images d'une soirée gardée sont copiées dans
+`data/images` au moment du choix et servies de là : elles tiennent jusqu'au jour J.
 
 ## Tags et vibes
 

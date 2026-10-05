@@ -27,5 +27,9 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
 - Site web = l'app Expo (`app/`) construite pour le web (`npm run build:web` → `app/dist`, servie par `surprise.quiz`).
   Jamais de page client à part (HTML Python, `.web.tsx` d'écran) : tout se fait dans `app/` et vaut pour les deux.
   Le Python ne fournit que l'API (données, pas de mise en page) et la modération.
+- Tests : toute fonctionnalité nouvelle ou modifiée vient avec ses tests, dans la même livraison, à chaque couche
+  touchée : `uv run pytest` (collecte, composition, API), `npm test` dans `app/` (comptes, Supabase local) et
+  `npm run e2e` (le site dans un navigateur : ce que voit le couple, images et textes compris). Les trois passent
+  avant un commit. Jamais le Supabase du projet dans les tests : le local (`npm run db:start`, Docker).
 - Base : Supabase (`public.raw_records` + schéma `pipeline`), par `SUPABASE_DB_URL` (session pooler IPv4). Sans elle,
   les scripts retombent sur `data/surprise.db` (non versionnée) ; `python -m surprise.local_store` la copie dans Supabase.

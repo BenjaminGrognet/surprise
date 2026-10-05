@@ -810,28 +810,72 @@ _IMAGES: dict[str, bool] = {}
 def unshown(steps: list[Step]) -> set:
     """The activities of these steps whose image a page cannot show: dead, refused, or not answering now.
 
-    A dead image is first replaced by the official site's when that one shows (kept in the enrichment, and in the
-    activity already loaded); else it is recorded dead, which leaves the activity out of the next evenings (Base).
-    Each image is checked once per process.
+    A dead image is first replaced by the official site's when that one shows (`_replace_dead`). Each image is
+    checked once per process.
     """
     todo = list({images.of(s.candidate.item) for s in steps} - _IMAGES.keys() - {None})
     if todo:
         with httpx.Client(timeout=8, follow_redirects=True, headers=BROWSER_HEADERS) as client, ThreadPoolExecutor(8) as pool:
             verdicts = dict(zip(todo, pool.map(lambda url: images.loads(client, url), todo)))
             _IMAGES.update({url: ok for url, ok in verdicts.items() if ok is not None})
-            dead = [url for url, ok in verdicts.items() if ok is False]
             items = {images.of(s.candidate.item): s.candidate.item for s in steps}
-            found = dict(zip(dead, pool.map(lambda url: images.replacement(client, items[url], url), dead)))
-        with open_store(DB) if dead else contextlib.nullcontext() as store:
-            if dead:
-                store.save_page_checks({url: (images.CHECK, True, None) for url in dead})
-            for url, image in found.items():
-                if image:
-                    item = items[url]
-                    item["enrichment"] |= {"image_url": image, "image_origin": "site officiel"}
-                    store.save_enrichment(item["source_id"], item["external_id"], {"image_url": image, "image_origin": "site officiel"})
-                    _IMAGES[image] = True
+            _replace_dead(client, {url: items[url] for url, ok in verdicts.items() if ok is False}, pool.map)
     return {s.candidate.key for s in steps if _IMAGES.get(images.of(s.candidate.item)) is not True}
+
+
+def _replace_dead(client: httpx.Client, dead: dict[str, dict[str, Any]], each: Callable = map) -> dict[str, str | None]:
+    """These dead images (each of its activity), replaced by the official site's when that one shows: kept in the
+    enrichment, and in the activity already loaded. Every one is recorded dead, which leaves an activity still
+    without another image out of the next evenings (Base). The new image of each, or None."""
+    if not dead:
+        return {}
+    found = dict(zip(dead, each(lambda url: images.replacement(client, dead[url], url), dead)))
+    with open_store(DB) as store:
+        store.save_page_checks({url: (images.CHECK, True, None) for url in dead})
+        for url, image in found.items():
+            _IMAGES[url] = False
+            if image:
+                item = dead[url]
+                item["enrichment"] |= {"image_url": image, "image_origin": "site officiel"}
+                store.save_enrichment(item["source_id"], item["external_id"], {"image_url": image, "image_origin": "site officiel"})
+                _IMAGES[image] = True
+    return found
+
+
+# Images a page reported it could not show, and the answer given: each checked once per process.
+_REPORTED: dict[str, str | None] = {}
+
+
+def broken_image(base: "Base", key: tuple[str, str], url: str) -> str | None:
+    """A page could not show this activity's image, `url`, even on a second try: the image to show instead, or None
+    (the page then shows its own picture). The one the activity has now if another replaced it since the page was
+    drawn; else `url` checked again, and replaced or recorded dead when it is (`_replace_dead`). An image that loads
+    from here, or does not answer now, is left as it is: the page's network, not the image."""
+    item = base.by_key.get(key)
+    if item is None or not url:
+        return None
+    if (now := _image_url(item)) and now != url and _IMAGES.get(images.of(item)) is not False:
+        return now
+    if images.of(item) != url:
+        return None
+    if url not in _REPORTED:
+        with httpx.Client(timeout=8, follow_redirects=True, headers=BROWSER_HEADERS) as client:
+            ok = images.loads(client, url)
+            if ok is not None:
+                _IMAGES[url] = ok
+            new = _replace_dead(client, {url: item}).get(url) if ok is False else None
+        if ok is None:
+            return None
+        _REPORTED[url] = _image_url(item) if new else None
+    return _REPORTED[url]
+
+
+def keep_images(route: Route) -> None:
+    """The images of a kept evening copied here (images.DIRECTORY), its pages then showing those: they stay until
+    the evening, whatever the sites do meanwhile. One that cannot be had stays the site's."""
+    urls = {url for s in [*route.steps, *filter(None, [route.night])] if (url := images.of(s.candidate.item))}
+    with httpx.Client(timeout=15, follow_redirects=True, headers=BROWSER_HEADERS) as client, ThreadPoolExecutor(8) as pool:
+        list(pool.map(lambda url: images.local_copy(url, client), urls))
 
 
 def pick_shown(routes: list[Route], count: int = 3, taken: list[Route] | None = None) -> list[Route]:
@@ -1287,12 +1331,14 @@ def name_with_claude(routes: list[Route], request: Request) -> bool:
 
 
 def _image_url(item: dict[str, Any]) -> str | None:
-    """The activity's photo, copied locally first when the source forbids showing it elsewhere."""
-    image = item["enrichment"].get("image_url") or ((item["activity"].get("image") or {}).get("url"))
-    if images.needs_copy(image):
-        copy = images.local_copy(image)
-        image = f"/images/{copy.name}" if copy else None
-    return image
+    """The activity's photo: its copy here if it has one (a kept evening's, `keep_images`), copied first when the
+    source forbids showing it elsewhere, else the site's."""
+    image = images.of(item)
+    if not image:
+        return None
+    if copy := images.copied(image) or (images.local_copy(image) if images.needs_copy(image) else None):
+        return f"/images/{copy.name}"
+    return None if images.needs_copy(image) else image
 
 
 def _booking(c: Candidate, item: dict[str, Any]) -> tuple[str | None, str]:
@@ -1729,10 +1775,12 @@ def regenerate(
 
 def choose(name: str, index: int, store: LocalStore | None = None) -> str | None:
     """The couple keeps route `index`: the evening is that route alone from now on, its name enough to find it; the
-    other routes and the candidates go. The error, if any."""
+    other routes and the candidates go, its images are copied here (`keep_images`). The error, if any."""
     with _SAVING, _own(store) as store:
         if not store.keep_route(name, index):
             return "parcours introuvable : relancez la composition"
+        state = load(name, store)
+    keep_images(state["routes"][0])
     return None
 
 

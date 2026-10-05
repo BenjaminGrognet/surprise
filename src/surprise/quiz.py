@@ -488,6 +488,14 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                 return self._send_json(HTTPStatus.OK, {"profile": profile})
             if path == "/api/soirees":
                 return self._compose(body)
+            if path == "/api/images/broken":
+                # A page could not show a step's image, even on a second try: another one, or null (its own picture).
+                key, url = str(body.get("id") or "").partition(":")[::2], body.get("url")
+                if not all(key) or not isinstance(url, str):
+                    return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "étape ou image manquante"})
+                with open_store(db) as store:
+                    found = base(store)
+                return self._send_json(HTTPStatus.OK, {"image_url": parcours.broken_image(found, key, url)})
             if remove := _REMOVE.match(path):
                 if error := parcours.remove(remove["name"], int(remove["route"]), int(remove["step"])):
                     return self._send_json(HTTPStatus.CONFLICT, {"error": error})

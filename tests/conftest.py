@@ -1,12 +1,19 @@
 import pytest
 
-from surprise import availability, enrich, parcours
+from surprise import availability, enrich, images, parcours
 
 
 @pytest.fixture(autouse=True)
 def images_show(monkeypatch):
     """Evenings are composed without asking the test images' sites whether they answer (see test_parcours)."""
     monkeypatch.setattr(parcours, "unshown", lambda steps: set())
+
+
+@pytest.fixture(autouse=True)
+def images_kept_aside(monkeypatch, tmp_path):
+    """A kept evening's images are not downloaded (see test_images), nor any copied into data/images."""
+    monkeypatch.setattr(parcours, "keep_images", lambda route: None)
+    monkeypatch.setattr(images, "DIRECTORY", tmp_path / "images")
 
 
 @pytest.fixture(autouse=True)

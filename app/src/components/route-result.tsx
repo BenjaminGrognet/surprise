@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import { Spinner, busyStyle } from '@/components/spinner';
+import { StepImage } from '@/components/step-image';
 import { useTheme } from '@/hooks/use-theme';
-import { API_URL, type SoireeRoute, type SoireeStep } from '@/lib/api';
+import { type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { formatTime } from '@/lib/dates';
 
 const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre: 'Un verre', sortie: 'Sortie', nuit: 'La nuit' };
@@ -30,8 +31,6 @@ export function place(step: SoireeStep) {
   const where = step.arrondissement ? `Paris ${step.arrondissement}ᵉ` : step.town && step.town !== 'Paris' ? step.town : null;
   return [step.venue, where].filter(Boolean).join(' · ');
 }
-
-export const imageUri = (url: string) => (url.startsWith('/') ? API_URL + url : url);
 
 export function RouteResult({
   route,
@@ -115,7 +114,7 @@ function StepRow({
     <View style={[styles.card, { borderColor: theme.line, backgroundColor: PAPER }, busyStyle(!!busyRedo && (busyRedo === step.redo || busyRedo === remove))]}>
       <View style={styles.side}>
         <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
-          {step.image_url ? <Image source={{ uri: imageUri(step.image_url) }} style={styles.thumbImg} /> : null}
+          <StepImage step={step} style={styles.thumbImg} />
         </View>
         {onRedo && step.redo ? <Pressable onPress={busyRedo ? undefined : () => onRedo(step.redo!)} style={styles.redoRow}>{busyRedo === step.redo ? <Spinner size={11} /> : null}<ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === step.redo ? 'Recherche…' : '↻ Changer'}</ThemedText></Pressable> : null}
         {onRedo && removable && remove ? <Pressable onPress={() => onRedo(remove)}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === remove ? 'Retrait…' : '✕ Retirer'}</ThemedText></Pressable> : null}
