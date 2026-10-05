@@ -2,11 +2,11 @@ import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
-import { GhostButton, PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { EveningsNav } from '@/components/evenings-nav';
 import { Countdown, PageCard } from '@/components/intrigue-card';
+import { NotifyAsk } from '@/components/notify-ask';
 import { Organiser } from '@/components/organiser';
-import { place } from '@/components/route-result';
 import { StepImage } from '@/components/step-image';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -19,15 +19,16 @@ import { PassagerInvite } from '@/components/passager-invite';
 import { RevealModePicker } from '@/components/reveal-mode';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
-import { getSoireeState, type SoireeRoute, type SoireeStep } from '@/lib/api';
+import { getSoireeState, place, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import {
   cluesFor, inTime, nextClue, revealAt, revealMode, shownClues, stepRevealed, stepWords, type RevealMode, type StepWord,
 } from '@/lib/clues';
 import { nearStep } from '@/lib/arrival';
 import { arrivedSteps, markArrived } from '@/lib/local-store';
-import { askNotify, notifyState, scheduleReveals, type NotifyState } from '@/lib/notifications';
+import { syncNotifications } from '@/lib/notifications';
 import { formatTime, isoDay, longDay } from '@/lib/dates';
 import { curtainFalls } from '@/lib/souvenirs';
+import { clueChapter } from '@/lib/story';
 
 // "La Révélation": the kept evening seen from each account of the couple. The instigateur has the whole timed
 // roadmap; the passager only gets riddles, and a veiled programme that lifts step by step. Which of the two the
@@ -135,19 +136,15 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
   const words = stepWords(route, mode);
   const steps = [...route.steps, ...(route.night ? [route.night] : [])];
   const [arrived, setArrived] = useState<string[]>([]);
-  const [notify, setNotify] = useState<NotifyState>('unsupported');
 
   useEffect(() => {
     arrivedSteps(evening).then(setArrived);
   }, [evening]);
 
-  // The clues and veils still to come become notifications on this phone, once allowed; redone when the mode changes.
+  // The week told on this phone (lib/story.ts), once allowed: told again as the evening reads, its mode may have changed.
   useEffect(() => {
-    notifyState().then(setNotify).catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (notify === 'granted') scheduleReveals(evening, route, mode, secretTitle).catch(() => {});
-  }, [notify, evening, route, mode, secretTitle]);
+    syncNotifications();
+  }, [evening, route, mode]);
 
   function arrive(step: SoireeStep) {
     setArrived((a) => [...a, step.id]);
@@ -161,14 +158,9 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
         {now < start ? <Countdown to={start} now={now} /> : null}
       </PageCard>
 
-      <Clues clues={clues} now={now} title="Vos indices" />
+      <Clues route={route} clues={clues} now={now} title="Vos indices" />
 
-      {notify === 'ask' ? (
-        <View style={styles.block}>
-          <ThemedText type="small" themeColor="textSecondary">Soyez prévenu(e) à chaque indice, sans rouvrir l&apos;application.</ThemedText>
-          <GhostButton onPress={() => askNotify().then(setNotify)}>Activer les rappels</GhostButton>
-        </View>
-      ) : null}
+      <NotifyAsk text="Vivez votre semaine au fil des notifications : un indice chaque matin, les mots mystères, le jour J, chaque voile qui se lève." />
 
       <View style={styles.block}>
         <ThemedText type="eyebrow">Le programme</ThemedText>
@@ -197,7 +189,8 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
   );
 }
 
-function Clues({ clues, now, title }: { clues: ReturnType<typeof cluesFor>; now: number; title: string }) {
+// The clues come as the chapters of the passager's week, each under its own: "J-3 · La garde-robe".
+function Clues({ route, clues, now, title }: { route: SoireeRoute; clues: ReturnType<typeof cluesFor>; now: number; title: string }) {
   const theme = useTheme();
   const shown = shownClues(clues, now);
   const next = nextClue(clues, now);
@@ -207,7 +200,10 @@ function Clues({ clues, now, title }: { clues: ReturnType<typeof cluesFor>; now:
       {shown.map((c) => (
         <View key={c.text} style={styles.clue}>
           <ThemedText type="clue" themeColor="gold">✦</ThemedText>
-          <ThemedText type="clue" style={styles.clueText}>{c.text}</ThemedText>
+          <View style={styles.clueText}>
+            <ThemedText type="eyebrow" themeColor="gold">{clueChapter(route, c)}</ThemedText>
+            <ThemedText type="clue">{c.text}</ThemedText>
+          </View>
         </View>
       ))}
       {next ? (

@@ -123,6 +123,18 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   const link = await page.getByText(/\/invitation\?code=[0-9a-f]{12}$/).textContent();
   const invitation = new URL(link!).pathname + new URL(link!).search;
 
+  // Behind the scenes, the passager's week as their phone will tell it: the sealed letter a week before, each step's
+  // mystery word turned into its name as its veil lifts.
+  await page.getByText('Les Coulisses', { exact: true }).click();
+  const week = page.getByTestId('semaine-passager');
+  await expect(week.getByText('La semaine de votre passager')).toBeVisible();
+  const whole = week.getByText(/^Toute la semaine \(\d+\)$/);
+  if (await whole.count()) await whole.click();
+  await expect(week.getByText('J-7 · Le pli scellé', { exact: true })).toBeVisible();
+  await expect(week.getByText(`« ${route.secret_title} » commence`)).toBeVisible();
+  for (const s of route.steps) await expect(week.getByText(`prend un nom : ${s.title}, à`)).toBeVisible();
+  await expect(week.getByText('Le lendemain · Le Livre des Secrets', { exact: true })).toBeVisible();
+
   // The passager, in a browser of their own.
   const other = await browser.newContext();
   const passager = await other.newPage();
@@ -145,6 +157,8 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   // Their page of the evening: the clues, the programme still sealed.
   await passager.goto(`/revelation?soiree=${kept.name}`);
   await expect(passager.getByText('Vos indices')).toBeVisible();
+  // Each clue under its chapter of the week; the meeting time theirs from the start.
+  await expect(passager.getByText('Le rendez-vous', { exact: true })).toBeVisible();
   await hidden();
   await other.close();
 

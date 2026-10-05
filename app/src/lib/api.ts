@@ -118,6 +118,12 @@ export type SoireeStep = {
   source_name: string;
   redo: string | null;
 };
+// Where a step is: its venue and its quarter (or town).
+export function place(step: SoireeStep) {
+  const where = step.arrondissement ? `Paris ${step.arrondissement}ᵉ` : step.town && step.town !== 'Paris' ? step.town : null;
+  return [step.venue, where].filter(Boolean).join(' · ');
+}
+
 export type SoireeRoute = {
   index: number;
   title: string;

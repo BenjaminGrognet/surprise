@@ -8,8 +8,8 @@ Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo), `c
 ```bash
 # Python : collecte, composition, le parcours du couple par l'API
 uv run pytest
-# Dans app/, Docker Desktop ouvert : un Supabase local (jamais celui du projet), puis les comptes (Jest)
-# et le site dans un navigateur (Playwright : compte, soirée, étape changée, passager invité)
+# Dans app/, Docker Desktop ouvert : un Supabase local (jamais celui du projet), puis les comptes et les
+# notifications (Jest) et le site dans un navigateur (Playwright : compte, soirée, étape changée, passager invité)
 npm run db:start
 npm test
 npm run e2e
@@ -405,6 +405,32 @@ suivants, chacun des deux scelle une page — une photo, un mot (table `souvenir
 `souvenirs`, lues par liens signés). Scellée, une page ne se modifie plus ; on ne lit celle de l'autre qu'après avoir
 scellé la sienne (fonction `sealed_by_me`). Mes soirées (`/historique`) n'en montrent plus que la photo et les
 notes, le long d'un fil d'or, de plus en plus patinées avec l'âge ; le parcours n'y apparaît plus.
+
+Les notifications (`app/src/lib/story.ts` pour ce qu'elles disent, `notifications.ts` pour leur programmation) : sur
+le téléphone seulement (rien sur le web), programmées sur l'appareil, sans serveur, d'après les soirées du compte (à
+venir et du dernier mois). Le passager vit sa semaine en chapitres, sur un compte à rebours :
+- le pli scellé à J-7 (le jour et l'heure, rien d'autre) ;
+- un indice chaque matin à 9 h (« J-3 · La garde-robe ») et les mots mystères l'après-midi ;
+- la veille au soir, puis le jour J en crescendo (« H-2 · Le compte à rebours », « H-1 · Le départ ») ;
+- chaque voile qui se lève, son mot mystère devenu un nom (« « Velours » prend un nom : … ») ;
+- le lendemain, le Livre des Secrets ; quatre jours après, « À votre tour » (sauf si une autre soirée est déjà gardée).
+
+L'instigateur reçoit :
+- les réservations encore à faire (J-6, J-3, J-1, jusqu'à ce qu'elles soient cochées) ;
+- l'invitation pas encore envoyée (J-5, J-2) ;
+- une fois le passager arrivé, chaque indice du matin quand il le reçoit (« Dans l'ombre ») ;
+- la veille, l'heure du départ, puis l'heure de partir vers chaque étape suivante ;
+- le lendemain, le livre et les pouces ; trois semaines après, la prochaine intrigue (sauf si une autre soirée est déjà gardée).
+
+Rien entre 22 h et 9 h, sauf pendant la soirée elle-même. Ce qui tombe à moins de 20 min d'écart part en une seule
+notification. Au plus 60 notifications sont programmées (iOS en garde 64).
+
+Tout est reprogrammé au retour dans l'app et à chaque changement (soirée gardée, réservation cochée, plan B, mode de
+dévoilement), et effacé à la déconnexion ; hors ligne, rien ne bouge. Toucher une notification ouvre sa page. Les
+coulisses de l'instigateur montrent la semaine du passager telle que son téléphone la dira.
+
+Limites : sans push envoyé par un serveur, le téléphone du passager n'apprend un changement (plan B, mode) qu'en
+rouvrant l'app. L'icône Android des notifications (monochrome) reste à fournir avant publication.
 
 ```bash
 # app/.env, lu au build : publiques par nature (clé anon), jamais la service role key

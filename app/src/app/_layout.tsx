@@ -4,16 +4,17 @@ import {
 import {
   Manrope_200ExtraLight, Manrope_300Light, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, useFonts,
 } from '@expo-google-fonts/manrope';
-import { DarkTheme, Stack, ThemeProvider, usePathname } from 'expo-router';
+import { DarkTheme, router, Stack, ThemeProvider, usePathname, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 
 import { TabBar, TabBarContext } from '@/components/tab-bar';
 import { Colors } from '@/constants/theme';
 import { CoupleContext } from '@/hooks/use-couple';
 import { myRole, type CoupleState } from '@/lib/couple';
 import { claimDevice } from '@/lib/local-store';
+import { clearNotifications, onNotificationOpen, syncNotifications } from '@/lib/notifications';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 
 // The navigator's own surfaces (between screens, behind a transition) in the brand's night.
@@ -56,7 +57,10 @@ export default function RootLayout() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       void claimDevice(session?.user.id ?? null);
       setSignedIn(!!session);
-      if (!session) setCouple(null);
+      if (!session) {
+        setCouple(null);
+        void clearNotifications(); // another account may use this phone next
+      }
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -76,6 +80,23 @@ export default function RootLayout() {
       setBooted(true);
     });
   }, [signedIn]);
+
+  // The phone's notifications (lib/notifications.ts) told again from the account's evenings: once signed in, when a
+  // passager joins (their role changes), and whenever the app comes back to the front. A touch on one opens its page.
+  const account = couple?.userId;
+  const role = couple?.role;
+  useEffect(() => {
+    if (!account) return;
+    syncNotifications(0);
+    const foreground = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncNotifications();
+    });
+    const opened = onNotificationOpen((url) => router.push(url as Href));
+    return () => {
+      foreground.remove();
+      opened();
+    };
+  }, [account, role]);
 
   const value = useMemo(
     () => ({ role: couple?.role ?? 'instigateur', userId: couple?.userId ?? null, refresh }),

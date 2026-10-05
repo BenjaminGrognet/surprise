@@ -9,7 +9,7 @@ import { StepImage } from '@/components/step-image';
 import { TasteVote } from '@/components/taste-vote';
 import { useTheme } from '@/hooks/use-theme';
 import type { Vote } from '@/lib/account';
-import { type SoireeRoute, type SoireeStep } from '@/lib/api';
+import { place, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { formatTime } from '@/lib/dates';
 
 const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre: 'Un verre', sortie: 'Sortie', nuit: 'La nuit' };
@@ -27,11 +27,6 @@ export function formatPrice(step: SoireeStep) {
   if (step.kind === 'nuit') return `${step.price_estimated ? '≈ ' : 'dès '}${step.price.toFixed(0)} € la nuit`;
   if (step.price === 0) return 'Gratuit';
   return `${step.price_estimated ? '≈ ' : ''}${step.price.toFixed(0)} € à deux`;
-}
-
-export function place(step: SoireeStep) {
-  const where = step.arrondissement ? `Paris ${step.arrondissement}ᵉ` : step.town && step.town !== 'Paris' ? step.town : null;
-  return [step.venue, where].filter(Boolean).join(' · ');
 }
 
 export function RouteResult({

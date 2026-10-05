@@ -4,7 +4,9 @@
 import type { SoireeRoute, SoireeStep } from '@/lib/api';
 import { formatTime } from '@/lib/dates';
 
-export type Clue = { text: string; at: number }; // at: epoch ms when it shows (0: from the start)
+// What a clue tells, for the chapter it opens in the passager's week (lib/story.ts).
+export type ClueKind = 'rendezvous' | 'ouverture' | 'budget' | 'tenue' | 'table' | 'duree' | 'bagage' | 'sens' | 'carte' | 'compte';
+export type Clue = { text: string; at: number; kind: ClueKind }; // at: epoch ms when it shows (0: from the start)
 
 // How the programme is lifted for the passager, chosen by the instigateur (soirees_choisies.reveal_mode).
 export type RevealMode = 'etapes' | 'veille' | 'arrivee';
@@ -91,35 +93,37 @@ export function cluesFor(route: SoireeRoute, mode: RevealMode = 'etapes'): Clue[
   const start = Date.parse(route.start);
   const morning = (daysBefore: number) => Date.parse(`${route.day}T09:00`) - daysBefore * DAY;
   const clues: Clue[] = [
-    { text: `Le rideau se lève à ${formatTime(route.start)}. Soyez prêts un peu avant.`, at: 0 },
-    { text: budget(route), at: morning(4) },
-    { text: outfit(route), at: morning(3) },
+    { text: `Le rideau se lève à ${formatTime(route.start)}. Soyez prêts un peu avant.`, at: 0, kind: 'rendezvous' },
+    { text: budget(route), at: morning(4), kind: 'budget' },
+    { text: outfit(route), at: morning(3), kind: 'tenue' },
     {
       text: route.steps.some((s) => s.role === 'repas')
         ? 'Ne dînez pas avant : une table est prévue.'
         : 'Mangez un morceau avant de partir : pas de dîner au programme.',
       at: morning(2),
+      kind: 'table',
     },
-    { text: duration(route), at: morning(1) },
+    { text: duration(route), at: morning(1), kind: 'duree' },
   ];
   const first = opening(route);
-  if (first) clues.push({ text: first, at: morning(5) });
-  if (route.night) clues.push({ text: 'Glissez une brosse à dents dans votre sac : vous ne dormirez pas chez vous.', at: morning(1) });
+  if (first) clues.push({ text: first, at: morning(5), kind: 'ouverture' });
+  if (route.night) clues.push({ text: 'Glissez une brosse à dents dans votre sac : vous ne dormirez pas chez vous.', at: morning(1), kind: 'bagage' });
   // One sense per step, the first that tells it, spread over the last days.
   const senses = new Set<string>();
   for (const step of route.steps) {
     const line = SENSES.find(([vibe, text]) => step.vibes.includes(vibe) && !senses.has(text));
     if (line) senses.add(line[1]);
   }
-  [...senses].slice(0, 3).forEach((text, i) => clues.push({ text, at: [morning(2) + 6 * HOUR, start - 12 * HOUR, start - 4 * HOUR][i] }));
+  [...senses].slice(0, 3).forEach((text, i) => clues.push({ text, at: [morning(2) + 6 * HOUR, start - 12 * HOUR, start - 4 * HOUR][i], kind: 'sens' }));
   const where = geography(route);
-  if (where) clues.push({ text: where, at: start - 6 * HOUR });
+  if (where) clues.push({ text: where, at: start - 6 * HOUR, kind: 'carte' });
   const count = route.steps.length;
   clues.push({
     text: route.night
       ? `${count} étape${count > 1 ? 's' : ''}, puis une nuit ailleurs.`
       : `${count} étape${count > 1 ? 's' : ''} ; le mystère se referme vers ${formatTime(route.end)}.`,
     at: start - 2 * HOUR,
+    kind: 'compte',
   });
   // "La veille": the programme itself shows the day before, so the clues stop there.
   const kept = mode === 'veille' ? clues.filter((c) => c.at <= start - DAY) : clues;

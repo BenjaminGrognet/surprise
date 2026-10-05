@@ -75,6 +75,7 @@ export type EveningHistoryRow = {
   passager_email: string | null;
   invite_code: string; // the link's code, renewed when the passager is let go
   reveal_mode?: string; // how its programme is lifted for the passager (lib/clues.ts RevealMode); absent before the migration
+  booked?: string[]; // the steps the instigateur marked booked (bookedSteps)
   page_name: string; // the evening's page on the server: once kept, its only route
   title: string;
   secret_title: string | null; // "Le Pacte de l'Île Saint-Louis", fixed when kept; null for older evenings

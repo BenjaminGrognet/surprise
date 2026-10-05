@@ -5,7 +5,6 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { PrimaryLink, TextButton } from '@/components/buttons';
 import { CardHead, countdownLabel, IntrigueCard, PageCard } from '@/components/intrigue-card';
-import { place } from '@/components/route-result';
 import { StepImage } from '@/components/step-image';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -15,7 +14,7 @@ import { useCouple } from '@/hooks/use-couple';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { accountProfile, eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
-import { getSoireeState, type Profile, type SoireeRoute } from '@/lib/api';
+import { getSoireeState, place, type Profile, type SoireeRoute } from '@/lib/api';
 import { cluesFor, dayHint, inTime, nextClue, revealAt, revealMode, stepRevealed, stepWords } from '@/lib/clues';
 import { complicity, type Complicity } from '@/lib/complicity';
 import { eveningRole, type AccountRole } from '@/lib/couple';

@@ -1,18 +1,15 @@
 import { Linking, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/buttons';
-import { place } from '@/components/route-result';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui-icons';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
-import type { SoireeRoute, SoireeStep } from '@/lib/api';
+import { place, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { inTime } from '@/lib/clues';
 import { formatTime, isoDay } from '@/lib/dates';
-
-// On foot up to this hop, as the evening was composed (surprise.parcours WALK_KM) and as the roadmap's hops say.
-const WALK_KM = 1.3;
+import { WALK_KM } from '@/lib/story';
 
 // Google Maps from where the phone is: on foot or by metro as the evening was planned; to the first step, its own pick.
 function directions(step: SoireeStep, first: boolean) {
