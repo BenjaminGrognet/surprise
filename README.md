@@ -3,10 +3,21 @@
 Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo), `collecte.cmd` (collecte, 200 fiches par source) ou `admin.cmd` (modération) ; détail dans
 [docs/lancer-en-local.md](docs/lancer-en-local.md).
 
+## Tests
+
+```bash
+# Python : collecte, composition, le parcours du couple par l'API
+uv run pytest
+# Dans app/, Docker Desktop ouvert : un Supabase local (jamais celui du projet), puis les comptes (Jest)
+# et le site dans un navigateur (Playwright : compte, soirée, étape changée, passager invité)
+npm run db:start
+npm test
+npm run e2e
+```
+
 ## Collecteurs
 
 ```bash
-uv run pytest
 # Que Faire à Paris : résumé des fiches retenues / rejetées (6 prochaines semaines)
 uv run python -m surprise.collectors.que_faire_a_paris
 # … dans Supabase (SUPABASE_DB_URL dans .env)

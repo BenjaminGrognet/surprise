@@ -7,14 +7,36 @@ import { removePhotos } from '@/lib/souvenirs';
 
 export { currentUser };
 
+// Supabase Auth's refusals (by their code), as the couple reads them; any other one in a general sentence.
+const AUTH_ERRORS: Record<string, string> = {
+  invalid_credentials: 'Email ou mot de passe incorrect.',
+  user_already_exists: 'Un compte existe déjà avec cet email : connectez-vous.',
+  email_exists: 'Un compte existe déjà avec cet email : connectez-vous.',
+  weak_password: 'Mot de passe trop court : 6 caractères au moins.',
+  email_address_invalid: "Cet email n'est pas valide.",
+  validation_failed: "Cet email n'est pas valide.",
+  email_not_confirmed: "Votre email n'est pas encore confirmé : ouvrez le lien reçu.",
+  signup_disabled: 'Les nouveaux comptes sont fermés pour le moment.',
+  over_request_rate_limit: 'Trop de tentatives : réessayez dans quelques minutes.',
+  over_email_send_rate_limit: 'Trop de tentatives : réessayez dans quelques minutes.',
+};
+
+function authError(error: { code?: string; name?: string }) {
+  if (error.code && AUTH_ERRORS[error.code]) return new Error(AUTH_ERRORS[error.code]);
+  if (error.name === 'AuthRetryableFetchError') return new Error('Connexion impossible : vérifiez votre réseau, puis réessayez.');
+  return new Error("La connexion n'a pas abouti. Réessayez dans un instant.");
+}
+
 export async function signIn(email: string, password: string) {
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(error.message);
+  if (!email.trim() || !password) throw new Error('Indiquez votre email et votre mot de passe.');
+  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) throw authError(error);
 }
 
 export async function signUp(email: string, password: string) {
-  const { error } = await supabase.auth.signUp({ email, password });
-  if (error) throw new Error(error.message);
+  if (!email.trim() || !password) throw new Error('Indiquez votre email et votre mot de passe.');
+  const { error } = await supabase.auth.signUp({ email: email.trim(), password });
+  if (error) throw authError(error);
 }
 
 export const signOut = () => supabase.auth.signOut();

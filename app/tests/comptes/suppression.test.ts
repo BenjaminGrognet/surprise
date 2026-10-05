@@ -27,7 +27,7 @@ test("the instigateur's account deleted takes its evenings, their pages and phot
   await as(lea);
   await deleteMyAccount();
   expect(await currentUser()).toBeNull();
-  await expect(signIn(lea.email, lea.password)).rejects.toThrow(/invalid login credentials/i);
+  await expect(signIn(lea.email, lea.password)).rejects.toThrow('Email ou mot de passe incorrect.');
   expect((await admin.auth.admin.getUserById(lea.id)).data.user).toBeNull();
   expect((await admin.from('couple_profiles').select('id').eq('user_id', lea.id)).data).toEqual([]);
   expect((await admin.from('soirees_choisies').select('id').eq('id', row.id)).data).toEqual([]);

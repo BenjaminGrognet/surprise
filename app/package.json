@@ -56,7 +56,7 @@
     "lint": "expo lint",
     "test": "jest",
     "build:e2e": "node scripts/build-e2e.js",
-    "e2e": "playwright test",
+    "e2e": "npm run build:e2e && playwright test",
     "db:start": "supabase start --workdir .. -x studio,postgres-meta,realtime,edge-runtime,imgproxy,logflare,vector,supavisor,mailpit",
     "db:stop": "supabase stop --workdir .."
   },

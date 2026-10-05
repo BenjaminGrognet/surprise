@@ -18,14 +18,15 @@ test('an account is created and signed in at once, its email kept', async () => 
   expect(user?.email).toBe(account.email);
 });
 
-test('an email already taken, a wrong password, a short one: refused, with the reason', async () => {
+test('an email already taken, a wrong password, a short one: refused, with the reason in French', async () => {
   const account = await newAccount('refus');
   await signOut();
-  await expect(signUp(account.email, 'un-autre-secret')).rejects.toThrow(/already registered/i);
-  await expect(signIn(account.email, 'pas-le-bon')).rejects.toThrow(/invalid login credentials/i);
-  await expect(signIn('personne-ici@example.com', 'secret-123')).rejects.toThrow(/invalid login credentials/i);
-  await expect(signUp('court@example.com', '12345')).rejects.toThrow(/at least 6 characters/i);
-  await expect(signUp('pas-un-email', 'secret-123')).rejects.toThrow(/email/i);
+  await expect(signUp(account.email, 'un-autre-secret')).rejects.toThrow('Un compte existe déjà avec cet email : connectez-vous.');
+  await expect(signIn(account.email, 'pas-le-bon')).rejects.toThrow('Email ou mot de passe incorrect.');
+  await expect(signIn('personne-ici@example.com', 'secret-123')).rejects.toThrow('Email ou mot de passe incorrect.');
+  await expect(signUp('court@example.com', '12345')).rejects.toThrow('Mot de passe trop court : 6 caractères au moins.');
+  await expect(signUp('pas-un-email', 'secret-123')).rejects.toThrow("Cet email n'est pas valide.");
+  await expect(signIn('  ', '')).rejects.toThrow('Indiquez votre email et votre mot de passe.');
   expect(await currentUser()).toBeNull();
 });
 
