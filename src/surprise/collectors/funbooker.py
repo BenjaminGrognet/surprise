@@ -2,8 +2,8 @@
 
 Listings come from the "other" sitemap, restricted to Paris ones by their URL
 ("…-a-paris-10eme/voir"). Each page gives a schema.org Product (name, lowest
-price), the map block (address, coordinates), the key facts (duration, minimum
-age), the breadcrumb (categories), the og:image and the description (lead_text).
+price), the map block (address, coordinates), the key facts (duration, group
+size, minimum age), the breadcrumb (categories), the og:image and the description (lead_text).
 """
 
 import html
@@ -43,6 +43,9 @@ _BLOCK_BREAK = re.compile(r"<(?:/?p\b|/?h\d|br|/?li)[^>]*>", re.IGNORECASE)
 _IN_PARIS = re.compile(r"[\s,]*\bà Paris(?:\s+\d{1,2}\s*(?:er|ème|e))?\s*$", re.IGNORECASE)
 # The og:image is a 400px square thumbnail: the same Cloudinary image, uncropped and larger.
 _THUMBNAIL = re.compile(r"/image/upload/[^/]+/")
+# How many a booking takes: "Jusqu'à 10 personnes", "De 2 à 6 personnes", "Pour 2 personnes". "Une personne" says no
+# limit (a wine tasting booked seat by seat, for 1 to 12, shows it too), "De 2 à 6 enfants" is a children's workshop.
+_GROUP = re.compile(r"^(?:jusqu['’]à (\d+)|de (\d+) à (\d+)|pour (\d+)) personnes?$", re.IGNORECASE)
 
 
 def fetch_listing_urls(client: httpx.Client) -> list[str]:
@@ -103,11 +106,15 @@ def normalize(payload: dict[str, Any]) -> Normalized:
         )
     except ValidationError:
         return Normalized(raw, rejection=join_reasons(*reasons, OUT_OF_AREA))
+    # The composition proposes it only to a party of that size (parcours.fits_party).
+    players_min, players_max = group_size(payload.get("group"))
     try:
         activity = Activity(
             title=title,
             kind=ActivityKind.PERMANENT,
             duration_minutes=duration_minutes(payload.get("duration")),
+            players_min=players_min,
+            players_max=players_max,
             # The listing page is the activity's page.
             website=safe_url(payload["url"]),
             image=Image(url=payload["image_url"], license="Funbooker", source_url=raw.url) if payload.get("image_url") else None,
@@ -136,6 +143,17 @@ def duration_minutes(text: str | None) -> int | None:
     hours, minutes, only_minutes = match.groups()
     total = int(only_minutes) if only_minutes else int(hours) * 60 + int(minutes or 0)
     return total or None
+
+
+def group_size(text: str | None) -> tuple[int | None, int | None]:
+    """'Jusqu'à 10 personnes' → (None, 10), 'De 2 à 6 personnes' → (2, 6), 'Pour 2 personnes' → (2, 2)."""
+    match = _GROUP.match(" ".join((text or "").split()))
+    if not match:
+        return None, None
+    up_to, low, high, exactly = (int(n) if n else None for n in match.groups())
+    if exactly:
+        return exactly, exactly
+    return low, high or up_to
 
 
 def collect(client: httpx.Client, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

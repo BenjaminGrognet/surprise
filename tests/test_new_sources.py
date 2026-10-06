@@ -11,6 +11,9 @@ FUNBOOKER_PAGE = """
     <span itemprop="name">Activit&eacute;s gastronomiques</span>
 <li class="mr-4 pb-2 font-weight-bold flex items-center">
   <i class="fal fun-icon fa-clock fa-lg mr-2" aria-hidden="true"></i> 1h30min </li>
+<li class="mr-4 pb-2 font-weight-bold flex items-center">
+  <i class="fal fun-icon fa-users fa-lg mr-2" aria-hidden="true"></i>
+   Jusqu&#039;&agrave; 12 personnes  </li>
 <div id="map" data-text="49 Rue du Faubourg   du Temple, 75010 Paris, FR" data-lat="48.86" data-lng="2.36"></div>
 """
 
@@ -24,8 +27,22 @@ def test_funbooker_listing():
     assert (activity.venue.address, activity.venue.postal_code, activity.venue.latitude) == ("49 Rue du Faubourg du Temple", "75010", 48.86)
     assert str(activity.image.url).endswith("/image/upload/f_auto,q_auto,c_limit,w_1200/v1/marketplace-listing/abc")
     assert "gastronomie" in activity.categories
+    assert (activity.players_min, activity.players_max) == (None, 12)
     assert funbooker._PARIS_LISTING.search(url)
     assert not funbooker._PARIS_LISTING.search("https://www.funbooker.com/fr/annonce/permis-cotier-a-lagny-sur-marne-77/voir")
+
+
+
+def test_funbooker_group_size():
+    """How many a booking takes, as the listing says it: a band too big or too small for it is not proposed it."""
+    assert funbooker.group_size("Jusqu'à 10 personnes") == (None, 10)
+    assert funbooker.group_size("Jusqu’à 2 personnes") == (None, 2)
+    assert funbooker.group_size("De 4 à 10 personnes") == (4, 10)
+    assert funbooker.group_size("Pour 2 personnes") == (2, 2)
+    # "Une personne" is no limit: a wine tasting booked seat by seat says it too.
+    assert funbooker.group_size("Une personne") == (None, None)
+    assert funbooker.group_size("De 2 à 6 enfants") == (None, None)
+    assert funbooker.group_size(None) == (None, None)
 
 
 PARIS_FRIENDLY_PAGE = """

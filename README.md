@@ -436,8 +436,10 @@ widget, carte postale et carton en tiennent compte).
   l'app affiche la part de chacun.
 - **Le choix des activités** (`parcours.affinity`) : ce qui se partage (quiz, karaoké, escape game, murder party, jeux,
   danse, dégustations…) compte là où la romance compte pour deux. Une offre pour deux dans son titre (massage en duo,
-  love room) n'est jamais proposée à une bande ; une offre EVJF/EVG jamais à un couple ; un escape game n'est proposé
-  qu'à son nombre de joueurs (`Activity.players_min/max`). À partir de 6, un bar sans réservation pèse moins.
+  love room) n'est jamais proposée à une bande ; une offre EVJF/EVG jamais à un couple ; une activité n'est proposée
+  qu'à son nombre de participants (`Activity.players_min/max` : les joueurs d'un escape game, la jauge d'une fiche
+  Funbooker, « De 4 à 10 personnes » ; « Une personne » n'y dit rien, une dégustation réservée place par place l'affiche
+  aussi). À partir de 6, un bar sans réservation pèse moins.
 - **Le profil du couple ne s'applique pas** (`quiz.squad_profile`) ; les votes et les soirées déjà faites, si.
 - **Les invités** (migration `20261007000000_secret_squad.sql`) : `soirees_choisies.formule` et `personnes`, table
   `soiree_invites` (passagers et complices, pour les deux formules ; un couple n'a qu'un passager), deux liens par
