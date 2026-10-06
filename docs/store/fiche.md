@@ -12,10 +12,9 @@ aux questionnaires, et ce qui bloque encore. Préparé le 6 octobre 2026.
 2. **Identifiants de l'app** (`app/app.json`) : `fr.secretdate.app` est posé pour iOS et Android (le widget en a
    besoin), avec `fr.secretdate.app.widgets` et `group.fr.secretdate.app` pour le widget iPhone. À confirmer avant
    la première build : ils ne changent plus après la première publication. Le `slug` vaut encore `app`.
-3. **Un serveur public** : l'API Python en HTTPS (`EXPO_PUBLIC_API_URL`). Le Supabase du projet a reçu le
-   6 octobre ses deux migrations manquantes (`reveal_mode`, `gouts`). Il n'a pas d'historique de migrations :
-   `supabase db push` voudrait tout rejouer. Marquer d'abord les migrations comme appliquées
-   (`supabase migration repair --status applied …`).
+3. **Un serveur public** : l'API Python en HTTPS (`EXPO_PUBLIC_API_URL`). Le Supabase du projet est à jour de
+   ses 26 migrations, et son historique les connaît (réparé le 6 octobre) : les prochaines passent par
+   `supabase db push` (voir le README, « Base »).
 4. **Trois pages web** :
    - une politique de confidentialité ;
    - une page d'assistance (contact) ;

@@ -48,6 +48,17 @@ Tous les scripts se lancent avec `uv run --env-file .env …` pour la lire.
 uv run --env-file .env python -m surprise.local_store --db data/surprise.db
 ```
 
+Les migrations (`supabase/migrations/`) s'appliquent au Supabase du projet avec `supabase db push`, qui ne passe que
+celles que son historique (`supabase_migrations.schema_migrations`) ne connaît pas encore. L'historique a été remis à
+jour le 6 octobre 2026 (`supabase migration repair --status applied`, les 26 premières vérifiées une à une) : les
+migrations d'avant avaient été passées à la main. Depuis `app/`, avec l'URL de `.env` :
+
+```bash
+uv run --env-file ../.env sh -c 'npx supabase db push --workdir .. --db-url "$SUPABASE_DB_URL" --dry-run'
+```
+
+Puis sans `--dry-run` si la liste est la bonne.
+
 ### Collecte complète
 
 `surprise.collect` lance les 30 sources, 4 à la fois (`--jobs`). Chaque source enregistre par lots de 50 fiches au
