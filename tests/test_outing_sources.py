@@ -169,10 +169,13 @@ def test_escape_game_room():
     assert "escape_game" in tag(activity.model_dump(mode="json"))
 
 
-def test_escape_room_for_three_or_more_is_not_for_a_couple():
+def test_escape_room_for_three_or_more_is_kept_for_a_band():
     page = ESCAPE_ROOM_PAGE.replace("<strong>2</strong> à <strong>5 joueurs</strong>", "<strong>4</strong> à <strong>8 joueurs</strong>")
     payload = escape_game.parse_room("https://www.escapegame.fr/paris/team-break/prison-break/", page)
-    assert escape_game.normalize(payload, NOW).rejection == "pas pour un couple"
+    result = escape_game.normalize(payload, NOW)
+    # A band's (Secret Squad), its number of players kept: a couple's evening never proposes it.
+    assert result.rejection is None
+    assert (result.activity.players_min, result.activity.players_max) == (4, 8)
     closed = ESCAPE_ROOM_PAGE.replace("</section>", "</section><p>Cette salle est définitivement fermée.</p>")
     payload = escape_game.parse_room("https://www.escapegame.fr/paris/lock-academy/x/", closed)
     assert escape_game.normalize(payload, NOW).rejection == "fermé définitivement"

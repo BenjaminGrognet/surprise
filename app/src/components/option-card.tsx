@@ -31,7 +31,7 @@ export function OptionCard({
         styles.card,
         !desc && styles.compact,
         { backgroundColor: theme.velvet, borderColor: selected ? theme.accent : theme.accentHair },
-        selected && styles.glow,
+        selected && { boxShadow: `0 4px 14px ${theme.glow}` },
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}>
@@ -72,7 +72,6 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.three,
   },
   compact: { minHeight: 36, paddingVertical: 4 },
-  glow: { boxShadow: '0 4px 14px rgba(61, 183, 135, 0.25)' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.35 },
   icon: { width: 22, alignItems: 'center' },

@@ -48,7 +48,7 @@ test("the passager's account deleted: the evening stays its instigateur's, witho
 
   await deleteMyAccount();
   await as(lea);
-  expect(await keptEvening(row.page_name)).toMatchObject({ id: row.id, passager: null });
+  expect(await keptEvening(row.page_name)).toMatchObject({ id: row.id, invites: [] });
   const { data: pages } = await admin.from('souvenirs').select('author').eq('soiree_id', row.id);
   expect(pages).toEqual([{ author: lea.id }]);
   expect((await photos(row.id)).length).toBe(1);

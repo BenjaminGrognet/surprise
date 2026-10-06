@@ -20,7 +20,7 @@ test('a kept evening is in the history with its secret name, once even when kept
   const page = pageName();
   const row = await keep(FUTURE, page);
   await keep(FUTURE, page);
-  expect(row).toMatchObject({ page_name: page, secret_title: 'Le Pacte du Marais', day: FUTURE, passager: null, reveal_mode: 'etapes' });
+  expect(row).toMatchObject({ page_name: page, secret_title: 'Le Pacte du Marais', day: FUTURE, invites: [], reveal_mode: 'etapes', formule: 'duo', personnes: 2 });
   expect(row.invite_code).toMatch(/^[0-9a-f]{12}$/);
   expect((await eveningsHistory()).map((r) => r.page_name)).toEqual([page]);
   expect(await keptSecretTitle(page)).toBe('Le Pacte du Marais');

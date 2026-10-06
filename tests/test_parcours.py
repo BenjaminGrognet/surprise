@@ -636,3 +636,72 @@ def test_the_tastes_are_kept_with_the_evening_for_its_redraws():
     data = parcours._encode(request())
     del data["tastes"]
     assert parcours._decode(data).tastes == {}
+
+
+# Secret Squad: an evening for a band of friends ------------------------------------------------------------------
+
+
+def squad(party=6, **extra):
+    return request(**{"party": party, "formule": "squad", "budget": 60 * party, "vibes": ["rire", "fete"], **extra})
+
+
+def test_a_band_pays_for_each_of_them():
+    def offer(unit, price=20):
+        return {"offers": [{"is_free": False, "price_min": price, "price_unit": unit}]}
+
+    assert parcours.price_for(offer("per_person"), "sortie", 6) == (120, False)
+    assert parcours.price_for(offer("per_couple", 50), "sortie", 5) == (150, False)  # three couples' tickets for five
+    assert parcours.price_for(offer("per_group", 180), "sortie", 6) == (180, False)
+    assert parcours.price_for({"offers": []}, "verre", 6) == (90, True)  # the estimate for two, by head
+    assert parcours.price_for(offer("per_person"), "sortie") == (40, False)  # a couple, as before
+    show = item("show", "Stand-up", ["humour"], occurrences=[at(20)])
+    assert parcours.build_candidate(show, squad(), None).price == 120
+
+
+def test_each_offer_is_for_its_party():
+    hen = item("evjf", "Atelier cocktails EVJF", ["atelier"], occurrences=[at(20)])
+    massage = item("duo", "Massage en duo", ["bien_etre"], occurrences=[at(20)])
+    room = item("room", "Escape game : Prison Break", ["jeux"], occurrences=[at(20)])
+    room["activity"] |= {"players_min": 4, "players_max": 6}
+    # A hen party is a band's, a massage for two a couple's.
+    assert parcours.build_candidate(hen, request(), None) is None and parcours.build_candidate(hen, squad(), None)
+    assert parcours.build_candidate(massage, request(), None) and parcours.build_candidate(massage, squad(), None) is None
+    # An escape room for 4 to 6: neither two nor eight.
+    assert parcours.build_candidate(room, request(), None) is None
+    assert parcours.build_candidate(room, squad(6), None) and parcours.build_candidate(room, squad(8), None) is None
+    # Not even a live check spent on one not for the party.
+    assert parcours.quick_score(room, request()) == float("-inf") and parcours.quick_score(room, squad()) > 0
+
+
+def test_a_band_likes_what_a_group_shares_where_a_couple_likes_romance():
+    karaoke = item("karaoke", "Karaoké en cabine privée", ["bar"], occurrences=[at(21)])
+    candles = item("bougies", "Candlelight : Vivaldi aux chandelles", ["concert"], occurrences=[at(21)])
+
+    def scores(req):
+        return {c.key[1]: c.score for c in _scored([karaoke, candles], req)}
+
+    couple = scores(request(vibes=["fete", "musique"]))
+    band = scores(squad(vibes=["fete", "musique"]))
+    assert couple["bougies"] > couple["karaoke"] and band["karaoke"] > band["bougies"]
+
+
+def test_a_big_band_would_rather_book_than_stand_at_the_door():
+    bar = item("bar", "Bar à cocktails", ["bar"], kind="permanent", hours="Mo-Su 18:00-02:00")
+    small, big = squad(4), squad(parcours.WALK_IN_PARTY + 2)
+    walk_in = lambda req: parcours.score(parcours.build_candidate(bar, req, None), req)  # noqa: E731
+    assert walk_in(big) < walk_in(small)
+
+
+def test_a_bands_evening_is_named_and_told_as_theirs():
+    req, _, route = _night()
+    band = squad(6, vibes=["insolite", "fete"])
+    assert parcours.secret_title(route, squad=True) == "La Virée de Beaubourg"  # a night out, the band's words
+    shown = parcours.route_json(0, route, band)
+    assert (shown["secret_title"], shown["formule"], shown["personnes"]) == ("La Virée de Beaubourg", "squad", 6)
+    parcours.name_by_rules(route, band)
+    assert f"pour environ {route.price / 6:.0f} € par personne" in route.pitch and "à deux" not in route.pitch
+    # Kept with the evening, for its redraws; an evening saved before the formulas is a couple's.
+    assert parcours._decode(json.loads(parcours._json([band])))[0].formule == "squad"
+    data = parcours._encode(request())
+    del data["formule"]
+    assert parcours._decode(data).formule == "duo" and not parcours._decode(data).squad

@@ -153,6 +153,9 @@ class Activity(BaseModel):
     occurrences: list[Occurrence] = Field(default_factory=list)
     offers: list[Offer] = Field(default_factory=list)
     booking: Booking | None = None
+    # How many it takes, when the source says (an escape room: 3 to 6 players): an evening proposes it to as many.
+    players_min: int | None = Field(default=None, ge=1)
+    players_max: int | None = Field(default=None, ge=1)
 
     @field_validator("categories")
     @classmethod

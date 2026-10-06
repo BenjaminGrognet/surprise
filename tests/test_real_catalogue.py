@@ -54,3 +54,16 @@ def test_each_wish_gets_routes_shown_whole(api, envies, diner, profiled):
         assert route["title"] and route["secret_title"]
         for step in route["steps"]:
             assert step["title"] and step["text"] and step["image_url"].startswith(("https://", "http://")), step
+
+
+@pytest.mark.parametrize("envies, occasion", [(["bande"], None), (["trinquer", "rire"], "evjf"), (["fete"], "anniversaire")], ids=str)
+def test_a_band_gets_routes_shown_whole(api, envies, occasion):
+    # Secret Squad on the real activities: eight friends, routes to share, every price counting them all.
+    page = api("/api/soirees", {"formule": "squad", "personnes": 8, "envies": envies, "occasion": occasion, "diner": False, "day": DAY.isoformat()})
+    assert page["personnes"] == 8 and len(page["routes"]) > 1, page
+    for route in page["routes"]:
+        _chains(route)
+        assert route["title"] and route["secret_title"] and "par personne" in route["pitch"]
+        for step in route["steps"]:
+            assert step["title"] and step["text"] and step["image_url"].startswith(("https://", "http://")), step
+            assert "duo" not in step["title"].lower(), step

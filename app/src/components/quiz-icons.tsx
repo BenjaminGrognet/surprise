@@ -316,4 +316,20 @@ export const QUIZ_ICONS: Record<string, ReactNode> = {
       <Path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M7 8v3M12 8v3M17 8v3M7 4h.01M12 4h.01M17 4h.01" />
     </>
   ),
+
+  // Secret Squad: the band, and the crown of a hen or stag party's star.
+  bande: (
+    <>
+      <Circle cx="12" cy="7" r="3" />
+      <Circle cx="5" cy="9" r="2.2" />
+      <Circle cx="19" cy="9" r="2.2" />
+      <Path d="M7 20v-1.5a5 5 0 0 1 10 0V20M1.5 19v-1a3.5 3.5 0 0 1 4.7-3.3M22.5 19v-1a3.5 3.5 0 0 0-4.7-3.3" />
+    </>
+  ),
+  couronne: (
+    <>
+      <Path d="m2 7 4.5 4L12 4l5.5 7L22 7l-2 11H4L2 7Z" />
+      <Path d="M4 21h16" />
+    </>
+  ),
 };

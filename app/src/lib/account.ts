@@ -1,7 +1,7 @@
 // Accounts (Supabase Auth) and the couple's own data: profile sync and evening history.
 // Row-level security scopes couple_profiles/soirees_choisies to the signed-in user.
 import { currentUser, supabase } from '@/lib/supabase';
-import type { Profile } from '@/lib/api';
+import type { Formule, Profile } from '@/lib/api';
 import type { RevealMode } from '@/lib/clues';
 import { removePhotos } from '@/lib/souvenirs';
 
@@ -68,12 +68,20 @@ export async function saveAccountProfile(answers: Record<string, unknown>, profi
   }
 }
 
+// A guest of an evening (table soiree_invites): a passager, who only gets the clues, or a complice of a band's evening,
+// in on the secret with its instigateur.
+export type GuestRole = 'passager' | 'complice';
+export type Invite = { user_id: string; email: string | null; role: GuestRole; joined_at: string };
+export type { Formule };
+
 export type EveningHistoryRow = {
   id: string;
-  user_id: string;
-  passager: string | null; // the one passager invited to this evening, once joined
-  passager_email: string | null;
-  invite_code: string; // the link's code, renewed when the passager is let go
+  user_id: string; // its instigateur
+  formule?: Formule; // absent before the migration: a couple's
+  personnes?: number; // how many go out, its instigateur counted: 2 for a couple
+  invites?: Invite[]; // its guests once joined: one passager at most for a couple
+  codes?: { complice_code: string } | null; // a band's complices' link: read by its instigateur and its complices only
+  invite_code: string; // the passagers' link's code, renewed when they are let go
   reveal_mode?: string; // how its programme is lifted for the passager (lib/clues.ts RevealMode); absent before the migration
   booked?: string[]; // the steps the instigateur marked booked (bookedSteps)
   page_name: string; // the evening's page on the server: once kept, its only route
@@ -86,9 +94,13 @@ export type EveningHistoryRow = {
   souvenirs?: { author: string; note: string; photo: string | null }[];
 };
 
+// An evening as the account sees it: its row, its guests and, for its organisers, the complices' link; with its book.
+const KEPT = '*, invites:soiree_invites(user_id,email,role,joined_at), codes:soiree_codes(complice_code)';
+const EVENING = `${KEPT}, souvenirs(author,note,photo)`;
+
 export async function eveningsHistory(): Promise<EveningHistoryRow[]> {
   const { data, error } = await supabase
-    .from('soirees_choisies').select('*, souvenirs(author,note,photo)').order('chosen_at', { ascending: false });
+    .from('soirees_choisies').select(EVENING).order('chosen_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data as EveningHistoryRow[];
 }
@@ -101,7 +113,7 @@ export async function upcomingEvening(today: string): Promise<EveningHistoryRow 
 // The evenings still to come, the nearest first: the compass leafs through them.
 export async function upcomingEvenings(today: string, limit = 20): Promise<EveningHistoryRow[]> {
   const { data, error } = await supabase
-    .from('soirees_choisies').select('*, souvenirs(author,note,photo)').gte('day', today).order('day').order('chosen_at', { ascending: false }).limit(limit);
+    .from('soirees_choisies').select(EVENING).gte('day', today).order('day').order('chosen_at', { ascending: false }).limit(limit);
   if (error) throw new Error(error.message);
   return (data ?? []) as EveningHistoryRow[];
 }
@@ -114,12 +126,16 @@ export async function chooseEvening(input: {
   pitch: string;
   vibes: string[];
   day: string | null;
+  // A band's evening (Secret Squad), and how many they are; a couple's by default.
+  formule?: Formule;
+  personnes?: number;
 }) {
   const user = await currentUser();
   if (!user) throw new Error('Connectez-vous pour la garder dans votre historique.');
   const { error } = await supabase.from('soirees_choisies').insert({
     user_id: user.id, page_name: input.pageName,
     title: input.title, secret_title: input.secretTitle, pitch: input.pitch, vibes: input.vibes, day: input.day,
+    formule: input.formule ?? 'duo', personnes: input.formule === 'squad' ? input.personnes : 2,
   });
   // Already kept (a second tap, one page per evening): nothing more to do.
   if (error && error.code !== '23505') throw new Error(error.message);
@@ -139,10 +155,13 @@ export async function bookedSteps(pageName: string): Promise<string[]> {
   return (data?.booked as string[] | undefined) ?? [];
 }
 
+// Ticked by the instigateur, or a complice of a band's evening (save_booked); a passager books nothing.
 export async function saveBookedSteps(pageName: string, booked: string[]) {
-  const { data, error } = await supabase.from('soirees_choisies').update({ booked }).eq('page_name', pageName).select('id');
+  const { data, error } = await supabase.from('soirees_choisies').select('id').eq('page_name', pageName).maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data?.length) throw new Error("Cette soirée n'est pas gardée sur votre compte.");
+  if (!data) throw new Error("Cette soirée n'est pas gardée sur votre compte.");
+  const saved = await supabase.rpc('save_booked', { sid: data.id, steps: booked });
+  if (saved.error) throw new Error(saved.error.message);
 }
 
 // The couple's tastes (table gouts): on a step, « on aime ce genre » (1) or « pas pour nous » (-1), one vote per
@@ -194,7 +213,7 @@ export async function deleteMyAccount() {
 
 // The kept evening of a page, as the revelation finds it.
 export async function keptEvening(pageName: string): Promise<EveningHistoryRow | null> {
-  const { data, error } = await supabase.from('soirees_choisies').select('*').eq('page_name', pageName).maybeSingle();
+  const { data, error } = await supabase.from('soirees_choisies').select(KEPT).eq('page_name', pageName).maybeSingle();
   if (error) throw new Error(error.message);
   return (data as EveningHistoryRow | null) ?? null;
 }

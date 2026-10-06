@@ -99,6 +99,9 @@ _TAG_RULES = [
     ("nocturne", "Nocturne / soirée", "moment", r"nocturne|nuit|night|soirée|sunset|midnight|halloween|apéro|happy hour"),
     ("diner", "Dîner", "moment", r"dîner|diner|déjeuner|repas"),
     ("en_duo", "Pensé pour deux", "moment", r"duo|à deux|couple|privati|privé|private"),
+    # A stag or hen party offer, or for girls only: a band of friends' (Secret Squad), never a couple's. Their texts
+    # often say "also for a hen party" of fine couple workshops: only the title and the venue name tell.
+    ("evjf", "EVJF / EVG", "moment", r"\bevg\b|\bevjf\b|enterrements? de vie de (?:garçon|jeune fille|célibataires?)|bachelor(?:ette)? party|hen party|stag party|girls only|ladies only|entre filles"),
     ("frisson", "Frisson (fantômes, crime…)", "moment", r"fantôme|ghost|mystère|crime|obscur|horreur|\bhell\b|manoir|catacombe|halloween|loup[- ]garou|étrange|sherlock|assassin|haschisch|prison"),
 ]
 

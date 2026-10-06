@@ -224,13 +224,21 @@ def test_shotgun_asks_the_cumulative_page_until_it_ends():
     assert [call.request.url.params["page"] for call in route.calls] == ["25", "50"]
 
 
-def test_stag_party_offers_are_not_for_couples():
-    from surprise.collectors.common import GROUP_PARTY
+def test_stag_party_offers_are_tagged_for_a_band():
+    from surprise.tags import tag
 
-    assert GROUP_PARTY.search('SPA insolite "The Beer Spa" formule EVG & EVJF')
-    assert GROUP_PARTY.search("Atelier pour un enterrement de vie de jeune fille")
-    assert GROUP_PARTY.search("La Bringue - Halloween Stripclub Girls Only - Paris")
-    assert not GROUP_PARTY.search("Atelier bougie en duo") and not GROUP_PARTY.search("Soirée Evgeny Kissin")
+    def evjf(title: str) -> bool:
+        return "evjf" in tag({"title": title, "venue": {"name": ""}, "categories": []})
+
+    assert evjf('SPA insolite "The Beer Spa" formule EVG & EVJF')
+    assert evjf("Atelier pour un enterrement de vie de jeune fille")
+    assert evjf("La Bringue - Halloween Stripclub Girls Only - Paris")
+    assert not evjf("Atelier bougie en duo") and not evjf("Soirée Evgeny Kissin")
+
+
+def test_stag_party_offers_are_kept_at_collection():
+    # A band's (Secret Squad): kept in the base, only a couple's evening leaves them out (parcours.fits_party).
+    assert normalize_facts(raw({}), {"name": "Atelier cocktails EVJF", "address": "3 rue X, 75011 Paris"}, "x", NOW).rejection is None
 
 
 def test_time_out_venue_name_drops_the_page_title():

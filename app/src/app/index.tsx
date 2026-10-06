@@ -12,12 +12,12 @@ import { Icon } from '@/components/ui-icons';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useNow } from '@/hooks/use-now';
-import { useTheme } from '@/hooks/use-theme';
+import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { accountProfile, eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
 import { getSoireeState, place, type Profile, type SoireeRoute } from '@/lib/api';
 import { cluesFor, dayHint, inTime, nextClue, revealAt, revealMode, stepRevealed, stepWords } from '@/lib/clues';
 import { complicity, type Complicity } from '@/lib/complicity';
-import { eveningRole, type AccountRole } from '@/lib/couple';
+import { eveningRole, guests, isSquad, placesLeft, type AccountRole } from '@/lib/couple';
 import { formatTime, isoDay, longDay, shortDay } from '@/lib/dates';
 import { forgetProfile, rememberedProfile } from '@/lib/local-store';
 import { curtainFalls } from '@/lib/souvenirs';
@@ -29,7 +29,7 @@ const capitalised = (text: string) => text.charAt(0).toUpperCase() + text.slice(
 // couple's card — its countdown in gold —, then a status line, the evening's first step, and the complicity gauge.
 // The passager's page opens on their own card, what being the passager means; then the evening's card, the status,
 // the step veiled (its mystery word) and the gauge, and a way to compose an evening of their own in turn. Each
-// evening is shown from the account's side of it (eveningRole).
+// evening is shown from the account's side of it (eveningRole), and in its own look: a band's (Secret Squad) in its neon.
 export default function AccueilScreen() {
   const { role, userId } = useCouple();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -66,23 +66,27 @@ export default function AccueilScreen() {
   }, []);
 
   const side = upcoming ? eveningRole(upcoming.row, userId) : role;
+  const palette = isSquad(upcoming?.row) ? 'squad' : 'date';
   return (
     <Screen gap={Spacing.four}>
       {role === 'passager' ? <PassagerWelcome awaiting={loaded && !upcoming} /> : null}
       {toSeal ? <BookCall row={toSeal} /> : null}
 
-      <View style={styles.cardBlock}>
-        {loaded ? (
-          upcoming ? <NextIntrigue {...upcoming} role={side} plain={role === 'passager'} /> : role === 'passager' ? null : <NoIntrigue />
-        ) : (
-          <IntrigueCard><View style={styles.placeholder} /></IntrigueCard>
-        )}
-        {upcoming ? <Status row={upcoming.row} route={upcoming.route} role={side} /> : null}
-        {loaded && !upcoming && role === 'instigateur' ? <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink> : null}
-      </View>
+      <PaletteProvider name={palette}>
+        <View style={styles.cardBlock}>
+          {loaded ? (
+            upcoming ? <NextIntrigue {...upcoming} role={side} plain={role === 'passager'} /> : role === 'passager' ? null : <NoIntrigue />
+          ) : (
+            <IntrigueCard><View style={styles.placeholder} /></IntrigueCard>
+          )}
+          {upcoming ? <Status row={upcoming.row} route={upcoming.route} role={side} /> : null}
+          {loaded && !upcoming && role === 'instigateur' ? <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink> : null}
+        </View>
+
+        {upcoming?.route ? <FirstStep row={upcoming.row} route={upcoming.route} role={side} /> : null}
+      </PaletteProvider>
 
       {role === 'instigateur' && loaded && !profile ? <ProfileCall /> : null}
-      {upcoming?.route ? <FirstStep row={upcoming.row} route={upcoming.route} role={side} /> : null}
       {role === 'passager' && loaded ? <YourTurn /> : null}
       {gauge ? <Gauge gauge={gauge} /> : null}
 
@@ -118,7 +122,7 @@ function NextIntrigue({
           <ThemedText style={styles.plainTitle}>{title}</ThemedText>
         </View>
       ) : (
-        <CardHead badge={role === 'passager' ? 'Passager' : 'Instigateur'} title={title} />
+        <CardHead badge={isSquad(row) ? (role === 'passager' ? 'Squad · Invité' : 'Squad') : role === 'passager' ? 'Passager' : 'Instigateur'} title={title} />
       )}
       {route ? (
         <ThemedText type="clue" style={[styles.cardClue, { color: theme.creamSoft }]} numberOfLines={3}>
@@ -168,11 +172,15 @@ function NextIntrigue({
 function Status({ row, route, role }: { row: EveningHistoryRow; route: SoireeRoute | null; role: AccountRole }) {
   const theme = useTheme();
   const now = useNow();
-  const invite = role === 'instigateur' && !row.passager;
+  const band = isSquad(row);
+  const joined = guests(row).length;
+  const invite = role === 'instigateur' && (band ? placesLeft(row) > 0 : !joined);
   const next = role === 'passager' && route ? nextClue(cluesFor(route, revealMode(row.reveal_mode)), now) : null;
   const text = role === 'passager'
     ? next ? `Votre prochain indice arrive ${inTime(next.at, now)}` : 'Tous vos indices sont dévoilés'
-    : row.passager ? 'Complices connectés : votre passager ne voit que les indices' : 'Votre passager n’a pas encore rejoint l’intrigue';
+    : band
+      ? `${joined + 1} sur ${row.personnes ?? 2} dans la bande : les invités ne voient que les indices`
+      : joined ? 'Complices connectés : votre passager ne voit que les indices' : 'Votre passager n’a pas encore rejoint l’intrigue';
   const dot = invite ? theme.gold : theme.accent;
   const open = () => router.push({ pathname: '/revelation', params: { soiree: row.page_name } });
   return (
@@ -205,7 +213,7 @@ function BookCall({ row }: { row: EveningHistoryRow }) {
 
 // The instigateur's welcome before any evening: three short paragraphs, set tight.
 const PITCH = [
-  'Bonjour, cher instigateur.\nConfiez-nous vos envies, votre humeur. Nous imaginons pour vous une soirée parisienne qui ne ressemble à aucune autre.',
+  'Bonjour, cher instigateur.\nConfiez-nous vos envies, votre humeur. Nous imaginons pour vous une soirée parisienne qui ne ressemble à aucune autre, à deux ou entre potes.',
   'Jusqu’au jour J, l’invité·e ne recevra que quelques indices, juste assez pour éveiller la curiosité sans dévoiler la destination.',
   'À vous le mystère, à nous la surprise.',
 ];

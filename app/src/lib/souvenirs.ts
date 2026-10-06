@@ -15,7 +15,7 @@ export type Book = { evening: EveningHistoryRow; pages: Page[] };
 export async function book(pageName: string): Promise<Book | null> {
   const user = await currentUser();
   if (!user) return null;
-  const { data, error } = await supabase.from('soirees_choisies').select('*, souvenirs(*)').eq('page_name', pageName).maybeSingle();
+  const { data, error } = await supabase.from('soirees_choisies').select('*, invites:soiree_invites(user_id,email,role,joined_at), souvenirs(*)').eq('page_name', pageName).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
   const { souvenirs, ...evening } = data as Omit<EveningHistoryRow, 'souvenirs'> & { souvenirs: Souvenir[] };

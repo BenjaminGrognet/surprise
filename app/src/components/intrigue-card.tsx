@@ -2,19 +2,22 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { DiscoBall, DiscoFacets } from '@/components/disco-ball';
 import { EmeraldFacets } from '@/components/emerald-facets';
 import { LogoSecretDate } from '@/components/logo-secretdate';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui-icons';
-import { Fonts, Radius, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { Brands, Fonts, Radius, Spacing } from '@/constants/theme';
+import { usePalette, useTheme } from '@/hooks/use-theme';
 
-// The sealed invitation, cut like a membership card: a faceted emerald under a gold hairline, with its halo.
+// The sealed invitation, cut like a membership card: a faceted emerald under a gold hairline, with its halo (a band's
+// evening, Secret Squad: a disco ball's mirror tiles).
 // Centred by default; `align="start"` lays it out like the card itself, from the left.
 export function IntrigueCard({
   children, onPress, align = 'center', label,
 }: { children: ReactNode; onPress?: () => void; align?: 'center' | 'start'; label?: string }) {
   const theme = useTheme();
+  const squad = usePalette() === 'squad';
   return (
     <Pressable
       disabled={!onPress}
@@ -26,7 +29,7 @@ export function IntrigueCard({
         { borderColor: theme.accentSoft, backgroundColor: theme.backgroundElement, boxShadow: `0 24px 48px -24px ${theme.glow}` },
         pressed && styles.pressed,
       ]}>
-      <EmeraldFacets />
+      {squad ? <DiscoFacets /> : <EmeraldFacets />}
       <View style={[styles.body, align === 'start' ? styles.start : styles.centred]}>{children}</View>
     </Pressable>
   );
@@ -50,7 +53,7 @@ export function CardHead({ badge, title, back }: { badge?: string; title: string
             </Pressable>
           ) : null}
           <CardEmblem />
-          <ThemedText style={[styles.brand, { color: theme.gold }]}>Secret Date</ThemedText>
+          <ThemedText style={[styles.brand, { color: theme.gold }]}>{Brands[usePalette()]}</ThemedText>
         </View>
         {badge ? <Badge>{badge}</Badge> : null}
       </View>
@@ -76,12 +79,12 @@ export function PageCard({
   );
 }
 
-// The card's emblem, top left like an issuer's: the SecretDate monogram in a gold ring.
+// The card's emblem, top left like an issuer's: the SecretDate monogram in a gold ring (Secret Squad's disco ball).
 export function CardEmblem() {
   const theme = useTheme();
   return (
     <View style={[styles.emblem, { borderColor: theme.goldSoft }]}>
-      <LogoSecretDate size={30} round />
+      {usePalette() === 'squad' ? <DiscoBall size={30} /> : <LogoSecretDate size={30} round />}
     </View>
   );
 }

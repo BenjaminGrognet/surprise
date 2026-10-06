@@ -213,3 +213,30 @@ def test_each_evening_says_whether_they_eat():
     assert not unwished.overnight
     [out] = quiz.requests_for(profile, [date(2026, 10, 10)], ["romantique"], overnight=True)
     assert out.overnight
+
+
+def test_a_bands_wishes_and_occasions_name_known_vibes_and_tags():
+    for wish in quiz.SQUAD_ENVIES + quiz.SQUAD_OCCASIONS:
+        assert set(wish["vibes"]) <= VIBES.keys(), wish
+        assert set(wish.get("prefer") or []) <= TAGS.keys(), wish
+    # The mood cards are wishes, the band's never a couple's.
+    assert set(quiz.MOODS) <= quiz.ENVIE_KEYS.keys() and set(quiz.SQUAD_MOODS) <= quiz.SQUAD_ENVIE_KEYS.keys()
+    assert not {"romantique", "pimenter", "cocooning", "nous"} & quiz.SQUAD_ENVIE_KEYS.keys()
+
+
+def test_a_bands_evening_is_its_own():
+    band = quiz.squad_profile()
+    [hen] = quiz.requests_for(band, [date(2026, 10, 10)], ["bande", "chanter"], "evjf", budget=240, party=4, formule="squad")
+    assert (hen.party, hen.formule, hen.budget) == (4, "squad", 240) and hen.squad
+    # "Fidèles à la bande": the band's vibes, not a couple's romance; a hen party's offers and karaoke come first.
+    assert "romantique" not in hen.vibes and {"rire", "fete"} <= set(hen.vibes)
+    assert {"evjf", "karaoke", "quiz"} <= hen.prefer
+    # The same word, another occasion: a band's birthday is a party, a couple's a romantic dinner.
+    [birthday] = quiz.requests_for(band, [date(2026, 10, 10)], ["fete"], "anniversaire", party=8, formule="squad")
+    [theirs] = quiz.requests_for(band, [date(2026, 10, 10)], ["fete"], "anniversaire")
+    assert "romantique" not in birthday.vibes and "romantique" in theirs.vibes and not theirs.squad
+
+
+def test_a_band_says_its_vibes_its_own_way():
+    assert set(quiz.SQUAD_VIBE_LABELS) <= VIBES.keys()
+    assert quiz.SQUAD_VIBE_LABELS["rire"] != VIBES["rire"]["label"] and "Paillettes" == quiz.SQUAD_VIBE_LABELS["romantique"]

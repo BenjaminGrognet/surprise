@@ -43,6 +43,44 @@ export const Colors = { light: brand, dark: brand } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+// Secret Squad's "Néon de minuit", for a band of friends' evenings: an asphalt night, blue-black, lit by an orange
+// neon sign — the Vegas strip at 3 a.m. as much as a hen party —, with the brand's champagne gold kept for what is
+// precious. Same words as the brand's: a screen wrapped in <PaletteProvider name="squad"> takes it whole.
+const squad: Record<ThemeColor, string> = {
+  text: '#ECE8DF',
+  background: '#070A12',
+  backgroundElement: '#0F1420',
+  backgroundSelected: '#18202F',
+  textSecondary: '#959DAD',
+  line: 'rgba(232, 194, 122, 0.14)',
+  accent: '#FF7A3D',
+  accentInk: '#FF9A66',
+  accentSoft: 'rgba(232, 194, 122, 0.26)',
+  accentFaint: 'rgba(255, 122, 61, 0.24)',
+  satin: '#FF7A3D',
+  onAccent: '#170A03',
+  accentHair: 'rgba(232, 194, 122, 0.14)',
+  glass: 'rgba(236, 232, 223, 0.03)',
+  velvet: '#0F1420',
+  gold: '#E8C27A',
+  goldSoft: 'rgba(232, 194, 122, 0.5)',
+  glow: 'rgba(255, 122, 61, 0.3)',
+  cream: '#F3EEE4',
+  creamSoft: 'rgba(243, 238, 228, 0.62)',
+  creamFaint: 'rgba(243, 238, 228, 0.36)',
+  danger: '#F2727F',
+  dangerFaint: 'rgba(242, 114, 127, 0.14)',
+  ok: '#6FD3A8',
+  info: '#8DB8E8',
+  warn: '#E6B866',
+};
+
+// The two formulas' looks: Secret Date (a couple, the brand) and Secret Squad (a band of friends).
+export type PaletteName = 'date' | 'squad';
+export const Palettes: Record<PaletteName, Record<ThemeColor, string>> = { date: brand, squad };
+// Each one's name, on its cards like a card issuer's.
+export const Brands: Record<PaletteName, string> = { date: 'Secret Date', squad: 'Secret Squad' };
+
 // Cormorant Garamond for titles and names, Manrope for the text (loaded in _layout.tsx).
 export const Fonts = {
   sans: 'Manrope_400Regular',

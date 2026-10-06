@@ -52,7 +52,7 @@ function instigateurLine(e: PlannedEvening, at: number) {
     const next = steps(e).find((s) => Date.parse(s.start) > at);
     return next ? `${formatTime(next.start)} · ${next.title}` : 'Dernière étape : rien ne presse.';
   }
-  if (!e.passager) return 'Votre passager attend son invitation.';
+  if (!e.passager) return e.squad ? 'Votre bande attend son invitation.' : 'Votre passager attend son invitation.';
   const shown = shownClues(cluesFor(e.route, e.mode), at);
   return `Dernier indice : ${shown[shown.length - 1].text}`;
 }
@@ -64,7 +64,7 @@ export function widgetCard(evenings: PlannedEvening[], at: number): WidgetCard {
     .sort((a, b) => Date.parse(a.route.start) - Date.parse(b.route.start))[0];
   if (!next) return NO_EVENING;
   return {
-    kicker: `${next.role === 'passager' ? 'Passager' : 'Instigateur'} · ${shortDay(next.route.day)}`,
+    kicker: `${next.squad ? 'Squad · ' : ''}${next.role === 'passager' ? (next.squad ? 'Invité' : 'Passager') : 'Instigateur'} · ${shortDay(next.route.day)}`,
     title: next.secretTitle,
     countdown: countdownAt(next, at),
     line: next.role === 'passager' ? passagerLine(next, at) : instigateurLine(next, at),

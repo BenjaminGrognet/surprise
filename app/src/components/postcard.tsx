@@ -3,11 +3,12 @@ import { Platform, StyleSheet, View } from 'react-native';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { PrimaryButton } from '@/components/buttons';
+import { DiscoBall } from '@/components/disco-ball';
 import { LogoSecretDate } from '@/components/logo-secretdate';
 import { ThemedText } from '@/components/themed-text';
-import { Fonts, Spacing } from '@/constants/theme';
+import { Brands, Fonts, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
-import { useTheme } from '@/hooks/use-theme';
+import { usePalette, useTheme } from '@/hooks/use-theme';
 import type { SoireeRoute } from '@/lib/api';
 import type { RevealMode } from '@/lib/clues';
 import { postcard, postcardFile, type Postcard } from '@/lib/postcard';
@@ -62,13 +63,15 @@ export function PostcardShare({ route, mode, secretTitle }: { route: SoireeRoute
 // The card itself, at its own size: the night with an emerald glow, the emblem, the secret name, the words in gold.
 export const PostcardView = forwardRef<View, { card: Postcard }>(function PostcardView({ card }, ref) {
   const theme = useTheme();
+  const palette = usePalette();
+  const squad = palette === 'squad';
   return (
     <View ref={ref} collapsable={false} style={[styles.card, { backgroundColor: theme.background }]}>
       <Svg width={W} height={H} style={StyleSheet.absoluteFill}>
         <Defs>
           <RadialGradient id="postcard-glow" cx="50%" cy="0%" r="85%">
-            <Stop offset="0" stopColor="#14533A" stopOpacity={0.95} />
-            <Stop offset="0.55" stopColor="#071A12" stopOpacity={0.9} />
+            <Stop offset="0" stopColor={squad ? '#5C2A14' : '#14533A'} stopOpacity={0.95} />
+            <Stop offset="0.55" stopColor={squad ? '#170D0A' : '#071A12'} stopOpacity={0.9} />
             <Stop offset="1" stopColor={theme.background} stopOpacity={1} />
           </RadialGradient>
         </Defs>
@@ -76,8 +79,8 @@ export const PostcardView = forwardRef<View, { card: Postcard }>(function Postca
         <Rect x={14} y={14} width={W - 28} height={H - 28} rx={22} fill="none" stroke={theme.goldSoft} strokeWidth={1} />
       </Svg>
       <View style={styles.top}>
-        <LogoSecretDate size={54} round />
-        <ThemedText style={[styles.brand, { color: theme.gold }]}>SECRET DATE</ThemedText>
+        {squad ? <DiscoBall size={54} /> : <LogoSecretDate size={54} round />}
+        <ThemedText style={[styles.brand, { color: theme.gold }]}>{Brands[palette].toUpperCase()}</ThemedText>
       </View>
       <View style={styles.middle}>
         <ThemedText style={[styles.when, { color: theme.gold }]}>{card.when}</ThemedText>

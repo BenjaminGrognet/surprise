@@ -1,6 +1,6 @@
 // The couple's evening in the browser, on real activities of the base (tests/e2e_server.py) and the local Supabase: the
 // instigateur creates an account, composes, changes a step, keeps the evening; the passager joins by its link and
-// sees only its clues.
+// sees only its clues. And a band's (Secret Squad): its own look, its number, its guests and complices by two links.
 import { readFileSync } from 'node:fs';
 
 import { expect, type Page, test } from '@playwright/test';
@@ -40,8 +40,12 @@ async function createAccount(page: Page, label: string, button = 'Créer notre c
 const posted = (page: Page, path: RegExp) =>
   page.waitForResponse((r) => r.request().method() === 'POST' && path.test(new URL(r.url()).pathname));
 
+// The first choice of a new evening: for two (Secret Date), or for a band (Secret Squad).
+const forTwo = (page: Page) => page.getByText('Une soirée à deux', { exact: true }).click();
+
 // An evening composed from the form: to laugh, having eaten. What the server answered, and what the page sent it.
 async function compose(page: Page) {
+  await forTwo(page);
   await page.getByText('Rire aux éclats').click();
   await page.getByText('Non, déjà mangé').click();
   const composing = posted(page, /^\/api\/soirees$/);
@@ -73,12 +77,14 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   await expect(page.getByText('Bonjour, cher instigateur.')).toBeVisible();
 
   await page.getByText('Lancer une nouvelle intrigue').click();
+  await forTwo(page);
   await page.getByText('Rire aux éclats').click();
   await page.getByText('Non, déjà mangé').click();
   const composing = posted(page, /^\/api\/soirees$/);
   await page.getByText('Tramer nos intrigues').click();
   const composed: ComposedSoiree = await (await composing).json();
   await expect(page.getByText('Trois intrigues se murmurent au salon')).toBeVisible();
+  expect(composed).toMatchObject({ formule: 'duo', personnes: 2 });
   expect(composed.routes.length).toBeGreaterThan(1);
   for (const route of composed.routes) {
     for (const step of route.steps) await expect(page.getByText(step.title, { exact: true })).toBeVisible();
@@ -228,6 +234,7 @@ test("a photo the sites do not give is asked again, reported, and the step shows
   await page.goto('/');
   await createAccount(page, 'sans-images');
   await page.getByText('Lancer une nouvelle intrigue').click();
+  await forTwo(page);
   await page.getByText('Rire aux éclats').click();
   await page.getByText('Non, déjà mangé').click();
   const composing = posted(page, /^\/api\/soirees$/);
@@ -312,4 +319,82 @@ test('the instigateur votes on steps: kept on the account, sent with the next ev
   const next = await compose(page);
   expect(next.sent.votes).toEqual({ [down.id]: -1 });
   expect(next.composed.routes.flatMap((r) => r.steps).map((s) => s.id)).not.toContain(down.id);
+});
+
+const NEON = 'rgb(255, 122, 61)';
+
+test('a band’s evening: its own look, eight of them, its guests by one link and its complices by another', async ({ page, browser }) => {
+  await page.goto('/');
+  await createAccount(page, 'cerveau');
+  await page.getByText('Lancer une nouvelle intrigue').click();
+  // The first choice, each formula in its own look.
+  await expect(page.getByText('Quelle soirée tramer ?')).toBeVisible();
+  await expect(page.getByText('Secret Date', { exact: true }).last()).toBeVisible();
+  await page.getByText('Une soirée entre potes', { exact: true }).click();
+  await expect(page).toHaveURL(/formule=squad/);
+
+  // The band's form: its neon, its number, its wishes and occasions; no night out.
+  await expect(page.getByText('Quelle virée pour la bande ?')).toBeVisible();
+  await expect(page.getByText('Secret Squad', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Et quand la nuit tombe ?')).toHaveCount(0);
+  await expect(page.getByText('Romantique', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Une personne de plus' }).click();
+  await page.getByRole('button', { name: 'Une personne de plus' }).click();
+  await expect(page.getByText(/À partir de 8, moins de lieux/)).toBeVisible();
+  await page.getByText('Rire aux larmes', { exact: true }).click();
+  await page.getByText('Un EVJF ou un EVG', { exact: true }).click();
+  await page.getByText('Non, déjà mangé').click();
+  const button = page.getByText('Tramer la virée à 8', { exact: true });
+  expect(await button.evaluate((label) => getComputedStyle(label.parentElement!).backgroundColor)).toBe(NEON);
+  const composing = posted(page, /^\/api\/soirees$/);
+  await button.click();
+  const response = await composing;
+  const composed: ComposedSoiree = await response.json();
+  expect(response.request().postDataJSON()).toMatchObject({ formule: 'squad', personnes: 8, occasion: 'evjf', envies: ['rire'], decoucher: false, profile: null });
+  expect(composed).toMatchObject({ formule: 'squad', personnes: 8 });
+  expect(composed.routes.length).toBeGreaterThan(0);
+  await expect(page.getByText('Trois virées pour la bande')).toBeVisible();
+  // Each one's share, never the couple's price.
+  await expect(page.getByText(/€\/pers\.$/).first()).toBeVisible();
+  await expectImagesAndTexts(page, composed.routes[0].steps);
+
+  // Kept: the band's two links and its places.
+  const choosing = posted(page, /\/routes\/0\/choose$/);
+  await page.getByText('Garder cette intrigue').first().click();
+  const kept: ComposedSoiree = await (await choosing).json();
+  const route = kept.routes[0];
+  await expect(page).toHaveURL(/\/revelation\?soiree=/);
+  await expect(page.getByText('Votre bande pour cette soirée')).toBeVisible();
+  await expect(page.getByText('Encore 7 places dans la bande')).toBeVisible();
+  const links = await page.getByText(/\/invitation\?code=[0-9a-f]{12}$/).allTextContents();
+  expect(links).toHaveLength(2);
+  const [guests, complices] = links.map((link) => new URL(link).pathname + new URL(link).search);
+
+  // A friend by the guests' link: the clues only, in the band's look.
+  const friendContext = await browser.newContext();
+  const friend = await friendContext.newPage();
+  await friend.goto(guests);
+  await createAccount(friend, 'pote', 'Créer mon compte passager');
+  await expect(friend).toHaveURL(/\/$/);
+  await expect(friend.getByText(route.secret_title, { exact: true })).toBeVisible();
+  await friend.goto(`/revelation?soiree=${kept.name}`);
+  await expect(friend.getByText('Squad · Invité', { exact: true })).toBeVisible();
+  await expect(friend.getByText('Vos indices')).toBeVisible();
+  for (const s of route.steps) await expect(friend.getByText(s.title)).toHaveCount(0);
+  await friendContext.close();
+
+  // A witness by the complices' link: the whole evening, as its organiser sees it.
+  const witnessContext = await browser.newContext();
+  const witness = await witnessContext.newPage();
+  await witness.goto(complices);
+  await createAccount(witness, 'temoin', 'Créer mon compte passager');
+  await expect(witness).toHaveURL(/\/$/);
+  await witness.goto(`/revelation?soiree=${kept.name}`);
+  for (const s of route.steps) await expect(witness.getByText(s.title, { exact: true })).toBeVisible();
+  await witnessContext.close();
+
+  // The instigateur's home: the evening in the band's look, three of eight in.
+  await page.goto('/');
+  await expect(page.getByText('Squad', { exact: true })).toBeVisible();
+  await expect(page.getByText(/3 sur 8 dans la bande/)).toBeVisible();
 });

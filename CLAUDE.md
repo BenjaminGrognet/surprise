@@ -18,7 +18,8 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   l'instant ; garder l'origine pour pouvoir changer de stratégie si le produit est commercialisé.
 - Textes : le texte des médias (Paris ZigZag, Paris-Friendly, Paris Secret, Sortir à Paris) est gardé (`lead_text`) pour que Claude en
   rédige la description ; à retirer avant tout usage public.
-- Base : ne garder que des activités possibles pour un couple, vraiment réservables ou gratuites ;
+- Base : ne garder que des activités possibles pour un couple ou une bande d'amis (Secret Squad, 3 à 10 : offres
+  EVJF/EVG, escape games à 3 ou plus), vraiment réservables ou gratuites ; le parcours choisit selon la formule ;
   les autres sont rejetées à la collecte. Exception : bars, clubs, boîtes de nuit et restaurants (dansants ou non)
   sont gardés s'ils sont ouverts, marqués « non réservable » sans réservation en ligne. Les rejetées restent en base,
   à part dans la modération (« Écartées à la collecte »), pour améliorer les règles.

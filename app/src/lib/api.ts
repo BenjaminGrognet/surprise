@@ -62,15 +62,24 @@ export const saveProfile = (answers: Record<string, unknown>) =>
 
 export type ChipOption = { value: string; label: string; emoji?: string; icon?: string };
 export type BudgetOption = { budget: number; label: string; desc?: string; emoji?: string; icon?: string };
+// Secret Date, a couple's evening, or Secret Squad, a band of friends' (surprise.quiz SQUAD_…).
+export type Formule = 'duo' | 'squad';
 export type SoireeData = {
+  formule?: Formule;
   envies: ChipOption[];
+  moods?: string[]; // the mood cards, from the calmest to the wildest: wishes among `envies`
   occasions: ChipOption[];
   max: number;
   starts: ChipOption[];
   ends: ChipOption[];
-  budgets: BudgetOption[];
+  budgets: BudgetOption[]; // a band's: per person
+  personnes?: { min: number; max: number; default: number }; // a band's size
+  vibes?: Record<string, string>; // a band's words for the vibes
 };
 export type Night = {
+  // A band's evening (Secret Squad), for `personnes`, its budget per person; a couple's otherwise.
+  formule?: Formule;
+  personnes?: number;
   envies: string[];
   diner: boolean | null;
   decoucher: boolean;
@@ -86,7 +95,7 @@ export type Night = {
   votes?: Record<string, 1 | -1>;
 };
 
-export const getSoiree = () => api<SoireeData>('/api/soiree');
+export const getSoiree = (formule: Formule = 'duo') => api<SoireeData>(formule === 'squad' ? '/api/soiree?formule=squad' : '/api/soiree');
 
 // One step of a composed route (surprise.parcours.step_json): all the raw data, no HTML —
 // this screen decides how to lay it out.
@@ -128,6 +137,9 @@ export type SoireeRoute = {
   index: number;
   title: string;
   secret_title: string; // its name once kept, shown to the passager too: a mood and a quarter, no venue
+  // A band's evening (Secret Squad) and how many go out: its prices count them all, its clues and words are theirs.
+  formule?: Formule;
+  personnes?: number;
   pitch: string;
   day: string;
   start: string;
@@ -149,6 +161,8 @@ export type ComposedSoiree = {
   night_budget: number | null;
   vibes: string[];
   trame: string[];
+  formule?: Formule;
+  personnes?: number;
   routes: SoireeRoute[];
 };
 

@@ -1,7 +1,8 @@
-// The passager, invited to one evening by its link (join_evening), let go with a fresh link (reset_passager).
+// The passager, invited to one evening by its link (join_evening), let go with a fresh link (reset_passager): a couple's
+// evening has one guest at most (soiree_invites).
 import { expect, test } from '@jest/globals';
 import { deleteEvening, eveningsHistory, keptEvening, saveBookedSteps, saveRevealMode, signOut } from '@/lib/account';
-import { eveningRole, joinEvening, myRole, resetPassager } from '@/lib/couple';
+import { eveningRole, guests, joinEvening, myRole, resetPassager } from '@/lib/couple';
 
 import { as, keep, newAccount, PAST } from './helpers';
 
@@ -13,17 +14,18 @@ test('the passager joins by the link and sees the evening; the instigateur sees 
 
   const sam = await newAccount('passager');
   expect(await keptEvening(row.page_name)).toBeNull();
-  await joinEvening(row.invite_code);
-  await joinEvening(row.invite_code); // the link opened twice
+  expect(await joinEvening(row.invite_code)).toBe('passager');
+  expect(await joinEvening(row.invite_code)).toBe('passager'); // the link opened twice
   expect(await myRole()).toEqual({ role: 'passager', userId: sam.id });
   const seen = await keptEvening(row.page_name);
-  expect(seen).toMatchObject({ id: row.id, passager: sam.id, passager_email: sam.email });
+  expect(guests(seen!)).toMatchObject([{ user_id: sam.id, email: sam.email, role: 'passager' }]);
+  expect(seen!.codes).toBeNull(); // a couple's evening has no complices
   expect(eveningRole(seen!, sam.id)).toBe('passager');
   expect((await eveningsHistory()).map((r) => r.id)).toEqual([row.id]);
 
   await as(lea);
   const kept = await keptEvening(row.page_name);
-  expect(kept).toMatchObject({ passager: sam.id, passager_email: sam.email });
+  expect(guests(kept!, 'passager')).toMatchObject([{ user_id: sam.id, email: sam.email }]);
   expect(eveningRole(kept!, lea.id)).toBe('instigateur');
 });
 
@@ -60,7 +62,7 @@ test('the passager let go: the evening hidden from them, the old link dead, a ne
   await as(lea);
   await resetPassager(row.id);
   const fresh = await keptEvening(row.page_name);
-  expect(fresh).toMatchObject({ passager: null, passager_email: null });
+  expect(fresh).toMatchObject({ invites: [] });
   expect(fresh!.invite_code).not.toBe(row.invite_code);
 
   await as(sam);

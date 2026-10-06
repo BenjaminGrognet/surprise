@@ -31,7 +31,7 @@ export function InvitationCarton(invitation: Invitation) {
       </ThemedText>
       <View style={styles.paper}>
         <View style={styles.text}>
-          <ThemedText style={styles.brand}>SECRET DATE</ThemedText>
+          <ThemedText style={styles.brand}>{(invitation.brand ?? 'Secret Date').toUpperCase()}</ThemedText>
           <ThemedText style={styles.kicker}>VOUS ÊTES INVITÉ(E)</ThemedText>
           <ThemedText style={styles.title}>{invitation.secretTitle}</ThemedText>
           <ThemedText style={styles.when}>{invitation.when}</ThemedText>

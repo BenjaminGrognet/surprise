@@ -3,7 +3,7 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, TextButton } from '@/components/buttons';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { Spinner, busyStyle } from '@/components/spinner';
 import { StepImage } from '@/components/step-image';
 import { TasteVote } from '@/components/taste-vote';
@@ -11,23 +11,11 @@ import { useTheme } from '@/hooks/use-theme';
 import type { Vote } from '@/lib/account';
 import { place, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { formatTime } from '@/lib/dates';
+import { formatPrice, routePrice } from '@/lib/prices';
 
 const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre: 'Un verre', sortie: 'Sortie', nuit: 'La nuit' };
 const BOOKING_LABELS: Record<SoireeStep['booking_action'], string> = { voir_lieu: 'Voir le lieu', voir_fiche: 'Voir la fiche', reserver: 'Réserver' };
-// The activity cards: the night green, with the brand's own inks.
-const PAPER = Colors.dark.background;
-const INK = Colors.dark.text;
-const INK_SOFT = Colors.dark.textSecondary;
-const GOLD_INK = Colors.dark.gold;
-const LINK_INK = Colors.dark.accentInk;
-const BADGE_INK = { ok: Colors.dark.ok, info: Colors.dark.info, warn: Colors.dark.warn } as const;
 const BADGE_KIND: Record<SoireeStep['kind'], 'ok' | 'info' | 'warn'> = { verifie: 'ok', seance: 'ok', gratuit: 'info', sans_resa: 'warn', nuit: 'warn' };
-
-export function formatPrice(step: SoireeStep) {
-  if (step.kind === 'nuit') return `${step.price_estimated ? '≈ ' : 'dès '}${step.price.toFixed(0)} € la nuit`;
-  if (step.price === 0) return 'Gratuit';
-  return `${step.price_estimated ? '≈ ' : ''}${step.price.toFixed(0)} € à deux`;
-}
 
 export function RouteResult({
   route,
@@ -54,7 +42,7 @@ export function RouteResult({
     <View style={[styles.route, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }, busyStyle(busyRedo === route.redo)]}>
       <View style={styles.header}>
         <ThemedText type="eyebrow" style={styles.eyebrow}>
-          Intrigue {route.index + 1} · {formatTime(route.start)} → {formatTime(route.end)} · {route.price_estimated ? '≈ ' : ''}{route.price.toFixed(0)} €
+          Intrigue {route.index + 1} · {formatTime(route.start)} → {formatTime(route.end)} · {routePrice(route)}
         </ThemedText>
         {onRedo ? <TextButton busy={busyRedo === route.redo} onPress={() => onRedo(route.redo)}>{busyRedo === route.redo ? 'Recherche…' : '↻ Tout'}</TextButton> : null}
       </View>
@@ -65,7 +53,7 @@ export function RouteResult({
         {route.steps.map((step, i) => (
           <View key={i}>
             {i > 0 ? <Hop previous={route.steps[i - 1]} step={step} /> : null}
-            <StepRow step={step} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={removable} vote={votes?.[step.id]} onVote={onVote} />
+            <StepRow step={step} personnes={route.personnes} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={removable} vote={votes?.[step.id]} onVote={onVote} />
           </View>
         ))}
         {route.night ? (
@@ -96,6 +84,7 @@ function Hop({ previous, step }: { previous: SoireeStep; step: SoireeStep }) {
 
 function StepRow({
   step,
+  personnes,
   busyRedo,
   onRedo,
   removable,
@@ -103,6 +92,7 @@ function StepRow({
   onVote,
 }: {
   step: SoireeStep;
+  personnes?: number;
   busyRedo: string | null;
   onRedo?: (redo: string) => void;
   removable: boolean;
@@ -110,6 +100,9 @@ function StepRow({
   onVote?: (step: SoireeStep, vote: Vote) => void;
 }) {
   const theme = useTheme();
+  // The activity cards: the night, with the formula's own inks.
+  const [PAPER, INK, INK_SOFT, GOLD_INK, LINK_INK] = [theme.background, theme.text, theme.textSecondary, theme.gold, theme.accentInk];
+  const BADGE_INK = { ok: theme.ok, info: theme.info, warn: theme.warn };
   const remove = step.redo ? `${step.redo}/remove` : null;
   const [open, setOpen] = useState(false);
   // ponytail: length stands for "cut at two lines"; measure the text layout if it misfires.
@@ -140,7 +133,7 @@ function StepRow({
         ) : null}
         <ThemedText type="small" style={{ color: BADGE_INK[BADGE_KIND[step.kind]] }} numberOfLines={1}>{step.basis}</ThemedText>
         <View style={styles.line}>
-          <ThemedText type="smallBold" style={{ color: INK }}>{formatPrice(step)}</ThemedText>
+          <ThemedText type="smallBold" style={{ color: INK }}>{formatPrice(step, personnes)}</ThemedText>
           {step.booking_url ? (
             <Pressable
               onPress={() => Linking.openURL(step.booking_url!)}

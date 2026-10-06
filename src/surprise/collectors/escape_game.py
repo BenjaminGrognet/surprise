@@ -7,7 +7,8 @@ room page gives its name, its kind, its specs (theme, duration, number of
 players, price per player), the company's address with its coordinates, a photo,
 the scenario (lead_text) and the booking button, to the company's site, whose
 booking engine (Bookeo, 4escape…) is checked like any booking link. A room for
-three players or more is not for a couple.
+three players or more is kept for a band of friends (Secret Squad): its number
+of players goes with the activity, and an evening only proposes it to as many.
 """
 
 import html
@@ -19,7 +20,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
 
 from surprise.booking import CLOSED
-from surprise.collectors.common import Normalized, euro_amounts, join_reasons, page, run, safe_url, with_reason
+from surprise.collectors.common import Normalized, euro_amounts, page, run, safe_url, with_reason
 from surprise.collectors.facts import BROWSER_HEADERS, complete_place, normalize_facts, sitemap, text, utc_now
 from surprise.collectors.paris_zigzag import postal_code
 from surprise.models import RawRecord
@@ -99,10 +100,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
-    reason = join_reasons(
-        "fermé définitivement" if payload.get("closed") else None,
-        "pas pour un couple" if (payload.get("players_min") or 2) > 2 else None,
-    )
+    reason = "fermé définitivement" if payload.get("closed") else None
     kind, name = payload.get("kind"), payload["room_name"]
     facts = payload | {
         "name": name if not kind or _KIND_IN_NAME.search(name) else f"{kind} : {name}",

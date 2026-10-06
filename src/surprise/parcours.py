@@ -1,11 +1,15 @@
-"""Evening routes: three different evenings for a couple, from a date, a budget, hours and vibes.
+"""Evening routes: three different evenings for a couple, or a band of friends, from a date, a budget, hours and vibes.
+
+Two formulas: Secret Date, for two, and Secret Squad, for a band of friends (3 to 10, a hen or stag party, a
+birthday…), where the romance gives way to what a group shares (games, quizzes, karaoke, dancing) and every price
+counts each of them.
 
 Every step of a route is free or bookable that evening, checked as far as the
 sources allow:
 - a dated show that evening (concerts.paris sessions, Que Faire à Paris,
   Shotgun, Eventbrite…), bookable through its ticketing link or free;
 - a slot confirmed live on the booking engine (Funbooker, Wecandoo, Come to
-  Paris, Zenchef, SevenRooms, 4escape), for two people, cached a few hours;
+  Paris, Zenchef, SevenRooms, 4escape), for the party, cached a few hours;
 - a free place open at that time (opening hours known);
 - a bar or club open at that time, walked into without booking (kept on
   purpose in the base), marked as such; --strict leaves them out. A dinner
@@ -14,7 +18,7 @@ Runs whose evenings are unknown (a play "until December") are left out.
 
 The steps are chained in time and space: each one starts after the previous one
 ends plus the walk or ride between them, without a long wait. Routes are built
-by a beam search that favours the asked vibes, romance and originality, fills
+by a beam search that favours the asked vibes, romance (or conviviality) and originality, fills
 the evening, keeps to the budget and walks rather than rides. Three routes are
 kept, with no activity nor venue in common. Claude names them and writes their
 pitch when ANTHROPIC_API_KEY is set; otherwise they are named by rules.
@@ -50,7 +54,6 @@ import httpx
 
 from surprise import availability, genres, images
 from surprise.collectors import come_to_paris, funbooker, wecandoo
-from surprise.collectors.common import GROUP_PARTY
 from surprise.collectors.facts import BROWSER_HEADERS
 from surprise.local_store import LocalStore, open_store
 from surprise.originality import Scorer
@@ -78,7 +81,7 @@ _DURATIONS = [
     ("concert", 90), ("spectacle", 90), ("croisiere", 75), ("bien_etre", 90), ("jeux", 75), ("visite", 90),
     ("expo", 75), ("musee", 90), ("bar", 75), ("cinema", 110),
 ]
-# Price for two when a walk-in place gives none.
+# Price for two when a walk-in place gives none (a party pays its share of it per head).
 _ESTIMATES = {"repas": 90, "verre": 30, "sortie": 40, "nuit": 220}
 # A night's price from Time Out's scale when no price is given ("Prix : €€€").
 _NIGHT_SCALE = {1: 120, 2: 180, 3: 300, 4: 550}
@@ -96,6 +99,16 @@ DINNER_HOURS = (time(18, 30), time(21, 30))
 _USUAL_HOURS = {"verre": (time(18), time(1, 30)), "club": (time(23), time(5))}
 _ROMANTIC_TAGS = {"chandelles", "vue", "sur_l_eau", "en_duo", "cache", "chic", "jazz", "classique", "eglise", "dans_le_noir", "gastronomique", "massage"}
 _ROMANTIC_WORDS = {"romantique", "intimiste", "cosy", "aux chandelles", "vue panoramique", "coucher de soleil", "en duo"}
+# A band of friends (Secret Squad): what a group shares counts where romance counts for two.
+_CONVIVIAL_TAGS = {
+    "quiz", "karaoke", "escape_game", "murder_party", "jeu_de_piste", "jeux_de_societe", "jeu_actif", "mini_golf", "defouloir",
+    "jeu_video", "stand_up", "danse", "electro", "cabaret", "drag", "street_food", "degustation", "mixologie", "evjf",
+}
+_CONVIVIAL_VIBES = {"rire", "defi", "fete"}
+# Said in its title, an offer for two (a couple's massage, a love room): never a band's.
+_FOR_TWO = re.compile(r"\bduo\b|à deux|\bcouples?\b|amoureux|saint[- ]valentin|love ?room|en tête[- ]à[- ]tête", re.IGNORECASE)
+# From this many, a bar or club walked into without booking is a gamble: the band may stand at the door.
+WALK_IN_PARTY = 6
 _DULL = {"salon", "conference"}
 # Plays and stand-up fill every evening (hundreds a night): an ordinary one comes after the unusual, the more so as
 # the couple dares; stand-up keeps its place when they asked to laugh.
@@ -116,11 +129,12 @@ _DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
 @dataclass
 class Request:
     day: date
-    budget: float  # euros for two
+    budget: float  # euros for the whole party (two, or the band)
     start: datetime
     end: datetime
     vibes: list[str]
-    party: int = 2
+    party: int = 2  # how many go out: two, or the band of a Secret Squad
+    formule: str = "duo"  # "duo" (Secret Date, a couple) or "squad" (Secret Squad, a band of friends)
     walk_in: bool = True  # bars and clubs without booking may be steps
     trame: list[str] = field(default_factory=list)  # the steps asked, in order ("apero", "insolite", "fete")
     max_travel: int = 35  # minutes between two steps
@@ -134,6 +148,10 @@ class Request:
     night_budget: float | None = None  # euros for the room, added to the evening's budget (night_budget_for by default)
     done: set[tuple[str, str]] = field(default_factory=set)  # activities of evenings the couple chose: never again
     tastes: dict[str, float] = field(default_factory=dict)  # the couple's votes by kind of outing (tastes_from): + liked, − not for them
+
+    @property
+    def squad(self) -> bool:
+        return self.formule == "squad"
 
     @property
     def room_budget(self) -> float:
@@ -152,7 +170,7 @@ class Candidate:
     vibes: list[str]
     role: str  # "repas", "verre" or "sortie"
     duration: int
-    price: float  # for two
+    price: float  # for the whole party (price_for)
     price_estimated: bool
     starts: list[datetime]
     basis: str  # why it is bookable that evening
@@ -309,19 +327,21 @@ def default_duration(activity: dict[str, Any], role_: str) -> int:
     return next((minutes for category, minutes in _DURATIONS if category in categories), 90)
 
 
-def price_for_two(activity: dict[str, Any], role_: str) -> tuple[float, bool]:
-    """Cheapest price for two, and whether it is a guess."""
+def price_for(activity: dict[str, Any], role_: str, party: int = 2) -> tuple[float, bool]:
+    """Cheapest price for the party (two, or a band), and whether it is a guess: a price per person counts each of
+    them, a couple's every two, a group's once."""
     offers = activity.get("offers") or []
     if any(offer.get("is_free") for offer in offers):
         return 0.0, False
+    times = {"per_couple": math.ceil(party / 2), "per_group": 1}
     prices = [
-        float(offer["price_min"]) * (1 if offer.get("price_unit") in ("per_couple", "per_group") else 2)
+        float(offer["price_min"]) * times.get(offer.get("price_unit"), party)
         for offer in offers
         if offer.get("price_min") is not None
     ]
     if prices and min(prices) > 0:
         return min(prices), False
-    return float(_ESTIMATES[role_]), True
+    return float(_ESTIMATES[role_]) * party / 2, True
 
 
 def booking_url(item: dict[str, Any]) -> str | None:
@@ -345,10 +365,12 @@ def needs_check(item: dict[str, Any]) -> bool:
 def build_candidate(item: dict[str, Any], request: Request, checked: dict[str, Any] | None, originality: int = 35) -> Candidate | None:
     """The activity as a step of the evening, with its possible start times, or None if it cannot be one.
 
-    Never a stag or hen party offer (collected before the rule); a dinner sits down between 18:30 and 21:30.
+    A stag or hen party offer is only a band's, an offer for two (said in its title) only a couple's, and an activity
+    that says how many it takes (an escape room for 3 to 6) is proposed to as many; a dinner sits down between 18:30
+    and 21:30.
     """
     activity = item["activity"]
-    if GROUP_PARTY.search(" ".join(filter(None, [activity["title"], (activity.get("venue") or {}).get("name")]))):
+    if not fits_party(activity, request):
         return None
     if is_hotel(item):
         return None  # a hotel is where the evening ends (night_for), not a step of it
@@ -360,6 +382,16 @@ def build_candidate(item: dict[str, Any], request: Request, checked: dict[str, A
     if candidate:
         candidate.genres = item_genres(item)
     return candidate
+
+
+def fits_party(activity: dict[str, Any], request: Request) -> bool:
+    """The activity is for this party: a couple's or a band's offer for the formula asked, and its number of players."""
+    tags = describe(activity)["tags"]
+    if "evjf" in tags and not request.squad:
+        return False
+    if request.squad and _FOR_TWO.search(activity["title"]):
+        return False
+    return (activity.get("players_min") or 1) <= request.party <= (activity.get("players_max") or request.party)
 
 
 def item_genres(item: dict[str, Any]) -> list[str]:
@@ -378,7 +410,7 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
     found = describe(activity)
     role_ = role(activity, found["tags"], ate=request.no_dinner)
     duration = default_duration(activity, role_)
-    price, estimated = price_for_two(activity, role_)
+    price, estimated = price_for(activity, role_, request.party)
     free = price == 0 and not estimated
     link = booking_url(item)
     venue = activity.get("venue") or {}
@@ -430,7 +462,7 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
         engine = _ENGINE_NAMES.get(checked["engine"], checked["engine"])
         # The formula booked (Funbooker, Come to Paris); a restaurant's services say nothing to the couple.
         detail = f" · {checked['detail']}" if checked.get("detail") and engine not in _ENGINE_NAMES.values() and len(checked["detail"]) < 60 else ""
-        return Candidate(**base, starts=sorted(set(starts)), ends=ends, basis=f"libre pour 2, vérifié sur {engine}{detail}", kind="verifie")
+        return Candidate(**base, starts=sorted(set(starts)), ends=ends, basis=f"libre pour {request.party}, vérifié sur {engine}{detail}", kind="verifie")
 
     if activity.get("kind") == "temporary":
         return None  # a run without its evenings: cannot tell whether it plays that day
@@ -515,6 +547,15 @@ def taste(found: set[str], request: Request) -> float:
     return min(TASTE_MAX, TASTE_UP * total) if total > 0 else max(-TASTE_MIN, TASTE_DOWN * total)
 
 
+def affinity(tags: list[str], vibes: list[str], keywords: list[str], request: Request) -> float:
+    """What makes an outing theirs beyond the wishes: romance for two, what a band shares (games, karaoke, dancing)."""
+    if request.squad:
+        return 1.2 * bool(_CONVIVIAL_VIBES & set(vibes)) + min(2, 0.5 * len(_CONVIVIAL_TAGS & set(tags)))
+    value = 1.2 * ("romantique" in vibes)
+    value += min(2, 0.5 * len(_ROMANTIC_TAGS & set(tags)))
+    return value + min(1.2, 0.4 * len(_ROMANTIC_WORDS & set(keywords)))
+
+
 def score(candidate: Candidate, request: Request) -> float:
     """How well the activity answers the request, on its own."""
     item, activity = candidate.item, candidate.item["activity"]
@@ -532,10 +573,7 @@ def score(candidate: Candidate, request: Request) -> float:
         return -math.inf  # they will have eaten
     if candidate.role == "sortie" and genres.off_key(candidate.genres, set(activity.get("categories") or []), request.genres):
         return -math.inf  # not their music
-    if "romantique" in candidate.vibes:
-        value += 1.2
-    value += min(2, 0.5 * len(_ROMANTIC_TAGS & set(candidate.tags)))
-    value += min(1.2, 0.4 * len(_ROMANTIC_WORDS & set(candidate.keywords)))
+    value += affinity(candidate.tags, candidate.vibes, candidate.keywords, request)
     if request.prefer & set(candidate.tags) or request.genres & set(candidate.genres):
         value += 1
     # Originality counts more for a daring couple (surprise.originality: offbeat, rare, curated, not a classic).
@@ -549,7 +587,7 @@ def score(candidate: Candidate, request: Request) -> float:
         value += 0.6
     else:
         value -= 1
-    value += {"verifie": 0.6, "seance": 0.4, "gratuit": 0.2, "sans_resa": -0.3}[candidate.kind]
+    value += {"verifie": 0.6, "seance": 0.4, "gratuit": 0.2, "sans_resa": -0.3 if request.party < WALK_IN_PARTY else -1.5}[candidate.kind]
     if "à confirmer" in candidate.basis:
         value -= 0.5
     if item["status"] == "approved":
@@ -567,7 +605,10 @@ def check_engines(store: LocalStore, items: list[dict[str, Any]], request: Reque
     day = request.day.isoformat()
     cached = store.cached_availability(day, request.party, CACHE_HOURS)
     todo = _spread(sorted(
-        (item for item in items if needs_check(item) and (item["source_id"], item["external_id"]) not in cached),
+        (
+            item for item in items
+            if needs_check(item) and (key := (item["source_id"], item["external_id"])) not in cached and prescore.get(key, 0) > -math.inf
+        ),
         key=lambda item: -prescore.get((item["source_id"], item["external_id"]), 0),
     ))
     # Half of the checks for dinners at least, the rarest step to confirm (all of them when dinners alone are asked);
@@ -631,12 +672,17 @@ def _paced(delay: float) -> Callable[[httpx.Request], None]:
 
 
 def quick_score(item: dict[str, Any], request: Request, originality: int = 35) -> float:
-    """Ranking before any check: vibes, romance, originality and a photo."""
+    """Ranking before any check: vibes, romance (a band: conviviality), originality and a photo; never one not for
+    this party, not to spend a live check on it."""
+    if not fits_party(item["activity"], request):
+        return -math.inf
     found = describe(item["activity"])
     asked = set(request.vibes)
     value = 4 * len(asked & set(found["vibes"])) / len(asked) if asked else 1
-    value += 1.2 * ("romantique" in found["vibes"])
-    value += 0.5 * len(_ROMANTIC_TAGS & set(found["tags"]))
+    if request.squad:
+        value += 1.2 * bool(_CONVIVIAL_VIBES & set(found["vibes"])) + 0.5 * len(_CONVIVIAL_TAGS & set(found["tags"]))
+    else:
+        value += 1.2 * ("romantique" in found["vibes"]) + 0.5 * len(_ROMANTIC_TAGS & set(found["tags"]))
     value += 0.6 * bool(item["enrichment"].get("image_url") or item["activity"].get("image"))
     value += (originality - 35) / 25 * (0.5 + request.audace)
     value += max(-TASTE_MIN, taste(kinds(item, found["tags"]), request))
@@ -1057,7 +1103,7 @@ def is_hotel(item: dict[str, Any]) -> bool:
 
 def night_price(activity: dict[str, Any]) -> tuple[float, bool]:
     """A room's price for the night, and whether it is a guess (from Time Out's scale, "Prix : €€€", if given)."""
-    price, estimated = price_for_two(activity, "nuit")
+    price, estimated = price_for(activity, "nuit")
     if estimated:
         labels = " ".join(offer.get("label") or "" for offer in activity.get("offers") or [])
         if scale := re.search(r"€{1,4}", labels):
@@ -1218,7 +1264,12 @@ def name_by_rules(route: Route, request: Request) -> None:
             parts.append(f"puis, à {how}, {step_word(step)} : {_named(step)}")
     rides = [s for s in route.steps[1:] if s.distance > WALK_KM]
     moves = "Tout se fait à pied" if not rides else "Un seul trajet en métro ou taxi" if len(rides) == 1 else "Les trajets se font en métro ou taxi"
-    price = f"pour environ {route.price:.0f} € à deux" if route.price else "sans rien dépenser"
+    if not route.price:
+        price = "sans rien dépenser"
+    elif request.squad:
+        price = f"pour environ {route.price / request.party:.0f} € par personne"
+    else:
+        price = f"pour environ {route.price:.0f} € à deux"
     route.pitch = f"{' ; '.join(parts)}. {moves}, {price}."
     if night := route.night:
         how = f"{night.travel} min à pied" if night.distance <= WALK_KM else f"{night.travel} min en taxi"
@@ -1248,6 +1299,15 @@ _SECRET_WORDS = {
               {"savourer", "gastronomique", "degustation", "vin", "mixologie"}),
 }
 _SECRET_ALWAYS = ["Le Pacte", "Le Secret", "La Clé"]
+# A band's evening (Secret Squad) has its own words, by the same moods: "L'Opération de Pigalle", "La Virée du Marais".
+_SQUAD_WORDS = {
+    "romance": ["La Parenthèse", "Le Grand Jeu", "L'Échappée belle"],
+    "enigme": ["L'Opération", "La Mission", "Le Casse", "Le Coup monté"],
+    "nuit": ["La Virée", "La Tournée", "La Nuit blanche", "Le Grand Raout"],
+    "scene": ["Le Grand Show", "La Grande Tournée", "Le Grand Cirque"],
+    "table": ["La Tablée", "Le Banquet", "La Grande Bouffe"],
+}
+_SQUAD_ALWAYS = ["L'Équipée", "La Bande", "Le Gang"]
 # Paris by its quarters, at their heart: the nearest one names the evening.
 _QUARTERS = [
     ("l'Île Saint-Louis", 48.8515, 2.3566), ("l'Île de la Cité", 48.8546, 2.3477), ("le Marais", 48.8578, 2.3600),
@@ -1302,15 +1362,19 @@ def _secret_place(route: Route) -> str:
     return town if town and town != "Paris" and _plain(town) not in said else "la Ville Lumière"
 
 
-def secret_title(route: Route) -> str:
-    """The evening's secret name, the same for the same steps: a word of its mood and its quarter, no venue."""
+def secret_title(route: Route, squad: bool = False) -> str:
+    """The evening's secret name, the same for the same steps: a word of its mood and its quarter, no venue; a band's
+    own words for a Secret Squad."""
     flavours = Counter()
     for step in route.steps:
         said = {*step.candidate.tags, *step.candidate.vibes, *(step.candidate.item["activity"].get("categories") or [])}
         for flavour, (_, signs) in _SECRET_WORDS.items():
             flavours[flavour] += len(said & signs)
     mood = max(_SECRET_WORDS, key=lambda f: flavours[f]) if flavours and max(flavours.values()) else None
-    words = (_SECRET_WORDS[mood][0] if mood else []) + _SECRET_ALWAYS
+    if squad:
+        words = (_SQUAD_WORDS[mood] if mood else []) + _SQUAD_ALWAYS
+    else:
+        words = (_SECRET_WORDS[mood][0] if mood else []) + _SECRET_ALWAYS
     seed = int(hashlib.sha1("|".join(":".join(s.candidate.key) for s in route.steps).encode()).hexdigest(), 16)
     return f"{words[seed % len(words)]} {_of(_secret_place(route))}"
 
@@ -1339,8 +1403,9 @@ def name_with_claude(routes: list[Route], request: Request) -> bool:
         }
         for index, route in enumerate(routes)
     ]
+    who = f"entre amis, à {request.party}," if request.squad else "en couple"
     prompt = (
-        f"Voici {len(routes)} parcours de soirée en couple à Paris le {request.day:%d/%m/%Y}, envies : "
+        f"Voici {len(routes)} parcours de soirée {who} à Paris le {request.day:%d/%m/%Y}, envies : "
         f"{', '.join(VIBES[v]['label'] for v in request.vibes) or 'libres'}.\n"
         + json.dumps(summary, ensure_ascii=False, indent=1)
         + "\n\nPour chaque parcours, donne un titre évocateur (6 mots au plus) et un pitch de 2 phrases, "
@@ -1412,12 +1477,16 @@ def step_json(step: Step, redo: str | None) -> dict[str, Any]:
     }
 
 
-def route_json(index: int, route: Route) -> dict[str, Any]:
-    """One route (an evening's timeline), its data reshaped for a client to display however it likes."""
+def route_json(index: int, route: Route, request: Request | None = None) -> dict[str, Any]:
+    """One route (an evening's timeline), its data reshaped for a client to display however it likes; with the
+    formula and the party of the evening asked (a couple's when not given), which its clues and words follow."""
     steps = [step_json(step, f"routes/{index}/steps/{position}") for position, step in enumerate(route.steps)]
+    request = request or route.request
+    squad = bool(request and request.squad)
     return {
         "index": index, "title": route.title, "pitch": route.pitch,
-        "secret_title": secret_title(route),  # what both see once it is kept: no venue in it
+        "secret_title": secret_title(route, squad),  # what all see once it is kept: no venue in it
+        "formule": "squad" if squad else "duo", "personnes": request.party if request else 2,
         "day": route.steps[0].start.date().isoformat(),
         "start": route.steps[0].start.isoformat(), "end": route.steps[-1].end.isoformat(),
         "price": route.price, "price_estimated": any(s.candidate.price_estimated for s in route.steps),
@@ -1442,7 +1511,9 @@ def soiree_json(name: str, state: dict[str, Any]) -> dict[str, Any]:
         "start": request.start.isoformat(), "end": request.end.isoformat(),
         "budget": request.budget, "night_budget": request.room_budget if request.overnight else None,
         "vibes": request.vibes, "trame": request.trame,
-        "routes": [route_json(index, route) for index, route in enumerate(routes)],
+        # Secret Date ("duo") or Secret Squad ("squad"), and how many go out: every price counts them all.
+        "formule": request.formule, "personnes": request.party,
+        "routes": [route_json(index, route, request) for index, route in enumerate(routes)],
     }
 
 
@@ -1573,6 +1644,7 @@ def main() -> None:
     parser.add_argument("--decoucher", action="store_true", help="finir la soirée dans un hôtel ou une love room près de la dernière étape")
     parser.add_argument("--budget-nuit", type=float, help="budget de la chambre pour deux, ajouté à --budget (1,5 fois --budget par défaut, 120 à 600 €)")
     parser.add_argument("--strict", action="store_true", help="sans bars ni clubs non réservables")
+    parser.add_argument("--squad", type=int, metavar="N", help="Secret Squad : une soirée entre amis à N (--budget pour toute la bande)")
     parser.add_argument("--db", help="base SQLite ou URL postgresql:// (défaut : SUPABASE_DB_URL, sinon data/surprise.db)")
     parser.add_argument("--no-claude", action="store_true", help="titres et pitchs par règles, sans Claude")
     parser.add_argument("--no-open", action="store_true", help="ne pas ouvrir la soirée dans l'app")
@@ -1591,14 +1663,16 @@ def main() -> None:
     for day in days:
         begin, finish = window(day, args.start, args.end)
         requests.append(Request(
-            day, args.budget, begin, finish, vibes, walk_in=not args.strict, trame=trame, max_travel=args.trajet_max, overnight=args.decoucher,
-            night_budget=args.budget_nuit,
+            day, args.budget, begin, finish, vibes, walk_in=not args.strict, trame=trame, max_travel=args.trajet_max,
+            overnight=args.decoucher and not args.squad, night_budget=args.budget_nuit,
+            party=args.squad or 2, formule="squad" if args.squad else "duo",
         ))
 
     with open_store(args.db) as store:
         routes, name = generate(store, requests, args.parcours, args.checks, claude=not args.no_claude)
+    who = f"à {args.squad}" if args.squad else "à deux"
     for index, route in enumerate(routes, 1):
-        print(f"\n{index}. {_weekday(route.request.day)} {route.request.day:%d/%m} · {route.title} — {route.price:.0f} € à deux")
+        print(f"\n{index}. {_weekday(route.request.day)} {route.request.day:%d/%m} · {route.title} — {route.price:.0f} € {who}")
         for step in route.steps:
             print(f"   {step.start:%H:%M}-{step.end:%H:%M}  {step.candidate.title[:70]}  [{step.basis}]")
         if night := route.night:

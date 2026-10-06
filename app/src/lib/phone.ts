@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 import { currentUser, upcomingEvenings } from '@/lib/account';
 import { getSoireeState } from '@/lib/api';
 import { revealMode } from '@/lib/clues';
-import { eveningRole } from '@/lib/couple';
+import { eveningRole, guests, isSquad } from '@/lib/couple';
 import { isoDay } from '@/lib/dates';
 import { clearNotifications, scheduleNotifications } from '@/lib/notifications';
 import type { PlannedEvening } from '@/lib/story';
@@ -36,7 +36,8 @@ export async function phoneEvenings(): Promise<PlannedEvening[] | null> {
       mode: revealMode(row.reveal_mode),
       secretTitle: row.secret_title ?? route.secret_title,
       booked: row.booked ?? [],
-      passager: !!row.passager,
+      passager: guests(row, 'passager').length > 0,
+      squad: isSquad(row),
     };
   }));
   return evenings.filter((e): e is PlannedEvening => !!e);

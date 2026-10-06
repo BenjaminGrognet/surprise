@@ -20,13 +20,14 @@ export function qrSvg(text: string, size = 200, ink = '#06281B') {
 const escape = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export type Invitation = { secretTitle: string; when: string; link: string };
+// `brand`: the formula's name on the card, Secret Date unless a band's (Secret Squad).
+export type Invitation = { secretTitle: string; when: string; link: string; brand?: string };
 
 // The card as a page to print: ivory paper, gold rules, the name in italics, the code on the right. Its fonts come
 // from Google Fonts; without them, a serif.
-export function invitationHtml({ secretTitle, when, link }: Invitation) {
+export function invitationHtml({ secretTitle, when, link, brand = 'Secret Date' }: Invitation) {
   return `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>${escape(secretTitle)} · Secret Date</title>
+<html lang="fr"><head><meta charset="utf-8"><title>${escape(secretTitle)} · ${escape(brand)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,500&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -52,7 +53,7 @@ export function invitationHtml({ secretTitle, when, link }: Invitation) {
 </style></head>
 <body><div class="card">
   <div class="text">
-    <div class="brand">SECRET DATE</div>
+    <div class="brand">${escape(brand.toUpperCase())}</div>
     <div class="kicker">Vous êtes invité(e)</div>
     <h1>${escape(secretTitle)}</h1>
     <div class="when">${escape(when)}</div>

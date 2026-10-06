@@ -23,7 +23,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, USER_AGENT, Normalized, join_reasons, safe_url
+from surprise.collectors.common import OFF_TOPIC, USER_AGENT, Normalized, join_reasons, safe_url
 from surprise.collectors.paris_zigzag import PARIS, WINDOW, postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Occurrence, Offer, PriceUnit, RawRecord, Venue
 
@@ -186,7 +186,7 @@ def complete_place(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: datetime, window: timedelta = WINDOW) -> Normalized:
-    """An activity for a couple in Paris intra-muros, or why the record is rejected."""
+    """An activity for a couple or a band of friends in Paris intra-muros, or why the record is rejected."""
     name = " ".join((facts.get("name") or "").split())
     if not name:
         return Normalized(raw, rejection="sans nom")
@@ -195,7 +195,7 @@ def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: da
     context = " ".join(filter(None, [name, facts.get("audience"), " ".join(facts.get("tags") or [])]))
     if _CHILD_AUDIENCE.search(context):
         reasons.append("jeune public")
-    if _NOT_FOR_COUPLES.search(context) or GROUP_PARTY.search(name):
+    if _NOT_FOR_COUPLES.search(context):
         reasons.append("pas pour un couple")
     if OFF_TOPIC.search(name):
         reasons.append("hors sujet")
@@ -265,6 +265,8 @@ def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: da
                     paid_booking=True if facts.get("booking_url") and not free else None,
                 )
             ],
+            players_min=facts.get("players_min") or None,
+            players_max=facts.get("players_max") or None,
         )
     except ValidationError as error:
         return Normalized(raw, rejection=join_reasons(*reasons, f"invalide : {error}"))

@@ -15,11 +15,11 @@ import { Veil } from '@/components/veil';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { keptEvening, keptSecretTitle, type EveningHistoryRow } from '@/lib/account';
-import { eveningRole } from '@/lib/couple';
+import { eveningRole, organises } from '@/lib/couple';
 import { PassagerInvite } from '@/components/passager-invite';
 import { RevealModePicker } from '@/components/reveal-mode';
 import { useNow } from '@/hooks/use-now';
-import { useTheme } from '@/hooks/use-theme';
+import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { getSoireeState, place, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import {
   cluesFor, inTime, nextClue, revealAt, revealMode, shownClues, stepRevealed, stepWords, type RevealMode, type StepWord,
@@ -33,7 +33,8 @@ import { clueChapter } from '@/lib/story';
 
 // "La Révélation": the kept evening seen from each account of the couple. The instigateur has the whole timed
 // roadmap; the passager only gets riddles, and a veiled programme that lifts step by step. Both end on its postcard. Which of the two the
-// account is, the evening tells (eveningRole): a passager may compose evenings of their own.
+// account is, the evening tells (eveningRole): a passager may compose evenings of their own. A band's evening (Secret
+// Squad) shows in its neon; its complices see it as its instigateur does, who alone invites, lets go and reveals.
 export default function RevelationScreen() {
   const { soiree } = useLocalSearchParams<{ soiree?: string }>();
   const [route, setRoute] = useState<SoireeRoute | null | 'missing' | 'offline'>(null);
@@ -96,25 +97,29 @@ export default function RevelationScreen() {
   const secretTitle = kept ?? route.secret_title;
   const mode = revealMode(evening?.reveal_mode);
   const role = evening ? eveningRole(evening, userId) : accountRole;
+  const squad = (evening?.formule ?? route.formule) === 'squad';
+  const owner = !evening || organises(evening, userId);
   return (
-    <Screen gap={Spacing.four}>
-      <EveningsNav soiree={soiree!} />
-      {role === 'instigateur' ? (
-        <>
-          <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} mode={mode} onRoute={setRoute} />
-          {evening && (!evening.day || evening.day >= isoDay(new Date())) ? (
-            <>
-              <PassagerInvite evening={evening} onChange={loadEvening} card={{ secretTitle, when: eveningWhen(route) }} />
-              <RevealModePicker key={evening.reveal_mode} evening={evening} onChange={loadEvening} />
-            </>
-          ) : null}
-        </>
-      ) : (
-        <Surprised route={route} secretTitle={secretTitle} mode={mode} evening={soiree!} />
-      )}
-      <BookLink route={route} soiree={soiree!} />
-      <PostcardShare route={route} mode={mode} secretTitle={secretTitle} />
-    </Screen>
+    <PaletteProvider name={squad ? 'squad' : 'date'}>
+      <Screen gap={Spacing.four}>
+        <EveningsNav soiree={soiree!} />
+        {role === 'instigateur' ? (
+          <>
+            <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} mode={mode} onRoute={setRoute} />
+            {evening && (!evening.day || evening.day >= isoDay(new Date())) ? (
+              <>
+                <PassagerInvite evening={evening} onChange={loadEvening} card={{ secretTitle, when: eveningWhen(route) }} owner={owner} />
+                {owner ? <RevealModePicker key={evening.reveal_mode} evening={evening} onChange={loadEvening} /> : null}
+              </>
+            ) : null}
+          </>
+        ) : (
+          <Surprised route={route} secretTitle={secretTitle} mode={mode} evening={soiree!} />
+        )}
+        <BookLink route={route} soiree={soiree!} />
+        <PostcardShare route={route} mode={mode} secretTitle={secretTitle} />
+      </Screen>
+    </PaletteProvider>
   );
 }
 
@@ -155,7 +160,7 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
 
   return (
     <>
-      <PageCard back badge="Passager" title={secretTitle}>
+      <PageCard back badge={route.formule === 'squad' ? 'Squad · Invité' : 'Passager'} title={secretTitle}>
         <ThemedText type="eyebrow">La révélation · {longDay(route.day)}</ThemedText>
         {now < start ? <Countdown to={start} now={now} /> : null}
       </PageCard>

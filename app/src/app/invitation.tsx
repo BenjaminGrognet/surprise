@@ -12,7 +12,8 @@ import { currentUser } from '@/lib/account';
 import { joinEvening } from '@/lib/couple';
 
 // Where the instigateur's link leads (/invitation?code=…): the passager creates their own account, or signs in,
-// and joins the couple. From then on they only get the clues of the evenings.
+// and joins the evening — a couple's, or a band's (Secret Squad). From then on they only get its clues; by a band's
+// complices' link, they are in on the secret and see the whole evening.
 export default function InvitationScreen() {
   const { code } = useLocalSearchParams<{ code?: string }>();
   const { refresh } = useCouple();
@@ -43,7 +44,7 @@ export default function InvitationScreen() {
       <PageCard
         badge="Invitation"
         title="Quelqu'un trame une soirée pour vous…"
-        text="Vous serez le passager : pas de programme, seulement des indices, dévoilés peu à peu jusqu'au jour J."
+        text="À deux ou en bande, vous serez du voyage : pas de programme, seulement des indices dévoilés peu à peu jusqu'au jour J. Sauf si l'on vous a mis dans la confidence : alors vous verrez tout."
       />
 
       {!code ? (

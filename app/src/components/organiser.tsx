@@ -6,7 +6,7 @@ import { CompassGuide } from '@/components/compass-guide';
 import { Countdown, PageCard } from '@/components/intrigue-card';
 import { NotifyAsk } from '@/components/notify-ask';
 import { PassagerWeek } from '@/components/passager-week';
-import { formatPrice } from '@/components/route-result';
+import { formatPrice, routePrice } from '@/lib/prices';
 import { StepImage } from '@/components/step-image';
 import { TasteVote } from '@/components/taste-vote';
 import { ThemedText } from '@/components/themed-text';
@@ -89,7 +89,7 @@ export function Organiser({
 
   return (
     <>
-      <PageCard back badge={`${route.price_estimated ? '≈ ' : ''}${route.price.toFixed(0)} €`} title={secretTitle}>
+      <PageCard back badge={routePrice(route)} title={secretTitle}>
         <ThemedText type="eyebrow">Feuille de route · {longDay(route.day)}</ThemedText>
         {now < start ? <Countdown to={start} now={now} /> : <ThemedText type="subtitle">Le rideau est levé</ThemedText>}
       </PageCard>
@@ -97,7 +97,7 @@ export function Organiser({
       <CompassGuide route={route} />
 
       {now < start ? (
-        <NotifyAsk text="Soyez prévenu(e) : les réservations encore à faire, l'heure du départ le jour J, et chaque indice que reçoit votre passager." />
+        <NotifyAsk text={`Soyez prévenu(e) : les réservations encore à faire, l'heure du départ le jour J, et chaque indice que reçoit ${route.formule === 'squad' ? 'la bande' : 'votre passager'}.`} />
       ) : null}
 
       <Tabs tab={tab} onTab={setTab} pending={left} />
@@ -150,14 +150,14 @@ function Aventure({
       {/* The title alone: the pitch would repeat the steps and the price shown below. */}
       <ThemedText type="subtitle">{route.title}</ThemedText>
       {notice ? <ThemedText type="small" themeColor="accentInk">{notice}</ThemedText> : null}
-      <SilkThread steps={steps} now={now} swapping={swapping} onSwap={onSwap} votes={votes} onVote={onVote} />
+      <SilkThread steps={steps} personnes={route.personnes} now={now} swapping={swapping} onSwap={onSwap} votes={votes} onVote={onVote} />
     </View>
   );
 }
 
 function SilkThread({
-  steps, now, swapping, onSwap, votes, onVote,
-}: { steps: SoireeStep[]; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void } & Votes) {
+  steps, personnes, now, swapping, onSwap, votes, onVote,
+}: { steps: SoireeStep[]; personnes?: number; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void } & Votes) {
   const theme = useTheme();
   return (
     <View style={styles.thread}>
@@ -167,6 +167,7 @@ function SilkThread({
           {i > 0 ? <Hop previous={steps[i - 1]} step={step} /> : null}
           <ThreadStep
             step={step}
+            personnes={personnes}
             busy={swapping === step.id}
             onSwap={step.redo && Date.parse(step.start) > now && swapping === null ? () => onSwap(step) : null}
             vote={votes[step.id]}
@@ -179,8 +180,8 @@ function SilkThread({
 }
 
 function ThreadStep({
-  step, busy, onSwap, vote, onVote,
-}: { step: SoireeStep; busy: boolean; onSwap: (() => void) | null; vote?: Vote; onVote: ((vote: Vote) => void) | null }) {
+  step, personnes, busy, onSwap, vote, onVote,
+}: { step: SoireeStep; personnes?: number; busy: boolean; onSwap: (() => void) | null; vote?: Vote; onVote: ((vote: Vote) => void) | null }) {
   const theme = useTheme();
   const [more, setMore] = useState(false);
   const [photo, setPhoto] = useState(false);
@@ -189,7 +190,7 @@ function ThreadStep({
   const long = (step.text?.length ?? 0) > 160;
   return (
     <View style={[styles.anchorRow, busyStyle(busy)]}>
-      <View style={[styles.anchor, { borderColor: theme.accent, backgroundColor: theme.background }]}>
+      <View style={[styles.anchor, { borderColor: theme.accent, backgroundColor: theme.background, boxShadow: `0 0 10px ${theme.glow}` }]}>
         <View style={[styles.anchorCore, { backgroundColor: theme.accent }]} />
       </View>
       <View style={styles.anchorBody}>
@@ -216,7 +217,7 @@ function ThreadStep({
         ) : null}
         {long ? <TextButton onPress={() => setMore(!more)}>{more ? '− Réduire' : '+ Lire la suite'}</TextButton> : null}
         <View style={styles.stepFoot}>
-          <ThemedText type="small" themeColor="textSecondary">{formatPrice(step)}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">{formatPrice(step, personnes)}</ThemedText>
           <View style={styles.links}>
             {step.booking_url && step.booking_action !== 'reserver' ? (
               <TextLinkOut url={step.booking_url}>Le lieu →</TextLinkOut>
@@ -300,7 +301,7 @@ function Coulisses({
                     {formatTime(s.start)} · {s.title}
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {isBooked ? 'Réservé' : `${formatPrice(s)} · ${place(s)}`}
+                    {isBooked ? 'Réservé' : `${formatPrice(s, route.personnes)} · ${place(s)}`}
                   </ThemedText>
                 </View>
                 {isBooked ? null : <TextLinkOut url={s.booking_url!}>{s.role === 'repas' ? 'Valider la table →' : 'Réserver →'}</TextLinkOut>}
@@ -323,15 +324,16 @@ function Coulisses({
 // A facsimile of the surprised partner's screen, framed in brushed gold: the clues they hold, as quotes.
 function PartnerScreen({ route, secretTitle, now, mode }: { route: SoireeRoute; secretTitle: string; now: number; mode: RevealMode }) {
   const theme = useTheme();
+  const band = route.formule === 'squad';
   const clues = cluesFor(route, mode);
   const shown = shownClues(clues, now);
   const next = nextClue(clues, now);
   return (
     <View style={[styles.frameOuter, { borderColor: theme.goldSoft }]}>
       <View style={[styles.frameInner, { borderColor: theme.line, backgroundColor: theme.backgroundElement }]}>
-        <ThemedText style={[styles.shadowTitle, { color: theme.gold }]}>Dans l&apos;ombre du Passager…</ThemedText>
+        <ThemedText style={[styles.shadowTitle, { color: theme.gold }]}>{band ? 'Dans l’ombre de la bande…' : 'Dans l’ombre du Passager…'}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-          Ce que votre partenaire lit en ce moment. Vous seul voyez le reste.
+          {band ? 'Ce que lit la bande en ce moment. Vous et vos complices voyez le reste.' : 'Ce que votre partenaire lit en ce moment. Vous seul voyez le reste.'}
         </ThemedText>
         <ThemedText type="subtitle" style={styles.center}>{secretTitle}</ThemedText>
         {shown.map((c) => (
@@ -366,7 +368,7 @@ const styles = StyleSheet.create({
   anchorRow: { flexDirection: 'row', gap: Spacing.three, paddingBottom: Spacing.two },
   anchor: {
     width: ANCHOR, height: ANCHOR, borderRadius: ANCHOR / 2, borderWidth: 1, marginTop: 2,
-    alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(61, 183, 135, 0.55)',
+    alignItems: 'center', justifyContent: 'center',
   },
   anchorCore: { width: 5, height: 5, borderRadius: 3 },
   anchorBody: { flex: 1, gap: Spacing.one },

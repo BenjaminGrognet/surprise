@@ -151,7 +151,9 @@ export function passagerWeek({ route, mode, secretTitle, pageName, later = false
     {
       id: 'lendemain', at: Math.max(localAt(route.day, 1, 11), Date.parse(route.end) + 3 * HOUR), chapter: 'Le Livre des Secrets', lead: 0,
       url: book(pageName),
-      body: 'Une page vous attend : une photo, un mot sur hier soir. Celle de votre complice se découvre quand vous scellez la vôtre.',
+      body: route.formule === 'squad'
+        ? 'Une page vous attend : une photo, un mot sur hier soir. Celles de la bande se découvrent quand vous scellez la vôtre.'
+        : 'Une page vous attend : une photo, un mot sur hier soir. Celle de votre complice se découvre quand vous scellez la vôtre.',
     },
   ];
   if (mode === 'veille') {
@@ -170,7 +172,9 @@ export function passagerWeek({ route, mode, secretTitle, pageName, later = false
   if (!later) {
     lines.push({
       id: 'tour', at: localAt(route.day, 4, 19), chapter: 'À votre tour', lead: 0, url: '/soiree',
-      body: "Et si, la prochaine fois, c'était vous qui gardiez le secret ? Composez une soirée : votre complice n'en verra que les indices.",
+      body: route.formule === 'squad'
+        ? "Et si la prochaine virée de la bande, c'était vous qui la gardiez secrète ? Composez-la : ils n'en verront que les indices."
+        : "Et si, la prochaine fois, c'était vous qui gardiez le secret ? Composez une soirée : votre complice n'en verra que les indices.",
     });
   }
   return tell(route, lines, 'passager', revelation(pageName));
@@ -179,8 +183,9 @@ export function passagerWeek({ route, mode, secretTitle, pageName, later = false
 // The instigateur's week: the bookings still to make (until ticked), the invitation still to send, then what the
 // passager receives each morning; the eve, when to set off, when to leave for each next step, the morning after.
 export function instigateurWeek({
-  route, mode, secretTitle, pageName, later = false, booked, passager,
-}: StoryInput & { booked: string[]; passager: boolean }): Beat[] {
+  route, mode, secretTitle, pageName, later = false, booked, passager, squad = false,
+}: StoryInput & { booked: string[]; passager: boolean; squad?: boolean }): Beat[] {
+  const guest = squad ? 'Votre bande' : 'Votre passager';
   const start = Date.parse(route.start);
   const steps = allSteps(route);
   const first = steps[0];
@@ -199,18 +204,20 @@ export function instigateurWeek({
   if (!passager) {
     for (const days of [5, 2]) {
       lines.push({
-        id: `invitation:${days}`, at: localAt(route.day, -days, 18, 30), chapter: 'Votre passager',
-        body: "Votre passager n'a pas encore son invitation : sans elle, pas d'indices. Envoyez-lui le lien depuis la soirée.",
+        id: `invitation:${days}`, at: localAt(route.day, -days, 18, 30), chapter: guest,
+        body: squad
+          ? "Votre bande n'a pas encore son invitation : sans elle, pas d'indices. Envoyez-lui le lien depuis la soirée."
+          : "Votre passager n'a pas encore son invitation : sans elle, pas d'indices. Envoyez-lui le lien depuis la soirée.",
       });
     }
   } else {
     cluesFor(route, mode).forEach((clue, i) => {
       if (MORNINGS.has(clue.kind)) {
-        lines.push({ id: `ombre:${i}`, at: clue.at + 5 * MINUTE, chapter: "Dans l'ombre", lead: 3, body: `Votre passager vient de recevoir : « ${clue.text} »` });
+        lines.push({ id: `ombre:${i}`, at: clue.at + 5 * MINUTE, chapter: "Dans l'ombre", lead: 3, body: `${guest} vient de recevoir : « ${clue.text} »` });
       }
     });
     if (mode === 'veille') {
-      lines.push({ id: 'ombre:programme', at: start - DAY + 5 * MINUTE, chapter: "Dans l'ombre", body: 'Votre passager découvre tout le programme de demain.' });
+      lines.push({ id: 'ombre:programme', at: start - DAY + 5 * MINUTE, chapter: "Dans l'ombre", body: `${guest} découvre tout le programme de demain.` });
     }
   }
   lines.push(
@@ -256,6 +263,7 @@ export type PlannedEvening = {
   secretTitle: string;
   booked: string[];
   passager: boolean;
+  squad?: boolean; // a band's evening (Secret Squad): its guests are "la bande"
 };
 
 // Every evening's beats still to come, the nearest first, as many as the phone keeps; ids prefixed with the page. An

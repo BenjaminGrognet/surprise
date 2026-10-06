@@ -46,6 +46,7 @@ poésie, concert dans une église…
 | Modèle économique | Non défini — on stocke le potentiel d'affiliation par source pour garder l'option |
 | MVP | Que Faire à Paris + OpenAgenda + **Paris ZigZag** (média retenu, orienté insolite) |
 | Stockage | **Supabase** (PostgreSQL + PostGIS) — schéma dans `supabase/migrations/` |
+| Formules | **Secret Date** (un couple) et, depuis le 6 octobre 2026, **Secret Squad** (une bande de 3 à 10 : EVJF, EVG, anniversaire…) — même mécanique, base commune, le parcours filtre selon la formule |
 
 ## Sources
 

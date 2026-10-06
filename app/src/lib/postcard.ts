@@ -19,15 +19,16 @@ export const postcardFile = (title: string) =>
 
 export function postcard(route: SoireeRoute, mode: RevealMode, secretTitle: string, now: number): Postcard {
   const over = now >= Date.parse(route.end);
+  const band = route.formule === 'squad';
   return {
     title: secretTitle,
     when: eveningWhen(route),
     words: stepWords(route, mode).map((w) => (w.at <= now || over ? w.word : '?')),
     steps: over ? [...route.steps, ...(route.night ? [route.night] : [])].map((s) => s.title) : [],
     line: over
-      ? 'Une soirée vécue à deux, en secret.'
+      ? band ? 'Une soirée vécue en bande, en secret.' : 'Une soirée vécue à deux, en secret.'
       : now >= Date.parse(route.start)
-        ? 'Ce soir, une intrigue se joue pour nous deux.'
-        : 'Une soirée secrète nous attend : le reste est un mystère.',
+        ? band ? 'Ce soir, une intrigue se joue pour toute la bande.' : 'Ce soir, une intrigue se joue pour nous deux.'
+        : band ? 'Une virée secrète attend la bande : le reste est un mystère.' : 'Une soirée secrète nous attend : le reste est un mystère.',
   };
 }

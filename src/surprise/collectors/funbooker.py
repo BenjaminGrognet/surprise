@@ -16,7 +16,7 @@ import httpx
 from pydantic import ValidationError
 
 from surprise.categories import categorize
-from surprise.collectors.common import GROUP_PARTY, OFF_TOPIC, Normalized, join_reasons, page, run, safe_url
+from surprise.collectors.common import OFF_TOPIC, Normalized, join_reasons, page, run, safe_url
 from surprise.collectors.paris_zigzag import postal_code, split_venue
 from surprise.models import OUT_OF_AREA, Activity, ActivityKind, Image, Offer, RawRecord, Venue
 
@@ -89,8 +89,6 @@ def normalize(payload: dict[str, Any]) -> Normalized:
         reasons.append("jeune public")
     if OFF_TOPIC.search(payload["name"]):
         reasons.append("hors sujet")
-    if GROUP_PARTY.search(payload["name"]):
-        reasons.append("pas pour un couple")
     # "49 Rue du Faubourg du Temple, 75010 Paris, FR"
     address = re.sub(r",\s*FR$", "", " ".join(payload["address"].split()))
     _, street = split_venue(address, default_name=payload["name"])

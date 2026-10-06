@@ -12,14 +12,14 @@ import { ThemedText } from '@/components/themed-text';
 import { Veil } from '@/components/veil';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
-import { eveningRole } from '@/lib/couple';
-import { useTheme } from '@/hooks/use-theme';
+import { eveningRole, guests, isSquad } from '@/lib/couple';
+import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { isoDay, longDay } from '@/lib/dates';
 import { book, bookOpen, sealPage, type Book, type Fragment, type Page } from '@/lib/souvenirs';
 
-// "Le Livre des Secrets", at the end of the evening or the day after: each of the couple seals one page — a
-// photo, a note. Once sealed, the route fades from the history and only the memory stays; the other's page
-// shows once one's own is sealed.
+// "Le Livre des Secrets", at the end of the evening or the day after: each of the couple — each of the band, for a
+// Secret Squad — seals one page, a photo, a note. Once sealed, the route fades from the history and only the memory
+// stays; the others' pages show once one's own is sealed.
 export default function LivreScreen() {
   const { soiree } = useLocalSearchParams<{ soiree?: string }>();
   const [state, setState] = useState<Book | null | 'loading' | 'error'>('loading');
@@ -51,13 +51,20 @@ export default function LivreScreen() {
       </Screen>
     );
   }
-  return <Grimoire book={state} onSealed={load} />;
+  return (
+    <PaletteProvider name={isSquad(state.evening) ? 'squad' : 'date'}>
+      <Grimoire book={state} onSealed={load} />
+    </PaletteProvider>
+  );
 }
 
 function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed: () => void }) {
   const role = eveningRole(evening, useCouple().userId);
   const mine = pages.find((p) => p.mine);
-  const theirs = pages.find((p) => !p.mine);
+  const theirs = pages.filter((p) => !p.mine);
+  const squad = isSquad(evening);
+  // Its instigateur and each of its guests: the pages still awaited.
+  const awaited = 1 + guests(evening).length - pages.length;
   const open = bookOpen(evening, isoDay(new Date()));
   const params = { soiree: evening.page_name };
 
@@ -71,12 +78,9 @@ function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed
         </ThemedText>
       ) : mine ? (
         <>
-          <PageView page={mine} />
-          {theirs ? (
-            <PageView page={theirs} />
-          ) : evening.passager ? (
-            <AwaitedPage />
-          ) : null}
+          <PageView page={mine} squad={squad} />
+          {theirs.map((page) => <PageView key={page.author} page={page} squad={squad} />)}
+          {awaited > 0 ? <AwaitedPage squad={squad} count={awaited} /> : null}
         </>
       ) : (
         <SealForm soireeId={evening.id} onSealed={onSealed} />
@@ -192,12 +196,12 @@ function SealForm({ soireeId, onSealed }: { soireeId: string; onSealed: () => vo
   );
 }
 
-function PageView({ page }: { page: Page }) {
+function PageView({ page, squad }: { page: Page; squad: boolean }) {
   const theme = useTheme();
   const sealedOn = new Date(page.sealed_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
   return (
     <View style={[styles.page, { backgroundColor: theme.velvet, borderColor: page.mine ? theme.accentHair : theme.accentSoft }]}>
-      <ThemedText type="eyebrow" style={styles.label}>{page.mine ? 'Votre page' : 'La page de votre complice'}</ThemedText>
+      <ThemedText type="eyebrow" style={styles.label}>{page.mine ? 'Votre page' : squad ? 'Une page de la bande' : 'La page de votre complice'}</ThemedText>
       {page.photoUrl ? <Image source={{ uri: page.photoUrl }} style={[styles.photo, { borderColor: theme.accentSoft }]} /> : null}
       {page.note ? <ThemedText type="clue" style={{ color: theme.cream }}>« {page.note} »</ThemedText> : null}
       <ThemedText style={[styles.whisper, { color: theme.creamFaint }]}>Scellée le {sealedOn}</ThemedText>
@@ -206,14 +210,18 @@ function PageView({ page }: { page: Page }) {
 }
 
 // The other's page, not sealed yet: a blank leaf.
-function AwaitedPage() {
+function AwaitedPage({ squad, count }: { squad: boolean; count: number }) {
   const theme = useTheme();
   return (
     <View style={[styles.page, { backgroundColor: theme.velvet, borderColor: theme.accentHair }]}>
-      <ThemedText type="eyebrow" style={styles.label}>La page de votre complice</ThemedText>
+      <ThemedText type="eyebrow" style={styles.label}>
+        {squad ? `${count} page${count > 1 ? 's' : ''} de la bande` : 'La page de votre complice'}
+      </ThemedText>
       <Veil widths={['92%', '70%', '45%']} />
       <ThemedText type="small" style={{ color: theme.creamSoft }}>
-        Pas encore scellée : elle apparaîtra ici dès que votre complice aura déposé la sienne.
+        {squad
+          ? 'Pas encore scellées : elles apparaîtront ici à mesure que la bande déposera les siennes.'
+          : 'Pas encore scellée : elle apparaîtra ici dès que votre complice aura déposé la sienne.'}
       </ThemedText>
     </View>
   );

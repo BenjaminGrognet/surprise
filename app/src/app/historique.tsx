@@ -9,9 +9,9 @@ import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
-import { useTheme } from '@/hooks/use-theme';
+import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { deleteEvening, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
-import { eveningRole } from '@/lib/couple';
+import { eveningRole, isSquad, organises } from '@/lib/couple';
 import { isoDay, longDay } from '@/lib/dates';
 import { photoUrls } from '@/lib/souvenirs';
 import { supabaseConfigured } from '@/lib/supabase';
@@ -62,9 +62,13 @@ export default function ArchivesScreen() {
           <View style={styles.line} />
           {rows.map((row) =>
             row.souvenirs?.length ? (
-              <Relic key={row.id} row={row} age={relics.indexOf(row)} photos={photos} onDeleted={load} />
+              <PaletteProvider key={row.id} name={isSquad(row) ? 'squad' : 'date'}>
+                <Relic row={row} age={relics.indexOf(row)} photos={photos} onDeleted={load} />
+              </PaletteProvider>
             ) : (
-              <Anchor key={row.id} row={row} onDeleted={load} />
+              <PaletteProvider key={row.id} name={isSquad(row) ? 'squad' : 'date'}>
+                <Anchor row={row} onDeleted={load} />
+              </PaletteProvider>
             ),
           )}
         </View>
@@ -105,6 +109,12 @@ function patina(age: number) {
   };
 }
 
+// A colour of the palette ("#0F1420"), worn by time: as rgba at this opacity.
+function veiled(hex: string, opacity: number) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
 function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: number; photos: Record<string, string>; onDeleted: () => void }) {
   const theme = useTheme();
   const p = patina(age);
@@ -116,10 +126,10 @@ function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: n
     <Pressable onPress={open} style={styles.entry}>
       <View style={[styles.dot, age === 0 ? { backgroundColor: theme.gold, boxShadow: `0 0 8px ${theme.gold}` } : styles.dimDot]} />
       <ThemedText style={[styles.date, { color: theme.gold, opacity: age === 0 ? 1 : 0.6 }]}>
-        INTRIGUE SCELLÉE • {row.day ? monthYear(row.day) : 'DATE LIBRE'}
+        {isSquad(row) ? 'SQUAD • ' : ''}INTRIGUE SCELLÉE • {row.day ? monthYear(row.day) : 'DATE LIBRE'}
       </ThemedText>
       <ThemedText style={[styles.name, { color: theme.cream, opacity: age === 0 ? 1 : 0.8 }]}>{row.secret_title ?? row.title}</ThemedText>
-      <View style={[styles.card, { backgroundColor: `rgba(8, 26, 19, ${p.card})`, borderColor: `rgba(219, 193, 140, ${p.border})` }]}>
+      <View style={[styles.card, { backgroundColor: veiled(theme.velvet, p.card), borderColor: veiled(theme.gold, p.border) }]}>
         {photo ? (
           <View style={[styles.photo, { opacity: p.photoOpacity }]}>
             <View style={[StyleSheet.absoluteFill, { filter: p.photo }]}>
@@ -158,7 +168,7 @@ function Anchor({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => v
     <Pressable onPress={() => router.push(href)} style={styles.entry}>
       <View style={[styles.dot, styles.hollow, { borderColor: theme.accent, backgroundColor: theme.background }]} />
       <ThemedText style={[styles.date, { color: theme.accent, opacity: 0.8 }]}>
-        {ahead ? 'À VENIR' : 'À SCELLER'} • {row.day ? longDay(row.day).toUpperCase() : 'DATE LIBRE'}
+        {isSquad(row) ? 'SQUAD • ' : ''}{ahead ? 'À VENIR' : 'À SCELLER'} • {row.day ? longDay(row.day).toUpperCase() : 'DATE LIBRE'}
       </ThemedText>
       <ThemedText style={[styles.name, { color: theme.cream, opacity: 0.8 }]}>{row.secret_title ?? (hidden ? 'Une intrigue en préparation' : row.title)}</ThemedText>
       <TextLink href={href}>
@@ -169,14 +179,14 @@ function Anchor({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => v
   );
 }
 
-// A past evening can be struck from the archives (its instigateur only), after a confirmation.
+// A past evening can be struck from the archives (its own instigateur only, not a complice), after a confirmation.
 function DeleteEvening({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => void }) {
-  const role = eveningRole(row, useCouple().userId);
+  const owner = organises(row, useCouple().userId);
   const theme = useTheme();
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  if (role !== 'instigateur' || (row.day && row.day >= isoDay(new Date()))) return null;
+  if (!owner || (row.day && row.day >= isoDay(new Date()))) return null;
   const run = async () => {
     setBusy(true);
     setError('');

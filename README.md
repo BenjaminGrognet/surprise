@@ -9,7 +9,8 @@ Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo), `c
 # Python : collecte, composition, le parcours du couple par l'API
 uv run pytest
 # Dans app/, Docker Desktop ouvert : un Supabase local (jamais celui du projet), puis les comptes et les
-# notifications (Jest) et le site dans un navigateur (Playwright : compte, soirée, étape changée, passager invité)
+# notifications (Jest) et le site dans un navigateur (Playwright : compte, soirée, étape changée, passager invité,
+# soirée Secret Squad)
 npm run db:start
 npm test
 npm run e2e
@@ -397,9 +398,10 @@ anon ; la sécurité (chacun ne voit que ses données) vient uniquement des poli
 (`couple_profiles.user_id`, table `soirees_choisies`) — il n'y a pas de code serveur entre les deux.
 
 L'instigateur fait le profil, commande les soirées, voit la feuille de route et coche ses réservations
-(`soirees_choisies.booked`) ; il invite un passager par soirée, un seul au plus (colonnes `passager*` et `invite_code`
-de `soirees_choisies`), par un lien depuis la révélation de la soirée (`/invitation?code=…`, fonction `join_evening`) ;
-une autre soirée peut avoir un autre passager (`reset_passager` le renvoie et renouvelle le lien). Le passager a son
+(`save_booked`, colonne `soirees_choisies.booked`) ; il invite un passager par soirée, un seul au plus pour un couple
+(table `soiree_invites`, lien `invite_code` de `soirees_choisies`), par un lien depuis la révélation de la soirée
+(`/invitation?code=…`, fonction `join_evening`) ; une autre soirée peut avoir un autre passager (`reset_passager` le
+renvoie et renouvelle le lien). Une soirée Secret Squad (plus bas) a toute une bande d'invités. Le passager a son
 propre compte, ne voit que le compte à rebours, les indices et le programme voilé des soirées où il est invité ; chaque
 étape voilée porte un mot mystère (« Vertige », « Gourmandise »… tiré de ses ambiances, `stepWords` dans
 `app/src/lib/clues.ts`), le premier dès le départ, les autres au fil des derniers jours. À son tour, il peut faire le
@@ -411,6 +413,44 @@ L'instigateur peut supprimer une soirée passée (Mes soirées, livre et photos 
 (`delete_my_account`, photos retirées avant). Limite connue : le passager pourrait lire les données d'une soirée par
 l'API (l'app seule les voile).
 
+
+### Secret Squad : une soirée entre potes
+
+Au début de chaque commande (`/soiree`), deux formules : **Secret Date**, à deux, et **Secret Squad**, entre potes (EVJF,
+EVG, anniversaire, pot de départ, retrouvailles, sortie d'équipe, ou juste l'envie). La même mécanique, son propre look :
+la palette « Néon de minuit » (nuit bleu asphalte, orange néon, l'or champagne de la marque ; `Palettes.squad` de
+`app/src/constants/theme.ts`, posée par `<PaletteProvider name="squad">` sur la commande, l'accueil, la révélation, le
+livre et l'historique de la soirée), la boule à facettes à la place de l'émeraude (`components/disco-ball.tsx`), le
+badge « Squad », et ses mots (« la bande » où un couple dit « votre passager » ; indices, mots mystères, notifications,
+widget, carte postale et carton en tiennent compte).
+
+- **Combien** : de 3 à 10, l'instigateur compris (`quiz.SQUAD_PERSONNES`). Mesuré le 6 octobre 2026 sur 48 activités
+  réservables en ligne : 27 acceptent 2 personnes, 26 en acceptent 6, 16 en acceptent 10, 9 seulement 12. Chaque
+  vérification de disponibilité demande pour la bande entière (`Request.party`).
+- **Ses envies et occasions** (`quiz.SQUAD_ENVIES`, `SQUAD_OCCASIONS`, `GET /api/soiree?formule=squad`) : trinquer,
+  chanter à tue-tête, se défier entre potes… ; plus de romantique, de cocooning ni de love room (la bande rentre). Un
+  EVJF/EVG favorise les offres faites pour (tag `evjf`), chanter favorise karaoké et quiz. Les vibes ont leurs mots de
+  bande (`SQUAD_VIBE_LABELS` : « Fous rires », « Défis entre potes »…).
+- **Le budget** se donne par personne (moins de 30 €, 30 à 60 €, 60 à 100 €, on ne compte pas ; 60 € sans choix) ;
+  chaque prix compte la bande (`parcours.price_for` : par personne × N, par couple × N/2, par groupe une fois), et
+  l'app affiche la part de chacun.
+- **Le choix des activités** (`parcours.affinity`) : ce qui se partage (quiz, karaoké, escape game, murder party, jeux,
+  danse, dégustations…) compte là où la romance compte pour deux. Une offre pour deux dans son titre (massage en duo,
+  love room) n'est jamais proposée à une bande ; une offre EVJF/EVG jamais à un couple ; un escape game n'est proposé
+  qu'à son nombre de joueurs (`Activity.players_min/max`). À partir de 6, un bar sans réservation pèse moins.
+- **Le profil du couple ne s'applique pas** (`quiz.squad_profile`) ; les votes et les soirées déjà faites, si.
+- **Les invités** (migration `20261007000000_secret_squad.sql`) : `soirees_choisies.formule` et `personnes`, table
+  `soiree_invites` (passagers et complices, pour les deux formules ; un couple n'a qu'un passager), deux liens par
+  soirée de bande : celui des invités (`invite_code`, les indices seulement, un seul lien pour tout le groupe) et
+  celui des complices (`soiree_codes`, que seuls l'instigateur et les complices lisent), qui voient tout le programme
+  et cochent les réservations (les témoins d'un EVJF). `join_evening` refuse au-delà des places ; l'instigateur
+  retire un invité, un invité peut partir. Le livre a autant de pages que la bande. La jauge de complicité ne compte
+  que les soirées à deux.
+
+```bash
+# une soirée Secret Squad en ligne de commande : huit, 400 € pour toute la bande
+uv run --env-file .env python -m surprise.parcours 2026-10-16 --squad 8 --budget 400 --vibes rire,fete
+```
 
 Une soirée gardée prend un nom secret, vu des deux (« Le Pacte de l'Île Saint-Louis ») : un mot d'intrigue tiré de
 son ambiance et le quartier de son étape la plus centrale, jamais un lieu (un quartier qui porte le nom d'un lieu de la

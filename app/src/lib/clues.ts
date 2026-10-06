@@ -46,6 +46,8 @@ function has(steps: SoireeStep[], ...vibes: string[]) {
   return steps.some((s) => s.vibes.some((v) => vibes.includes(v)));
 }
 
+const squad = (route: SoireeRoute) => route.formule === 'squad';
+
 function outfit(route: SoireeRoute) {
   const steps = route.steps;
   const endHour = Number(formatTime(route.end).slice(0, 2)); // on Paris time, like the evening
@@ -53,6 +55,7 @@ function outfit(route: SoireeRoute) {
   if (has(steps, 'creer')) return 'Une tenue qui ne craint ni la farine ni la peinture.';
   if (has(steps, 'fete') && endHour >= 1 && endHour < 6) return 'Des chaussures pour danser : la nuit sera longue.';
   if (has(steps, 'flaner')) return 'Une petite laine : une partie se joue dehors.';
+  if (squad(route) && has(steps, 'fete', 'rire', 'defi')) return 'Le code couleur de la bande : venez assortis, ou venez marquants.';
   if (has(steps, 'romantique', 'emerveiller', 'savourer')) return "Portez une touche de doré : ce soir, on s'habille un peu.";
   return 'Venez comme vous êtes, avec un sourire en coin.';
 }
@@ -66,11 +69,12 @@ function geography(route: SoireeRoute) {
   return null;
 }
 
-// "Une soirée douce pour le portefeuille", from what the two of them will spend.
+// "Une soirée douce pour le portefeuille", from what each of them will spend (two, or the whole band).
 function budget(route: SoireeRoute) {
+  const each = route.price / (route.personnes ?? 2);
   if (route.price < 1) return "Rien à sortir du portefeuille : l'essentiel est offert.";
-  if (route.price < 50) return 'Une soirée douce pour le portefeuille.';
-  if (route.price < 120) return 'Un budget raisonnable, pour une soirée qui ne l’est pas.';
+  if (each < 25) return squad(route) ? 'Une soirée douce pour le portefeuille de chacun.' : 'Une soirée douce pour le portefeuille.';
+  if (each < 60) return 'Un budget raisonnable, pour une soirée qui ne l’est pas.';
   return 'On sort le grand jeu : ce soir, on ne compte pas.';
 }
 
@@ -158,6 +162,21 @@ const WORDS: [string, string[]][] = [
   ['fete', ['Effervescence', 'Ivresse', 'Pétillant']],
   ['romantique', ['Tendresse', 'Intimité', 'Murmures']],
 ];
+// A band's evening (Secret Squad) has its own words, where a couple's would whisper.
+const SQUAD_WORDS: Record<string, string[]> = {
+  rire: ['Fous rires', 'Délire', 'Bêtises'],
+  defi: ['Revanche', 'Équipe', 'Victoire'],
+  fete: ['Fiesta', 'Dancefloor', 'Jusqu’au bout'],
+  savourer: ['Festin', 'Tournée', 'Gourmandise'],
+  musique: ['Refrain', 'Décibels', 'Vibrations'],
+  romantique: ['Paillettes', 'Éclat', 'Douceur'],
+  coquin: ['Audace', 'Paillettes', 'Interdit'],
+  detente: ['Décompresser', 'Pause', 'Douceur'],
+};
+const SQUAD_ROLE_WORDS: Partial<Record<SoireeStep['role'], string[]>> = {
+  repas: ['Tablée', 'Festin', 'Banquet'],
+  verre: ['Tournée', 'Tchin', 'Santé'],
+};
 const ROLE_WORDS: Record<SoireeStep['role'], string[]> = {
   repas: ['Gourmandise', 'Saveurs', 'Tablée'],
   verre: ['Pétillant', 'Tchin', 'Ivresse'],
@@ -172,8 +191,11 @@ function seed(text: string) {
   return h;
 }
 
-function stepWord(step: SoireeStep, taken: Set<string>) {
-  const pools = [...WORDS.filter(([vibe]) => step.vibes.includes(vibe)).map(([, words]) => words), ROLE_WORDS[step.role]];
+function stepWord(step: SoireeStep, taken: Set<string>, band: boolean) {
+  const pools = [
+    ...WORDS.filter(([vibe]) => step.vibes.includes(vibe)).map(([vibe, words]) => (band && SQUAD_WORDS[vibe]) || words),
+    (band && SQUAD_ROLE_WORDS[step.role]) || ROLE_WORDS[step.role],
+  ];
   for (const pool of pools) {
     const start = seed(step.id) % pool.length;
     const word = [...pool.slice(start), ...pool.slice(0, start)].find((w) => !taken.has(w));
@@ -192,7 +214,7 @@ export function stepWords(route: SoireeRoute, mode: RevealMode = 'etapes'): Step
   const moments = [morning(3) + 6 * HOUR, morning(1) + 6 * HOUR, start - 5 * HOUR, start - 2 * HOUR];
   const taken = new Set<string>();
   return allSteps(route).map((step, i) => {
-    const word = stepWord(step, taken);
+    const word = stepWord(step, taken, squad(route));
     taken.add(word);
     const at = i === 0 ? 0 : Math.min(moments[Math.min(i - 1, moments.length - 1)], revealAt(route, step, mode) - HOUR);
     return { word, at };

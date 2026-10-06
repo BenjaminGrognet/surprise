@@ -187,3 +187,39 @@ def test_the_api_refuses_what_it_cannot_do(api):
         ({"envies": ["rire"], "diner": True, "profile": {"vibes": []}}, "profil invalide"),
     ]:
         assert api("/api/soirees", body) == (400, error)
+
+
+def test_a_band_composes_and_keeps_its_evening(api):
+    # Secret Squad: its own wishes, occasions and budgets per person, and how many they may be.
+    options = json.loads(urlopen(f"{api.url}/api/soiree?formule=squad").read())
+    assert options["formule"] == "squad" and options["personnes"] == quiz.SQUAD_PERSONNES
+    assert "evjf" in {o["value"] for o in options["occasions"]} and "romantique" not in {e["value"] for e in options["envies"]}
+    assert all(b["desc"].startswith("Par personne") for b in options["budgets"])
+    assert options["vibes"]["rire"] == "Fous rires" and options["vibes"]["cultiver"] == "Se cultiver"
+    assert json.loads(urlopen(f"{api.url}/api/soiree").read())["formule"] == "duo"
+
+    evening = {"formule": "squad", "personnes": 6, "envies": ["rire", "jouer"], "occasion": "evjf", "diner": False,
+               "day": DAY.isoformat(), "budget": 40, "decoucher": True, "profile": api("/api/profiles", {"answers": ANSWERS})["profile"]}
+    page = api("/api/soirees", evening)
+    # The budget per person, for the six; a band goes home; every price counts them all.
+    assert (page["formule"], page["personnes"], page["budget"], page["night_budget"]) == ("squad", 6, 240, None)
+    assert page["routes"] and all(route["night"] is None for route in page["routes"])
+    for route in page["routes"]:
+        _chains(route)
+        assert route["secret_title"].split(" ")[0] not in {"Le Serment", "La Promesse", "L'Aveu"}
+        assert all(step["price"] in (0, 120) for step in route["steps"])  # 20 € a head, six heads
+        assert "par personne" in route["pitch"]
+    # Kept and drawn again as theirs.
+    name = page["name"]
+    redrawn = api(f"/api/parcours/{name}/routes/0", {})
+    assert redrawn["formule"] == "squad" and redrawn["personnes"] == 6
+    kept = api(f"/api/parcours/{name}/routes/0/choose", {})
+    assert kept["chosen"] and kept["personnes"] == 6
+
+
+def test_the_api_refuses_a_band_it_cannot_seat(api):
+    evening = {"formule": "squad", "envies": ["rire"], "diner": True}
+    for personnes in (None, 2, 11, "six", True):
+        assert api("/api/soirees", {**evening, "personnes": personnes}) == (400, "nombre de personnes invalide")
+    # A couple's wish is not a band's.
+    assert api("/api/soirees", {**evening, "personnes": 6, "envies": ["romantique"]}) == (400, "au moins une envie")
