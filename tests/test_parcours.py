@@ -671,6 +671,9 @@ def test_each_offer_is_for_its_party():
     assert parcours.build_candidate(room, squad(6), None) and parcours.build_candidate(room, squad(8), None) is None
     # Not even a live check spent on one not for the party.
     assert parcours.quick_score(room, request()) == float("-inf") and parcours.quick_score(room, squad()) > 0
+    # Two friends are a band, not a couple: no massage for two, the hen party's workshop if they like.
+    assert parcours.build_candidate(massage, squad(2), None) is None and parcours.build_candidate(hen, squad(2), None)
+    assert parcours.build_candidate(room, squad(2), None) is None
 
 
 def test_a_band_likes_what_a_group_shares_where_a_couple_likes_romance():

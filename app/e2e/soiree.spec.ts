@@ -79,7 +79,11 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   await page.getByText('Lancer une nouvelle intrigue').click();
   await forTwo(page);
   await page.getByText('Rire aux éclats').click();
-  await page.getByText('Non, déjà mangé').click();
+  // Dinner or not: cutlery, or a plate crossed out.
+  const eaten = page.getByRole('checkbox', { name: 'Non, déjà mangé' });
+  await expect(eaten.locator('svg circle')).toHaveCount(2);
+  await expect(eaten.locator('svg path')).toHaveCount(1);
+  await eaten.click();
   const composing = posted(page, /^\/api\/soirees$/);
   await page.getByText('Tramer nos intrigues').click();
   const composed: ComposedSoiree = await (await composing).json();
@@ -338,8 +342,13 @@ test('a band’s evening: its own look, eight of them, its guests by one link an
   await expect(page.getByText('Secret Squad', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Et quand la nuit tombe ?')).toHaveCount(0);
   await expect(page.getByText('Romantique', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Une personne de plus' }).click();
-  await page.getByRole('button', { name: 'Une personne de plus' }).click();
+  // From two (a friend, no date) to ten.
+  await expect(page.getByText('Vous compris, de 2 à 10.')).toBeVisible();
+  const fewer = page.getByRole('button', { name: 'Une personne de moins' });
+  for (let i = 0; i < 4; i++) await fewer.click();
+  await expect(page.getByLabel('2 personnes', { exact: true })).toBeVisible();
+  await expect(fewer).toBeDisabled();
+  for (let i = 0; i < 6; i++) await page.getByRole('button', { name: 'Une personne de plus' }).click();
   await expect(page.getByText(/À partir de 8, moins de lieux/)).toBeVisible();
   await page.getByText('Rire aux larmes', { exact: true }).click();
   await page.getByText('Un EVJF ou un EVG', { exact: true }).click();

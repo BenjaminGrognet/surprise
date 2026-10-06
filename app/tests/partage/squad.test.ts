@@ -39,8 +39,15 @@ describe('a band’s clues and words', () => {
   test('its prices, each one’s share', () => {
     expect(routePrice(band)).toBe('45 €/pers.');
     expect(routePrice(couple)).toBe('90 €');
-    expect(formatPrice(band.steps[0], 6)).toBe('15 € par personne');
+    expect(formatPrice(band.steps[0], band)).toBe('15 € par personne');
+    expect(formatPrice(couple.steps[0], couple)).toBe('30 € à deux');
     expect(formatPrice(couple.steps[0])).toBe('30 € à deux');
+  });
+
+  test('two friends are a band, not a couple: each one’s share', () => {
+    const friends: SoireeRoute = { ...couple, formule: 'squad', personnes: 2 };
+    expect(routePrice(friends)).toBe('45 €/pers.');
+    expect(formatPrice(friends.steps[0], friends)).toBe('15 € par personne');
   });
 });
 

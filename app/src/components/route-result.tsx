@@ -53,7 +53,7 @@ export function RouteResult({
         {route.steps.map((step, i) => (
           <View key={i}>
             {i > 0 ? <Hop previous={route.steps[i - 1]} step={step} /> : null}
-            <StepRow step={step} personnes={route.personnes} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={removable} vote={votes?.[step.id]} onVote={onVote} />
+            <StepRow step={step} party={route} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={removable} vote={votes?.[step.id]} onVote={onVote} />
           </View>
         ))}
         {route.night ? (
@@ -84,7 +84,7 @@ function Hop({ previous, step }: { previous: SoireeStep; step: SoireeStep }) {
 
 function StepRow({
   step,
-  personnes,
+  party,
   busyRedo,
   onRedo,
   removable,
@@ -92,7 +92,7 @@ function StepRow({
   onVote,
 }: {
   step: SoireeStep;
-  personnes?: number;
+  party?: SoireeRoute;
   busyRedo: string | null;
   onRedo?: (redo: string) => void;
   removable: boolean;
@@ -133,7 +133,7 @@ function StepRow({
         ) : null}
         <ThemedText type="small" style={{ color: BADGE_INK[BADGE_KIND[step.kind]] }} numberOfLines={1}>{step.basis}</ThemedText>
         <View style={styles.line}>
-          <ThemedText type="smallBold" style={{ color: INK }}>{formatPrice(step, personnes)}</ThemedText>
+          <ThemedText type="smallBold" style={{ color: INK }}>{formatPrice(step, party)}</ThemedText>
           {step.booking_url ? (
             <Pressable
               onPress={() => Linking.openURL(step.booking_url!)}

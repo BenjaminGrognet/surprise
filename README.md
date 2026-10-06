@@ -427,9 +427,10 @@ livre et l'historique de la soirée), la boule à facettes à la place de l'éme
 badge « Squad », et ses mots (« la bande » où un couple dit « votre passager » ; indices, mots mystères, notifications,
 widget, carte postale et carton en tiennent compte).
 
-- **Combien** : de 3 à 10, l'instigateur compris (`quiz.SQUAD_PERSONNES`). Mesuré le 6 octobre 2026 sur 48 activités
-  réservables en ligne : 27 acceptent 2 personnes, 26 en acceptent 6, 16 en acceptent 10, 9 seulement 12. Chaque
-  vérification de disponibilité demande pour la bande entière (`Request.party`).
+- **Combien** : de 2 à 10, l'instigateur compris (`quiz.SQUAD_PERSONNES`) ; à deux, une soirée avec un pote,
+  pas un date : les prix restent par personne, les offres pour un couple écartées. Mesuré le 6 octobre 2026 sur 48
+  activités réservables en ligne : 27 acceptent 2 personnes, 26 en acceptent 6, 16 en acceptent 10, 9 seulement 12.
+  Chaque vérification de disponibilité demande pour la bande entière (`Request.party`).
 - **Ses envies et occasions** (`quiz.SQUAD_ENVIES`, `SQUAD_OCCASIONS`, `GET /api/soiree?formule=squad`) : trinquer,
   chanter à tue-tête, se défier entre potes… ; plus de romantique, de cocooning ni de love room (la bande rentre). Un
   EVJF/EVG favorise les offres faites pour (tag `evjf`), chanter favorise karaoké et quiz. Les vibes ont leurs mots de

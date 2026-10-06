@@ -291,7 +291,13 @@ export const QUIZ_ICONS: Record<string, ReactNode> = {
       <Path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
     </>
   ),
-  coche: <Path d="M20 6 9 17l-5-5" />,
+  assiette_barree: (
+    <>
+      <Circle cx="12" cy="12" r="9" />
+      <Circle cx="12" cy="12" r="5" />
+      <Path d="m3 3 18 18" />
+    </>
+  ),
   maison: (
     <>
       <Path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />

@@ -26,14 +26,15 @@ import { rememberedProfile } from '@/lib/local-store';
 // the server's wishes (surprise.quiz.ENVIES, its MOODS; a band's, SQUAD_MOODS). The other wishes are the "secret options".
 const MOODS = ['cocooning', 'romantique', 'nous', 'curieux', 'surprise'];
 const MIDDLE_MOOD = 2;
-// A band's evening (Secret Squad): how many they are, the instigateur counted (surprise.quiz.SQUAD_PERSONNES).
-const PERSONNES = { min: 3, max: 10, default: 6 };
+// A band's evening (Secret Squad): how many they are, the instigateur counted (surprise.quiz.SQUAD_PERSONNES); from
+// two, an evening with a friend being no date.
+const PERSONNES = { min: 2, max: 10, default: 6 };
 // From this many, fewer places book a table or a session for all of them online.
 const BIG_BAND = 8;
 
 const MEALS = [
   { value: true, label: 'Oui, on dîne', icon: 'couvert' },
-  { value: false, label: 'Non, déjà mangé', icon: 'coche' },
+  { value: false, label: 'Non, déjà mangé', icon: 'assiette_barree' },
 ];
 const NIGHTS = [
   { value: false, label: 'On rentre', icon: 'maison' },
@@ -397,7 +398,7 @@ function FormulePicker({ turn, onPick }: { turn: boolean; onPick: (formule: Form
       <FormuleCard
         name="squad"
         title="Une soirée entre potes"
-        text="EVJF, EVG, anniversaire ou juste l'envie : une virée secrète de 3 à 10, des activités pour toute la bande."
+        text="EVJF, EVG, anniversaire ou juste l'envie : une virée secrète de 2 à 10, des activités pour toute la bande."
         onPress={() => onPick('squad')} />
     </Screen>
   );

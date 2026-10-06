@@ -1,7 +1,7 @@
 """Evening routes: three different evenings for a couple, or a band of friends, from a date, a budget, hours and vibes.
 
-Two formulas: Secret Date, for two, and Secret Squad, for a band of friends (3 to 10, a hen or stag party, a
-birthday…), where the romance gives way to what a group shares (games, quizzes, karaoke, dancing) and every price
+Two formulas: Secret Date, for two, and Secret Squad, for a band of friends (2 to 10, a hen or stag party, a
+birthday, a friend's night out…), where the romance gives way to what a group shares (games, quizzes, karaoke, dancing) and every price
 counts each of them.
 
 Every step of a route is free or bookable that evening, checked as far as the

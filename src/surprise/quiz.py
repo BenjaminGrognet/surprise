@@ -14,7 +14,7 @@ and tastes come from the profile, when there is one. From both,
 surprise.parcours composes the evening.
 
 An evening is a couple's (Secret Date) or a band of friends' (Secret Squad,
-?formule=squad): 3 to 10, its own wishes, occasions and budgets per person, the
+?formule=squad): 2 to 10, its own wishes, occasions and budgets per person, the
 band's settings in place of the couple's profile.
 
     uv run python -m surprise.quiz            # http://127.0.0.1:8001
@@ -255,8 +255,9 @@ MOODS = ["cocooning", "romantique", "nous", "curieux", "surprise"]
 # Secret Squad: an evening for a band of friends (a hen or stag party, a birthday, a farewell drink…), with its own
 # wishes, occasions and budgets, per person as a band counts. A couple's profile is not the band's: the band's
 # settings (squad_profile) apply, the account's votes and its evenings done still do.
-# Ten at most: of 48 activities bookable online (checked for 2026-10-16), 27 seated two, 26 six, 16 ten, only 9 twelve.
-SQUAD_PERSONNES = {"min": 3, "max": 10, "default": 6}
+# From two: an evening out with a friend is no date. Ten at most: of 48 activities bookable online (checked for
+# 2026-10-16), 27 seated two, 26 six, 16 ten, only 9 twelve.
+SQUAD_PERSONNES = {"min": 2, "max": 10, "default": 6}
 SQUAD_BUDGET_OPTIONS: list[dict[str, Any]] = [
     {"value": "doux", "label": "Moins de 30 €", "desc": "Par personne, les bons plans", "icon": "pieces", "emoji": "🪙", "budget": 30},
     {"value": "moyen", "label": "30 à 60 €", "desc": "Par personne, l'équilibre", "icon": "portefeuille", "emoji": "💶", "budget": 60},

@@ -127,10 +127,19 @@ test('the whole band seals its book, each page shown once one’s own is sealed'
   expect(guests(all.evening)).toHaveLength(2);
 });
 
-test('a band counts 3 to 10, a couple two', async () => {
+test('a band counts 2 to 10, a couple two', async () => {
   await newAccount('compte');
-  for (const personnes of [2, 11]) {
+  for (const personnes of [1, 11]) {
     await expect(keepBand(personnes)).rejects.toThrow();
   }
+  // Two friends: a band all the same, one place for the friend.
+  const friends = await keepBand(2);
+  expect(friends).toMatchObject({ formule: 'squad', personnes: 2 });
+  expect(friends.codes?.complice_code).toMatch(/^[0-9a-f]{12}$/);
+  expect(placesLeft(friends)).toBe(1);
+  await newAccount('pote');
+  expect(await joinEvening(friends.invite_code)).toBe('passager');
+  await newAccount('de-trop');
+  await expect(joinEvening(friends.invite_code)).rejects.toThrow("La bande est au complet : demandez une place de plus à l'organisateur.");
   await signOut();
 });

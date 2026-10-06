@@ -150,14 +150,14 @@ function Aventure({
       {/* The title alone: the pitch would repeat the steps and the price shown below. */}
       <ThemedText type="subtitle">{route.title}</ThemedText>
       {notice ? <ThemedText type="small" themeColor="accentInk">{notice}</ThemedText> : null}
-      <SilkThread steps={steps} personnes={route.personnes} now={now} swapping={swapping} onSwap={onSwap} votes={votes} onVote={onVote} />
+      <SilkThread steps={steps} party={route} now={now} swapping={swapping} onSwap={onSwap} votes={votes} onVote={onVote} />
     </View>
   );
 }
 
 function SilkThread({
-  steps, personnes, now, swapping, onSwap, votes, onVote,
-}: { steps: SoireeStep[]; personnes?: number; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void } & Votes) {
+  steps, party, now, swapping, onSwap, votes, onVote,
+}: { steps: SoireeStep[]; party: SoireeRoute; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void } & Votes) {
   const theme = useTheme();
   return (
     <View style={styles.thread}>
@@ -167,7 +167,7 @@ function SilkThread({
           {i > 0 ? <Hop previous={steps[i - 1]} step={step} /> : null}
           <ThreadStep
             step={step}
-            personnes={personnes}
+            party={party}
             busy={swapping === step.id}
             onSwap={step.redo && Date.parse(step.start) > now && swapping === null ? () => onSwap(step) : null}
             vote={votes[step.id]}
@@ -180,8 +180,8 @@ function SilkThread({
 }
 
 function ThreadStep({
-  step, personnes, busy, onSwap, vote, onVote,
-}: { step: SoireeStep; personnes?: number; busy: boolean; onSwap: (() => void) | null; vote?: Vote; onVote: ((vote: Vote) => void) | null }) {
+  step, party, busy, onSwap, vote, onVote,
+}: { step: SoireeStep; party: SoireeRoute; busy: boolean; onSwap: (() => void) | null; vote?: Vote; onVote: ((vote: Vote) => void) | null }) {
   const theme = useTheme();
   const [more, setMore] = useState(false);
   const [photo, setPhoto] = useState(false);
@@ -217,7 +217,7 @@ function ThreadStep({
         ) : null}
         {long ? <TextButton onPress={() => setMore(!more)}>{more ? '− Réduire' : '+ Lire la suite'}</TextButton> : null}
         <View style={styles.stepFoot}>
-          <ThemedText type="small" themeColor="textSecondary">{formatPrice(step, personnes)}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">{formatPrice(step, party)}</ThemedText>
           <View style={styles.links}>
             {step.booking_url && step.booking_action !== 'reserver' ? (
               <TextLinkOut url={step.booking_url}>Le lieu →</TextLinkOut>
@@ -301,7 +301,7 @@ function Coulisses({
                     {formatTime(s.start)} · {s.title}
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {isBooked ? 'Réservé' : `${formatPrice(s, route.personnes)} · ${place(s)}`}
+                    {isBooked ? 'Réservé' : `${formatPrice(s, route)} · ${place(s)}`}
                   </ThemedText>
                 </View>
                 {isBooked ? null : <TextLinkOut url={s.booking_url!}>{s.role === 'repas' ? 'Valider la table →' : 'Réserver →'}</TextLinkOut>}

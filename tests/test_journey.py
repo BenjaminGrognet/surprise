@@ -217,9 +217,18 @@ def test_a_band_composes_and_keeps_its_evening(api):
     assert kept["chosen"] and kept["personnes"] == 6
 
 
+def test_two_friends_go_out_as_a_band(api):
+    # An evening with a friend is no date: a band of two, its budget per person, its prices each one's share.
+    page = api("/api/soirees", {"formule": "squad", "personnes": 2, "envies": ["rire"], "diner": False,
+                                "day": DAY.isoformat(), "budget": 40})
+    assert (page["formule"], page["personnes"], page["budget"]) == ("squad", 2, 80)
+    assert page["routes"] and all(route["formule"] == "squad" and route["personnes"] == 2 for route in page["routes"])
+    assert all(("par personne" in route["pitch"] or not route["price"]) and "à deux" not in route["pitch"] for route in page["routes"])
+
+
 def test_the_api_refuses_a_band_it_cannot_seat(api):
     evening = {"formule": "squad", "envies": ["rire"], "diner": True}
-    for personnes in (None, 2, 11, "six", True):
+    for personnes in (None, 1, 11, "six", True):
         assert api("/api/soirees", {**evening, "personnes": personnes}) == (400, "nombre de personnes invalide")
     # A couple's wish is not a band's.
     assert api("/api/soirees", {**evening, "personnes": 6, "envies": ["romantique"]}) == (400, "au moins une envie")
