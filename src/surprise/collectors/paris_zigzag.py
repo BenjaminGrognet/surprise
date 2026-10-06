@@ -1,7 +1,8 @@
 """Collector for Paris ZigZag (curation media, tier 3: discovery signal only).
 
-Articles are discovered through the sitemaps (robots.txt allows crawling) and
-only their practical blocks are read: the name of the place or event, its link
+Articles are discovered through the sitemaps (robots.txt allows crawling), after
+its lists for a band of friends (GROUP_ARTICLES), and only their practical
+blocks are read: the name of the place or event, its link
 to the official site, venue, address, dates, price and hours, e.g.
 
     <a href="https://official.example">Name</a><br />
@@ -42,6 +43,11 @@ WINDOW = timedelta(weeks=6)
 SINCE = timedelta(days=60)
 # Pause between two article requests.
 DELAY_SECONDS = 1.0
+# Its lists of places for a band of friends (Secret Squad), one practical block each: read first, whatever their age.
+GROUP_ARTICLES = [
+    f"{BASE_URL}/sortir-paris/balade-paris/evjf-paris/",
+    f"{BASE_URL}/top-redac/les-meilleurs-karaokes-parisiens-ou-chanter-avec-ses-amis/",
+]
 
 # Other cities, news and family content are out of scope.
 _EXCLUDED_SECTIONS = ("famille", "france", "lyon-actu", "lille-actu", "marseille-actu", "bordeaux-actu", "rennes-actu")
@@ -102,13 +108,14 @@ class Article:
 
 
 def fetch_articles(client: httpx.Client, today: date, since: timedelta = SINCE) -> list[Article]:
-    """Articles of the post sitemaps modified since the cutoff, outside the excluded sections."""
+    """Its lists for a band of friends, then the articles of the post sitemaps modified since the cutoff, outside the
+    excluded sections."""
     cutoff = (today - since).isoformat()
     sitemaps = [loc for loc, lastmod in _entries(client, SITEMAP_INDEX) if "/post-sitemap" in loc and (lastmod or "") >= cutoff]
-    articles = []
+    articles = [Article(url, None) for url in GROUP_ARTICLES]
     for sitemap in sitemaps:
         for loc, lastmod in _entries(client, sitemap):
-            if (lastmod or "") >= cutoff and _in_scope(loc):
+            if (lastmod or "") >= cutoff and _in_scope(loc) and loc not in GROUP_ARTICLES:
                 articles.append(Article(loc, lastmod))
     return articles
 

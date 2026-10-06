@@ -81,7 +81,8 @@ uv run --env-file .env python -m surprise.collect --limit 50
 uv run --env-file .env python -m surprise.collect --source fever --source tiqets --refresh --minutes 20
 ```
 
-Paris ZigZag (média de curation : nom, lieu, dates, lien officiel et photo de l'article, pas de texte) :
+Paris ZigZag (média de curation : nom, lieu, dates, lien officiel et photo de l'article, pas de texte ; ses listes pour
+une bande d'amis, EVJF et karaokés, `paris_zigzag.GROUP_ARTICLES`, lues d'abord quel que soit leur âge) :
 
 ```bash
 uv run python -m surprise.collectors.paris_zigzag --store local
@@ -126,8 +127,10 @@ Autres sources, chacune par sa voie la plus robuste (même options) :
 | Time Out Paris (hôtels) | `time_out_hotels` | sitemaps (toutes les pages `/paris/hotels/`) + schema.org Review, nom par le titre de la page, prix de la nuit dans le texte (sinon l'échelle €€€) ; gardé si son site passe par un moteur de réservation hôtelier (D-EDGE, SynXis, Mews, Reservit, Booking.com…) |
 | Nuits en amoureux (Loveroomers, Love'nSpa, Love Île-de-France ; guides Love Room Guide, The Love Room, Cupiroom, Weekendlove) | `nuits_couple` | catalogues : une fiche schema.org LodgingBusiness par chambre (sitemaps Loveroomers, `products.json` Shopify de Love'nSpa, liens de la page Paris de Love Île-de-France) ; guides : une chambre par intertitre, lieu sur OSM |
 | Articles « couple » (Hati Hati, Ryo, Love'n'Room, LoveCapsule, blog Funbooker, Petit Futé) | `selections_couple` | une idée par intertitre ou lien de réservation, lieu sur OSM |
+| Articles « entre potes » (Topito, Le Bonbon, Paris ZigZag : bars à jeux, karaokés, bars d'anniversaire, restos festifs, activités entre amis) | `selections_squad` | comme les articles « couple » ; le lieu d'un intertitre qui le décrit (« PAN, le premier bar à tir », « Le plus tardif : la Noche à Pigalle », « Miami Boulevard — Paris 1 »), celui d'une fiche Funbooker ou Privateaser liée, sinon OSM |
+| Privateaser | `privateaser` | liste des bars à réserver à Paris (`?page=N`, jusqu'à une page sans nouveau bar) + microdonnées schema.org du bar (adresse, coordonnées, horaires) et ses formules avec leur jauge (« Réserver quelques tables 1-440 personnes ») : la plus petite et la plus grande bande qu'il prend ; réserver des tables est gratuit, la réservation elle-même (`/booking/`) est fermée aux robots, donc pas vérifiée ; dix secondes entre deux pages (son CloudFront bloque en 403 un robot plus rapide), arrêt après trois pages sans réponse |
 | Restaurants OpenStreetMap | `osm_restaurants` | Overpass (restaurants de Paris avec site) + site du restaurant : gardé s'il passe par un moteur de réservation (Zenchef, SevenRooms, TheFork…), sur sa page ou sa page « Réserver » |
-| Sortir à Paris | `sortir_a_paris` | sitemaps (60 jours) des rubriques insolite, soirées, spectacles, gaming, Halloween et bars + bloc « Informations pratiques » (microdonnées schema.org Place, dates, tarifs, site officiel, réservation) ; articles sans lieu écartés |
+| Sortir à Paris | `sortir_a_paris` | d'abord les articles de ses guides pour une bande d'amis (EVJF, EVG, anniversaire entre adultes, bars karaoké : `GUIDES`, environ 175 articles), quels que soient leur rubrique et leur âge ; puis les sitemaps (60 jours) des rubriques insolite, soirées, spectacles, gaming, Halloween et bars + bloc « Informations pratiques » (microdonnées schema.org Place, dates, tarifs, site officiel, réservation) ; articles sans lieu écartés |
 | Dice | `dice` | sitemaps : événements de Paris (adresse en « -paris-tickets ») de la fenêtre, par le jour de leur adresse + schema.org MusicEvent ; une soirée qui finit après 2 h est du clubbing |
 | EscapeGame.fr | `escape_game` | sitemap des salles de Paris (escape games, action games, réalité virtuelle, expériences immersives) + fiche HTML (joueurs, durée, prix, adresse, bouton « Réserver » vers le site de l'enseigne) ; salle à 3 joueurs minimum écartée |
 | Loisirs OpenStreetMap | `osm_loisirs` | Overpass (karaoké, lancer de hache, laser game, réalité virtuelle, bowling, mini-golf, trampoline, hammam, escalade, piscine ; bars à fléchettes ou billard) + site du lieu comme pour les restaurants ; la nature du lieu dans le titre (« Escalade : Arkose ») ; bars gardés sans réservation |

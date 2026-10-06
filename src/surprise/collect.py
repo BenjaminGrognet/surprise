@@ -22,7 +22,7 @@ SOURCES = [
     "paris_secret", "concerts_paris", "paris_jetaime", "paris_jetaime_billetterie", "visit_paris_region",
     "explore_paris", "wecandoo", "fever", "getyourguide", "tiqets", "civitatis", "eventbrite", "shotgun",
     "billetreduc", "time_out", "le_bonbon", "selections_couple", "osm_restaurants", "time_out_hotels",
-    "nuits_couple", "sortir_a_paris", "dice", "escape_game", "osm_loisirs",
+    "nuits_couple", "sortir_a_paris", "dice", "escape_game", "osm_loisirs", "selections_squad", "privateaser",
 ]
 
 

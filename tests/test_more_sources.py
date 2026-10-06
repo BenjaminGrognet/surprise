@@ -11,7 +11,9 @@ from surprise.collectors import (
     explore_paris,
     paris_jetaime,
     paris_jetaime_billetterie,
+    privateaser,
     selections_couple,
+    selections_squad,
     shotgun,
     wecandoo,
 )
@@ -210,6 +212,51 @@ def test_couple_selection_article():
     assert [idea["name"] for idea in ideas] == ["Speakeasy : Le Moonshiner", "Escape Game Fantastique : 60 minutes", "Session Tir à l'Arc en duo"]
     assert ideas[0]["address"] == "5 Rue Sedaine, 75011 Paris"
     assert ideas[1]["venue_name"] == "Escape Game Fantastique"
+
+
+def test_band_selection_article():
+    """The lists for a band of friends say their places their own way: each read as the place it names."""
+    section = "<p>Un endroit parfait pour chanter, boire et rire entre potes jusqu'au bout de la nuit.</p>"
+    page = f"""<article><h2>Les meilleurs bars à jeux de Paris</h2>{section}
+    <h2>Le plus tardif : la Noche à Pigalle</h2>{section}<a href="https://www.google.fr/maps/place/La+Noche">Plan</a>
+    <h2>Miami Boulevard — Paris 1</h2>{section}<a href="https://www.google.com/url?q=https%3A%2F%2Fwww.miami-boulevard.com%2F">site</a>
+    <h2>PAN, le premier bar à tir de Paris</h2>{section}
+    <h2>Un atelier cocktail au Shake n' Smash</h2>{section}
+    <h2>Les Mauvais Joueurs</h2>{section}<p><a href="https://www.privateaser.com/lieu/11602-les-mauvais-joueurs">46 Rue Sedaine, 75011 Paris</a></p>
+    <h2>181 Rue Legendre, 75017 Paris</h2>{section}
+    <h2>À la Une</h2>{section}<h3>6 bibliothèques climatisées où lire au frais</h3>{section}</article>"""
+    ideas = {idea["name"]: idea for idea in selections_couple.parse_article("https://lebonbon.example/tops", page)}
+    assert list(ideas) == [
+        "La Noche à Pigalle", "Miami Boulevard", "PAN, le premier bar à tir de Paris", "Un atelier cocktail au Shake n' Smash",
+        "Les Mauvais Joueurs",
+    ]
+    # Its place apart from its neighbourhood, a map no site.
+    assert (ideas["La Noche à Pigalle"]["venue_name"], ideas["La Noche à Pigalle"]["website"]) == ("La Noche", None)
+    # The arrondissement after the name, the site behind a Google redirect.
+    assert (ideas["Miami Boulevard"]["postal_code"], ideas["Miami Boulevard"]["website"]) == ("75001", "https://www.miami-boulevard.com/")
+    assert ideas["PAN, le premier bar à tir de Paris"]["venue_name"] == "PAN"
+    assert ideas["Un atelier cocktail au Shake n' Smash"]["venue_name"] == "Shake n' Smash"
+    # A link labelled with the address books the place of the heading.
+    assert ideas["Les Mauvais Joueurs"]["booking_url"] == "https://www.privateaser.com/lieu/11602-les-mauvais-joueurs"
+    assert ideas["Les Mauvais Joueurs"]["address"] == "46 Rue Sedaine, 75011 Paris"
+
+
+@respx.mock
+def test_a_selected_bar_on_privateaser_takes_its_place_from_it(monkeypatch):
+    monkeypatch.setattr(privateaser, "DELAY_SECONDS", 0)
+    bar = "https://www.privateaser.com/lieu/11602-les-mauvais-joueurs"
+    respx.get(bar).mock(return_value=httpx.Response(200, text="""<h1 itemprop="name">Les Mauvais Joueurs</h1>
+      <meta itemprop="postalCode" content="75011"> <meta itemprop="streetAddress" content="46 Rue Sedaine">
+      <meta itemprop="latitude" content="48.856"> <meta itemprop="longitude" content="2.373">
+      <meta itemprop="openingHours" content="Tu-Sa 17:00-01:00">
+      <h3 class="title">Réserver quelques tables</h3> <div class="capacity-block"> 2-40 personnes </div>"""))
+    idea = {"article_url": "https://lebonbon.example/tops", "name": "Les Mauvais Joueurs", "booking_url": bar, "website": bar}
+    with httpx.Client() as client:
+        placed = selections_couple.with_listing(client, idea)
+    assert (placed["address"], placed["postal_code"], placed["evening"], placed["players_max"]) == ("46 Rue Sedaine", "75011", True, 40)
+    activity = selections_squad.normalize(placed, NOW).activity
+    assert (activity.venue.postal_code, activity.players_min, activity.players_max) == ("75011", 2, 40)
+    assert selections_squad.to_raw_record(placed).external_id == "lebonbon.example/tops#les-mauvais-joueurs"
 
 
 @respx.mock

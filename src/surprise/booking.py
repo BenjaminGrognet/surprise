@@ -65,6 +65,8 @@ ENGINES = {
     "OpenTable": r"opentable\.(?:fr|com)/(?:r/|restref|booking)",
     "Guestonline": r"guestonline\.(?:io|fr)",
     "Resy": r"resy\.com/cities",
+    # A bar's tables booked for a group, free, from its page.
+    "Privateaser": r"privateaser\.com/lieu/\d+",
     # Hotel booking engines, on the hotel's site or its "Réserver" page.
     "D-EDGE": r"secure-hotel-booking\.com|availpro\.com|fastbooking\.(?:com|net)|d-edge\.com/booking",
     "SynXis": r"synxis\.com",

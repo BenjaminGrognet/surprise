@@ -210,11 +210,35 @@ def test_collect_reads_recent_articles_in_scope():
         )
     )
     article = respx.get(ARTICLE_URL).mock(return_value=httpx.Response(200, text=PAGE))
+    lists = [respx.get(url).mock(return_value=httpx.Response(404)) for url in zz.GROUP_ARTICLES]
     with httpx.Client() as client:
         collected = list(zz.collect(client, NOW, delay=0))
-    assert article.call_count == 1
+    assert article.call_count == 1 and all(route.call_count == 1 for route in lists)
     assert len(collected) == 5
     assert {r.raw.source_id for r in collected} == {"paris_zigzag"}
+
+
+@respx.mock
+def test_its_lists_for_a_band_are_read_first_whatever_their_age():
+    respx.get(zz.SITEMAP_INDEX).mock(
+        return_value=httpx.Response(
+            200, text="<sitemapindex><sitemap><loc>https://www.pariszigzag.fr/post-sitemap1.xml</loc>"
+            "<lastmod>2026-09-23T20:00:00+02:00</lastmod></sitemap></sitemapindex>"
+        )
+    )
+    respx.get("https://www.pariszigzag.fr/post-sitemap1.xml").mock(
+        return_value=httpx.Response(
+            200,
+            text="<urlset>"
+            f"<url><loc>{ARTICLE_URL}</loc><lastmod>2026-09-20T10:00:00+02:00</lastmod></url>"
+            f"<url><loc>{zz.GROUP_ARTICLES[1]}</loc><lastmod>2026-09-21T10:00:00+02:00</lastmod></url>"
+            "</urlset>",
+        )
+    )
+    with httpx.Client() as client:
+        articles = zz.fetch_articles(client, NOW.date())
+    # The EVJF list of 2023 too; the karaoke one, also recent, once.
+    assert [a.url for a in articles] == [*zz.GROUP_ARTICLES, ARTICLE_URL]
 
 
 def test_the_official_page_is_the_link_naming_the_show():

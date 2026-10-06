@@ -1,6 +1,9 @@
 from datetime import date, datetime, timezone
 
-from surprise.collectors import dice, escape_game, osm_loisirs, sortir_a_paris
+import httpx
+
+from surprise.booking import engine_in
+from surprise.collectors import dice, escape_game, osm_loisirs, privateaser, sortir_a_paris
 from surprise.tags import tag
 
 NOW = datetime(2026, 9, 26, 10, tzinfo=timezone.utc)
@@ -63,6 +66,37 @@ def test_sortir_a_paris_run_ended_by_its_hours():
     assert "passé" in sortir_a_paris.normalize(payload, NOW).rejection
     later = sortir_a_paris.normalize(payload | {"hours": "Chaque jeudi jusqu'au 30 octobre"}, NOW).activity
     assert later.kind == "temporary" and str(later.ends_on) == "2026-10-30"
+
+
+# A guide's entries (one sponsored), among the links of its page: the menu, an article without data-id.
+SORTIR_A_PARIS_GUIDE = """
+<a href="/actualites/a-paris/articles/219977-meteo-a-paris">Météo</a>
+<p><a href="/loisirs/gaming/articles/339094-breush-a-paris-action-painting" data-id="339094"><img src="x.jpg"/>
+ <strong>Breush à Paris</strong></a><br/>Un cube immersif. <a href="/loisirs/gaming/articles/339094-breush-a-paris-action-painting">[Lire la suite]</a></p>
+<p><a href="/arts-culture/balades/articles/153840-la-fury-room" data-counter="21:148968:153840:0" data-id="153840">
+ <strong>La Fury Room</strong></a><br/>Sponsorisé - Se défouler.</p>
+"""
+
+
+def test_sortir_a_paris_reads_its_guides_for_a_band_first():
+    """The articles its guides for a band of friends list come first, whatever their section or age, each once."""
+    sitemap_index = '<sitemapindex><sitemap><loc>https://www.sortiraparis.com/sitemap-fr-1.xml</loc></sitemap></sitemapindex>'
+    recent = "https://www.sortiraparis.com/soiree/articles/306503-les-soirees-du-bizz-art"
+    breush = "https://www.sortiraparis.com/loisirs/gaming/articles/339094-breush-a-paris-action-painting"
+    fury = "https://www.sortiraparis.com/arts-culture/balades/articles/153840-la-fury-room"  # a section not read otherwise
+    sitemap_fr = f"<urlset><url><loc>{recent}</loc><lastmod>2026-09-20</lastmod></url><url><loc>{breush}</loc><lastmod>2026-09-21</lastmod></url></urlset>"
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == sortir_a_paris.GUIDES[0]:
+            return httpx.Response(200, text=SORTIR_A_PARIS_GUIDE)
+        if "/guides/" in url:
+            return httpx.Response(404)  # a guide that does not answer is skipped
+        return httpx.Response(200, text=sitemap_index if url == sortir_a_paris.SITEMAP_INDEX else sitemap_fr)
+
+    with httpx.Client(transport=httpx.MockTransport(answer)) as client:
+        pages = list(sortir_a_paris.fetch_pages(client, NOW))
+    assert pages == [breush, fury, recent]
 
 
 DICE_PAGE = """
@@ -211,3 +245,72 @@ def test_osm_leisure_venues_say_their_kind():
     # "ping_pong" is no bowling.
     assert osm_loisirs.kind_of({"leisure": "sports_centre", "sport": "climbing;ping_pong"})[0] == "climbing"
     assert osm_loisirs.kind_of({"leisure": "sports_centre", "sport": "tennis"}) is None
+
+
+PRIVATEASER_PAGE = """
+<meta property="og:image" content="https://privateaser-media.s3.eu-west-1.amazonaws.com/etab_photos/1608/750x375/424234.jpg">
+<div class="cover-title"> <h1 itemprop="name"> Le Capitole Caf&eacute; </h1> </div>
+<div class="concept-labels"> <div class="concept-label bolder">Terrasse</div> <div class="concept-label bolder">Bar dansant</div> </div>
+<span itemscope itemtype="https://schema.org/PostalAddress" itemprop="address"> 105 Boulevard de Sébastopol, 75002 Paris
+  <meta itemprop="postalCode" content="75002"> <meta itemprop="streetAddress" content="105 Boulevard de Sébastopol"> </span>
+<div itemprop="geo" itemscope itemtype="https://schema.org/GeoCoordinates">
+  <meta itemprop="latitude" content="48.866448"> <meta itemprop="longitude" content="2.352206"> </div>
+<meta itemprop="openingHours" content="Mo-We 07:30-01:00"> <meta itemprop="openingHours" content="Su 08:00-17:00">
+<div itemprop="description"> <div class="offering-seo-description truncate-overflow">
+  <p>Une grande terrasse, des DJ sets le jeudi.</p> <p>Des espaces privatisables pour vos anniversaires.</p> </div> Lire plus </div>
+<div class="booking-option-card__content"> <div class="title-block"> <h3 class="title">Réserver quelques tables</h3>
+  <div class="capacity-block"> 1-440 personnes </div></div></div>
+<div class="booking-option-card__content"> <div class="title-block"> <h3 class="title">Privatiser l'établissement entier</h3>
+  <div class="capacity-block"> 80-200 personnes </div></div></div>
+"""
+
+
+def test_privateaser_bar_booked_for_a_group():
+    url = "https://www.privateaser.com/lieu/1608-le-capitole-cafe"
+    payload = privateaser.parse_venue(url, PRIVATEASER_PAGE)
+    assert (payload["venue_id"], payload["name"], payload["postal_code"]) == ("1608", "Le Capitole Café", "75002")
+    assert payload["lead_text"] == "Une grande terrasse, des DJ sets le jeudi.\nDes espaces privatisables pour vos anniversaires."
+    # A few tables for one to 440, the whole bar for 80 to 200: any party from one to 440.
+    assert (payload["players_min"], payload["players_max"]) == (1, 440)
+    activity = privateaser.normalize(payload, NOW).activity
+    assert (activity.venue.address, activity.venue.latitude, activity.is_evening) == ("105 Boulevard de Sébastopol", 48.866448, True)
+    assert "bar" in activity.categories
+    offer = activity.offers[0]
+    assert (str(offer.booking_url), offer.online_booking, offer.paid_booking) == (url, True, False)
+    assert engine_in(url) == "Privateaser"
+    assert privateaser.parse_venue(url, "<h2>Page introuvable</h2>") is None
+
+
+def test_privateaser_open_in_the_evening():
+    assert privateaser.is_evening(["Mo-We 07:30-01:00"])  # past midnight
+    assert privateaser.is_evening(["Tu-Sa 17:00-23:30"])
+    assert not privateaser.is_evening(["Mo-Fr 08:00-17:00", "Su 10:00-19:00"])
+
+
+def test_privateaser_bars_come_page_after_page_until_one_adds_none():
+    bar = '<a href="https://www.privateaser.com/lieu/{0}-bar-{0}">Bar</a>'
+    pages = {"1": bar.format(1) + bar.format(2), "2": bar.format(2) + bar.format(3), "3": bar.format(3)}
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        assert str(request.url).startswith(privateaser.LISTING)
+        return httpx.Response(200, text=pages.get(request.url.params["page"], ""))
+
+    with httpx.Client(transport=httpx.MockTransport(answer)) as client:
+        urls = list(privateaser.venue_urls(client, delay=0))
+    assert urls == [f"https://www.privateaser.com/lieu/{n}-bar-{n}" for n in (1, 2, 3)]
+
+
+def test_privateaser_stops_when_the_site_blocks_it():
+    """Its CloudFront answers 403 to a robot reading too fast: a few pages in a row unanswered end the run."""
+    asked = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        if str(request.url).startswith(privateaser.LISTING):
+            bars = "".join(f'<a href="https://www.privateaser.com/lieu/{n}-bar">Bar</a>' for n in range(1, 9))
+            return httpx.Response(200, text=bars if request.url.params["page"] == "1" else "")
+        asked.append(str(request.url))
+        return httpx.Response(403, text="Request blocked.")
+
+    with httpx.Client(transport=httpx.MockTransport(answer)) as client:
+        assert list(privateaser.collect(client, NOW, delay=0)) == []
+    assert len(asked) == privateaser.BLOCKED_AFTER

@@ -8,7 +8,7 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   paris_city_game, come_to_paris, paris_secret, concerts_paris, paris_jetaime, paris_jetaime_billetterie,
   visit_paris_region, explore_paris, wecandoo, fever, getyourguide, tiqets, civitatis, eventbrite, shotgun,
   billetreduc, time_out, le_bonbon, selections_couple, osm_restaurants, time_out_hotels, nuits_couple,
-  sortir_a_paris, dice, escape_game, osm_loisirs), chacune avec `--store supabase --limit 50` (scripts lancés par
+  sortir_a_paris, dice, escape_game, osm_loisirs, selections_squad, privateaser), chacune avec `--store supabase --limit 50` (scripts lancés par
   `uv run --env-file .env …`), ou toutes ensemble par `python -m surprise.collect --limit 50`. Jamais sans limite : on valide le
   fonctionnement ensemble, source par source, sur un petit volume. Les pages encore fraîches ne sont pas relues
   (`FRESH_DAYS` par collecteur, 7 jours par défaut ; `--refresh` pour forcer).

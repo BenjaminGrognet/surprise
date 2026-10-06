@@ -34,6 +34,8 @@ SOURCES = {
     "dice": "Dice",
     "escape_game": "EscapeGame.fr",
     "osm_loisirs": "Loisirs OpenStreetMap",
+    "selections_squad": "Sélections entre potes (médias)",
+    "privateaser": "Privateaser",
     "manual": "Ajout manuel",
 }
 

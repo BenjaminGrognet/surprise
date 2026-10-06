@@ -1,9 +1,11 @@
 """Collector for Sortir à Paris (outings agenda and media, tier 3).
 
-Articles come from the French sitemaps (robots.txt lists them), those modified
-within the last 60 days in the sections the catalogue lacks: insolite, soirées,
-spectacles (cabarets, cirque, drag), gaming (escape games, réalité virtuelle),
-Halloween, bars. Each article ends with a practical block marked up in
+Articles come first from its guides of outings for a band of friends (Secret
+Squad: hen and stag parties, a grown-up birthday, karaoke bars), whatever their
+section or age, then from the French sitemaps (robots.txt lists them), those
+modified within the last 60 days in the sections the catalogue lacks: insolite,
+soirées, spectacles (cabarets, cirque, drag), gaming (escape games, réalité
+virtuelle), Halloween, bars. Each article ends with a practical block marked up in
 schema.org microdata:
 
     <meta itemprop="startDate" content="2026-09-24T00:00:00+02:00"/>
@@ -38,6 +40,13 @@ BASE_URL = "https://www.sortiraparis.com"
 SITEMAP_INDEX = f"{BASE_URL}/sitemap-index.xml"
 SINCE = timedelta(days=60)
 DELAY_SECONDS = 1.0
+# The guides that list outings for a band of friends, a hundred each, kept up to date by the site.
+GUIDES = [
+    f"{BASE_URL}/arts-culture/balades/guides/148968-un-evjf-a-paris-et-en-ile-de-france-les-activites-pour-un-enterrement-de-vie-de-jeune-fille",
+    f"{BASE_URL}/loisirs/insolite/guides/277863-organiser-un-evg-a-paris-ile-de-france-les-activites-pour-un-enterrement-de-vie-de-garcon",
+    f"{BASE_URL}/actualites/a-paris/guides/278354-anniversaire-adultes-a-paris-nos-idees-de-sorties",
+    f"{BASE_URL}/hotel-restaurant/bar-cafes/guides/207754-bars-karaoke-paris-ile-de-france",
+]
 
 # "<section>/<sub-section>" of the outings the catalogue lacks; articles only, not the guides (lists).
 _SECTIONS = {
@@ -45,6 +54,9 @@ _SECTIONS = {
     "hotel-restaurant/bar-cafes",
 }
 _ARTICLE = re.compile(r"^https://www\.sortiraparis\.com/(.+?)/articles/(\d+)-[\w-]+$")
+# A guide's entry, the only links of the page with a data-id: '<a href="/loisirs/gaming/articles/339094-breush-…"
+# data-id="339094">' (a sponsored one has a data-counter first).
+_GUIDE_ENTRY = re.compile(r'<a href="(/[\w/-]+/articles/\d+-[\w-]+)"[^>]*\bdata-id="\d+"')
 _PRACTICAL = re.compile(r'id="practical-info"(.*?)(?:<div id="map-canvas"|<div class="tags">|$)', re.DOTALL)
 _FIELD = re.compile(r"<p[^>]*>\s*<strong>([^<]+)</strong>\s*<br\s*/?>(.*?)</p>", re.DOTALL)
 _PLACE = re.compile(r'itemprop="location"[^>]*schema\.org/Place"(.*?)</span>\s*</span>', re.DOTALL)
@@ -61,14 +73,33 @@ _SITE_SUFFIX = re.compile(r"\s*[-–|]\s*Sortiraparis(?:\.com)?\s*$", re.IGNOREC
 
 
 def fetch_pages(client: httpx.Client, now: datetime) -> Iterator[str]:
-    """Articles of the chosen sections modified since the cutoff, the latest first, sitemap by sitemap."""
+    """The guides' articles, then those of the chosen sections modified since the cutoff, the latest first, sitemap
+    by sitemap; each once."""
+    seen = set()
+    for url in guide_articles(client):
+        seen.add(url)
+        yield url
     cutoff = (now.astimezone(PARIS).date() - SINCE).isoformat()
     for child, _ in sitemap(client, SITEMAP_INDEX):
         if "/sitemap-fr-" not in child:
             continue
         entries = [(lastmod or "", loc) for loc, lastmod in sitemap(client, child) if (lastmod or "") >= cutoff and _in_scope(loc)]
         for _, loc in sorted(entries, reverse=True):
-            yield loc
+            if loc not in seen:
+                yield loc
+
+
+def guide_articles(client: httpx.Client) -> list[str]:
+    """The articles the guides list, in their order; a guide that does not answer is skipped."""
+    found: dict[str, None] = {}
+    for guide in GUIDES:
+        try:
+            response = client.get(guide)
+        except httpx.HTTPError:
+            continue
+        if response.status_code == 200:
+            found |= dict.fromkeys(BASE_URL + path for path in _GUIDE_ENTRY.findall(response.text))
+    return list(found)
 
 
 def parse_article(url: str, page: str) -> dict[str, Any] | None:
