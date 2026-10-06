@@ -214,10 +214,40 @@ VIBES = {
 }
 
 
-def tag(activity: dict[str, Any]) -> list[str]:
-    """Tags of an activity, in taxonomy order, from its title, venue name and categories."""
+# A play, a show, a concert: its title may name a meal ("Dîner de famille", "Le Dîner de cons") without serving one. Told
+# by its categories or its text; unless the text says the meal comes with it (a dinner show, a dinner cruise).
+_SHOW_CATEGORIES = {"theatre", "humour", "spectacle", "cabaret", "concert"}
+_SHOW_TEXT = re.compile(
+    r"th[ée][âa]tre|\bcom[ée]die\b|\bspectacles?\b|one[- ](?:wo)?man[- ]show|stand[- ]up|seule? en sc[èe]ne|\bhumoriste|"
+    r"\bcom[ée]dien(?:ne)?s?\b|mise en sc[èe]ne"
+)
+_MEAL_INCLUDED = re.compile(
+    r"d[îi]ner[- ]?(?:spectacle|show|revue|concert|cabaret|croisi[èe]re)|d[îi]ner (?:et|&|\+) (?:spectacle|revue|show)|"
+    r"(?:d[îi]ner|repas|menu)s? (?:compris|inclus|offerts?)|avec (?:le |un )?d[îi]ner|formule d[îi]ner"
+)
+
+
+def performance(activity: dict[str, Any]) -> bool:
+    """A play, a show or a concert, where a meal named in the title is not served: by its categories, else its title,
+    venue and description. A restaurant stays a restaurant, and a show that says it serves dinner keeps its meal."""
+    categories = set(activity.get("categories") or ())
+    if "restaurant" in categories:
+        return False
     venue = activity.get("venue") or {}
-    return list(_tags(activity.get("title") or "", venue.get("name") or "", tuple(activity.get("categories") or ())))
+    text = " ".join(filter(None, (activity.get("title"), venue.get("name"), activity.get("description")))).lower()
+    if _MEAL_INCLUDED.search(text):
+        return False
+    return bool(categories & _SHOW_CATEGORIES) or bool(_SHOW_TEXT.search(text))
+
+
+def tag(activity: dict[str, Any]) -> list[str]:
+    """Tags of an activity, in taxonomy order, from its title, venue name and categories. A show named after a meal is
+    not one ("diner" left out)."""
+    venue = activity.get("venue") or {}
+    found = _tags(activity.get("title") or "", venue.get("name") or "", tuple(activity.get("categories") or ()))
+    if "diner" in found and performance(activity):
+        return [key for key in found if key != "diner"]
+    return list(found)
 
 
 @lru_cache(maxsize=100_000)

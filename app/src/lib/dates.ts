@@ -18,6 +18,12 @@ export const longDay = (day: string) =>
 export const shortDay = (day: string) =>
   new Date(`${day}T12:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 
+// "Vendredi 16 octobre · 19:30": an evening's day and hour, as a card prints them.
+export function eveningWhen(evening: { day: string; start: string }) {
+  const day = longDay(evening.day);
+  return `${day.charAt(0).toUpperCase()}${day.slice(1)} · ${formatTime(evening.start)}`;
+}
+
 // The evening runs on Paris time regardless of the device's own timezone.
 export const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });

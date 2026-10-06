@@ -1,6 +1,8 @@
 // The couple's evening in the browser, on real activities of the base (tests/e2e_server.py) and the local Supabase: the
 // instigateur creates an account, composes, changes a step, keeps the evening; the passager joins by its link and
 // sees only its clues.
+import { readFileSync } from 'node:fs';
+
 import { expect, type Page, test } from '@playwright/test';
 
 import type { ComposedSoiree, Night, SoireeStep } from '@/lib/api';
@@ -134,6 +136,32 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   await expect(week.getByText(`« ${route.secret_title} » commence`)).toBeVisible();
   for (const s of route.steps) await expect(week.getByText(`prend un nom : ${s.title}, à`)).toBeVisible();
   await expect(week.getByText('Le lendemain · Le Livre des Secrets', { exact: true })).toBeVisible();
+
+  // The invitation on paper: the evening's name and its code to scan, printed from a window of its own.
+  await page.getByText("Ou un carton d'invitation à imprimer…").click();
+  const carton = page.getByTestId('carton-invitation');
+  await expect(carton.getByText(route.secret_title, { exact: true })).toBeVisible();
+  await expect(carton.locator('svg path')).toHaveCount(1);
+  const printing = page.waitForEvent('popup');
+  await carton.getByText('Imprimer le carton').click();
+  const printed = await printing;
+  await expect(printed.locator('h1')).toHaveText(route.secret_title);
+  await expect(printed.getByText('Scannez pour recevoir')).toBeVisible();
+  await expect(printed.getByText(link!, { exact: true })).toBeVisible();
+  await expect(printed.locator(`svg[aria-label="QR code de l'invitation"] path`)).toHaveCount(1);
+  for (const s of route.steps) await expect(printed.getByText(s.title)).toHaveCount(0);
+  await printed.close();
+
+  // The evening's postcard, for a story: its name and a mystery word, no step; downloaded at 1080 x 1920.
+  const card = page.getByTestId('carte-postale');
+  await expect(card.getByText(route.secret_title, { exact: true })).toBeVisible();
+  await expect(card.getByText(/^« .+ »$/).first()).toBeVisible();
+  for (const s of route.steps) await expect(card.getByText(s.title)).toHaveCount(0);
+  const downloading = page.waitForEvent('download');
+  await card.getByText('Télécharger la carte').click();
+  const image = readFileSync((await (await downloading).path())!);
+  expect(image.subarray(1, 4).toString()).toBe('PNG');
+  expect([image.readUInt32BE(16), image.readUInt32BE(20)]).toEqual([1080, 1920]);
 
   // The passager, in a browser of their own.
   const other = await browser.newContext();

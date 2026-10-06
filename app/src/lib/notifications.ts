@@ -1,14 +1,9 @@
 // The phone's notifications, scheduled on the device (no server): for each evening of the last month and those to
-// come, the passager's week or the instigateur's reminders (lib/story.ts). All of them scheduled again whenever the
-// app comes back to the front or an evening changes (kept, a booking ticked, a plan B, its reveal mode, its passager
-// joined); none on the web, where everything below does nothing.
+// come, the passager's week or the instigateur's reminders (lib/story.ts), scheduled again with the widget whenever
+// the account's evenings are read (lib/phone.ts). None on the web, where everything below does nothing.
 import { Platform } from 'react-native';
 
-import { currentUser, upcomingEvenings } from '@/lib/account';
-import { getSoireeState } from '@/lib/api';
-import { revealMode } from '@/lib/clues';
-import { eveningRole } from '@/lib/couple';
-import { isoDay } from '@/lib/dates';
+import { syncPhone } from '@/lib/phone';
 import { notificationPlan, type PlannedEvening, type StoryRole } from '@/lib/story';
 
 const supported = () => Platform.OS !== 'web';
@@ -17,8 +12,6 @@ const CHANNELS: Record<StoryRole, { id: string; name: string }> = {
   passager: { id: 'recit', name: 'Le récit de vos soirées' },
   instigateur: { id: 'coulisses', name: 'Les coulisses' },
 };
-// The evening after still has its morning-after and its call for the next one: three weeks.
-const KEPT_DAYS = 30;
 
 async function lib() {
   const Notifications = await import('expo-notifications');
@@ -50,19 +43,8 @@ export async function askNotify(): Promise<NotifyState> {
   const N = await lib();
   await channels(N);
   const { status } = await N.requestPermissionsAsync();
-  if (status === 'granted') syncNotifications(0);
+  if (status === 'granted') syncPhone(0);
   return status === 'granted' ? 'granted' : 'denied';
-}
-
-// A burst of changes (an evening kept, then opened) makes one sync.
-let timer: ReturnType<typeof setTimeout> | null = null;
-export function syncNotifications(delay = 1_000) {
-  if (!supported()) return;
-  if (timer) clearTimeout(timer);
-  timer = setTimeout(() => {
-    timer = null;
-    scheduleNotifications().catch(() => {});
-  }, delay);
 }
 
 // Signed out: another account may use this phone next.
@@ -71,31 +53,11 @@ export async function clearNotifications() {
   await (await lib()).cancelAllScheduledNotificationsAsync();
 }
 
-// Everything scheduled again, now. Offline, nothing changes: what was scheduled stays rather than going for an evening
-// that could not be read.
-export async function scheduleNotifications() {
+// Everything scheduled again from the account's evenings (null: signed out, nothing left), once allowed.
+export async function scheduleNotifications(evenings: PlannedEvening[] | null) {
   if ((await notifyState()) !== 'granted') return;
-  const user = await currentUser();
-  if (!user) return clearNotifications();
-  const rows = await upcomingEvenings(isoDay(new Date(Date.now() - KEPT_DAYS * 86_400_000)), 50);
-  const evenings = await Promise.all(rows.map(async (row): Promise<PlannedEvening | null> => {
-    const state = await getSoireeState(row.page_name).catch((e: Error) => {
-      if (e.message.endsWith(': 404')) return null; // gone from the server: nothing more to tell of it
-      throw e;
-    });
-    const route = state?.chosen ? state.routes[0] : null;
-    if (!route) return null;
-    return {
-      pageName: row.page_name,
-      route,
-      role: eveningRole(row, user.id),
-      mode: revealMode(row.reveal_mode),
-      secretTitle: row.secret_title ?? route.secret_title,
-      booked: row.booked ?? [],
-      passager: !!row.passager,
-    };
-  }));
-  const beats = notificationPlan(evenings.filter((e): e is PlannedEvening => !!e), Date.now());
+  if (!evenings) return clearNotifications();
+  const beats = notificationPlan(evenings, Date.now());
   const N = await lib();
   await channels(N);
   await N.cancelAllScheduledNotificationsAsync();

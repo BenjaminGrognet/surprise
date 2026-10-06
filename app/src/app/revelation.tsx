@@ -7,6 +7,7 @@ import { EveningsNav } from '@/components/evenings-nav';
 import { Countdown, PageCard } from '@/components/intrigue-card';
 import { NotifyAsk } from '@/components/notify-ask';
 import { Organiser } from '@/components/organiser';
+import { PostcardShare } from '@/components/postcard';
 import { StepImage } from '@/components/step-image';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -25,13 +26,13 @@ import {
 } from '@/lib/clues';
 import { nearStep } from '@/lib/arrival';
 import { arrivedSteps, markArrived } from '@/lib/local-store';
-import { syncNotifications } from '@/lib/notifications';
-import { formatTime, isoDay, longDay } from '@/lib/dates';
+import { syncPhone } from '@/lib/phone';
+import { eveningWhen, formatTime, isoDay, longDay } from '@/lib/dates';
 import { curtainFalls } from '@/lib/souvenirs';
 import { clueChapter } from '@/lib/story';
 
 // "La Révélation": the kept evening seen from each account of the couple. The instigateur has the whole timed
-// roadmap; the passager only gets riddles, and a veiled programme that lifts step by step. Which of the two the
+// roadmap; the passager only gets riddles, and a veiled programme that lifts step by step. Both end on its postcard. Which of the two the
 // account is, the evening tells (eveningRole): a passager may compose evenings of their own.
 export default function RevelationScreen() {
   const { soiree } = useLocalSearchParams<{ soiree?: string }>();
@@ -103,7 +104,7 @@ export default function RevelationScreen() {
           <Organiser route={route} pageName={soiree!} secretTitle={secretTitle} mode={mode} onRoute={setRoute} />
           {evening && (!evening.day || evening.day >= isoDay(new Date())) ? (
             <>
-              <PassagerInvite evening={evening} onChange={loadEvening} />
+              <PassagerInvite evening={evening} onChange={loadEvening} card={{ secretTitle, when: eveningWhen(route) }} />
               <RevealModePicker key={evening.reveal_mode} evening={evening} onChange={loadEvening} />
             </>
           ) : null}
@@ -112,6 +113,7 @@ export default function RevelationScreen() {
         <Surprised route={route} secretTitle={secretTitle} mode={mode} evening={soiree!} />
       )}
       <BookLink route={route} soiree={soiree!} />
+      <PostcardShare route={route} mode={mode} secretTitle={secretTitle} />
     </Screen>
   );
 }
@@ -141,9 +143,9 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
     arrivedSteps(evening).then(setArrived);
   }, [evening]);
 
-  // The week told on this phone (lib/story.ts), once allowed: told again as the evening reads, its mode may have changed.
+  // The week told on this phone (lib/story.ts) and its widget: told again as the evening reads, its mode may have changed.
   useEffect(() => {
-    syncNotifications();
+    syncPhone();
   }, [evening, route, mode]);
 
   function arrive(step: SoireeStep) {

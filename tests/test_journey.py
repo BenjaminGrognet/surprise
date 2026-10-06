@@ -140,7 +140,9 @@ def test_a_couple_composes_changes_and_keeps_an_evening(api):
 
 
 def test_a_route_is_drawn_again_without_its_activities(api):
-    page = api("/api/soirees", {"envies": ["rire"], "diner": False, "day": DAY.isoformat()})
+    # Laughing and playing: enough outings left, in either catalogue, for a whole route none of the three proposed
+    # used (to laugh alone, the real quarter's shows run out: a 409, rightly).
+    page = api("/api/soirees", {"envies": ["rire", "jouer"], "diner": False, "day": DAY.isoformat()})
     name, before = page["name"], set(_keys(page)[0])
     redrawn = api(f"/api/parcours/{name}/routes/0", {})
     assert set(_keys(redrawn)[0]) != before and len(redrawn["routes"]) == len(page["routes"])

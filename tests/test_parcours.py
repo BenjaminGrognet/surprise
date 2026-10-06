@@ -440,6 +440,16 @@ def test_changing_a_step_never_gives_it_back_under_another_listing():
     assert parcours.replace_step(route, 1, others, req, {("test", "immersif")}) is None
 
 
+def test_a_play_named_after_a_dinner_is_an_outing_never_the_dinner():
+    play = item("piece", "Dîner De Famille", ["theatre"], occurrences=[at(19, 30)], venue="Café de la Gare")
+    table = item("table", "Dîner au restaurant", ["restaurant"], occurrences=[at(19, 30)], venue="Resto")
+    roles = {c.key[1]: c.role for c in _scored([play, table], request())}
+    assert roles == {"piece": "sortie", "table": "repas"}
+    # Having eaten, the play is still a play to see.
+    play_ate, _ = _scored([play, table], request(no_dinner=True))
+    assert play_ate.role == "sortie" and play_ate.score > float("-inf")
+
+
 def test_an_ordinary_play_comes_after_the_unusual_the_more_so_for_a_daring_couple():
     play = item("piece", "Une comédie de boulevard", ["theatre"], occurrences=[at(20)])
     workshop = item("atelier", "Atelier cocktails", ["atelier"], occurrences=[at(20)])

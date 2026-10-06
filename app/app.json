@@ -8,14 +8,16 @@
     "scheme": "secretdate",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/images/logo-secretdate.png"
+      "icon": "./assets/images/logo-secretdate.png",
+      "bundleIdentifier": "fr.secretdate.app"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#040F0A",
         "foregroundImage": "./assets/images/logo-secretdate.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "fr.secretdate.app"
     },
     "web": {
       "output": "static",
@@ -37,6 +39,49 @@
           "backgroundColor": "#040F0A",
           "image": "./assets/images/splash-secretdate.png",
           "imageWidth": 540
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "fr.secretdate.app.widgets",
+          "groupIdentifier": "group.fr.secretdate.app",
+          "widgets": [
+            {
+              "name": "ProchaineSoiree",
+              "displayName": "Prochaine soirée",
+              "description": "Le compte à rebours et le dernier indice de votre soirée secrète.",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "accessoryRectangular",
+                "accessoryInline"
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/cormorant-garamond/500Medium_Italic/CormorantGaramond_500Medium_Italic.ttf",
+            "./node_modules/@expo-google-fonts/manrope/400Regular/Manrope_400Regular.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "ProchaineSoiree",
+              "label": "Prochaine soirée",
+              "description": "Le compte à rebours et le dernier indice de votre soirée secrète.",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
         }
       ]
     ],

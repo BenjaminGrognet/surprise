@@ -1,7 +1,8 @@
 // The stores' images (docs/store/captures): the browser tests' site driven as two phones, 440x956 at 3x (an
 // instigateur composes an evening for tomorrow and keeps it, a passager joins it), then each screen captioned in the
 // app's night, emerald and gold: the App Store's 6.9" size (1320x2868), Google Play's phone size (1080x1920), Play's
-// icon and feature graphic. The App Store's icon is the app's own (assets/images/logo-secretdate.png).
+// icon and feature graphic, and an example of the evening's postcard as shared. The App Store's icon is the app's own
+// (assets/images/logo-secretdate.png).
 //
 // Only the app's own pictures: the sites' photos, and the server's copies of them, are not ours to publish. With the
 // local Supabase running (npm run db:start) and the site built (npm run build:e2e):
@@ -19,17 +20,20 @@ const RAW = fs.mkdtempSync(path.join(os.tmpdir(), 'secretdate-captures-'));
 const FONTS = path.resolve(__dirname, '../node_modules/@expo-google-fonts');
 const LOGO = path.resolve(__dirname, '../assets/images/logo-secretdate.png');
 
-// Each image: its file, the screen behind it, its caption.
+// Each image: its file, the screen behind it, its caption; Google Play takes eight (`play`).
 const SHOTS = [
   ['01-accueil', 'accueil', 'Une soirée surprise à Paris', 'Composée pour vous deux, gardée secrète jusqu’au bout.'],
   ['02-envies', 'envies', 'Une humeur, deux envies', 'Et l’intrigue se trame en quelques secondes.'],
   ['03-intrigues', 'intrigues', 'Trois intrigues au choix', 'Changez une étape, gardez celle qui vous ressemble.'],
-  ['04-feuille-de-route', 'feuille', 'Une feuille de route à la minute', 'Dîner, spectacle, dernier verre : tout s’enchaîne.'],
+  ['04-feuille-de-route', 'feuille', 'Une feuille de route à la minute', 'Chaque étape, son heure et son trajet.'],
   ['05-passager', 'passager', 'Votre complice ne sait rien', 'Juste un jour, une heure… et des indices.'],
   ['06-indices', 'indices', 'Un indice chaque matin', 'La tenue, le budget, un mot mystère par étape.'],
   ['07-semaine', 'semaine', 'Une semaine en chapitres', 'Chaque notification fait monter le mystère.'],
   ['08-coulisses', 'coulisses', 'Vous tirez les ficelles', 'Les réservations, et ce que voit votre passager.'],
+  ['09-carte-postale', 'carte', 'Une carte pour vos stories', 'Le nom de la soirée, ses mots mystères, rien de plus.'],
+  ['10-carton', 'carton', 'Un carton à glisser sous l’oreiller', 'Un code à scanner, et le mystère commence.'],
 ];
+const NOT_ON_PLAY = new Set(['02-envies', '08-coulisses']);
 
 const PASSWORD = `captures-${Math.random().toString(36).slice(2)}`;
 const email = (label) => `${label}-${Date.now()}@captures.test`;
@@ -95,6 +99,19 @@ async function screens(browser) {
   await page.mouse.wheel(0, -50);
   await settle(page);
   await shoot(page, 'semaine');
+  await page.getByText("Ou un carton d'invitation à imprimer…").click();
+  await page.getByTestId('carton-invitation').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await page.mouse.wheel(0, -30);
+  await settle(page);
+  await shoot(page, 'carton');
+  await page.getByTestId('carte-postale').evaluate((el) => el.scrollIntoView({ block: 'end' }));
+  await page.mouse.wheel(0, 120);
+  await settle(page);
+  await shoot(page, 'carte');
+  // The postcard itself, as it is shared: an example beside the stores' images.
+  const downloading = page.waitForEvent('download');
+  await page.getByText('Télécharger la carte').click();
+  await (await downloading).saveAs(path.join(OUT, 'exemple-carte-postale.png'));
 
   const passager = await (await phone(browser)).newPage();
   await passager.goto(new URL(link).pathname + new URL(link).search);
@@ -172,7 +189,7 @@ async function render(browser, html, w, h, file) {
     for (const [name, screen, title, sub] of SHOTS) {
       const raw = path.join(RAW, `${screen}.png`);
       await render(browser, captioned(1320, 2868, raw, title, sub), 1320, 2868, path.join(OUT, 'app-store', `${name}.jpg`));
-      await render(browser, captioned(1080, 1920, raw, title, sub), 1080, 1920, path.join(OUT, 'google-play', `${name}.jpg`));
+      if (!NOT_ON_PLAY.has(name)) await render(browser, captioned(1080, 1920, raw, title, sub), 1080, 1920, path.join(OUT, 'google-play', `${name}.jpg`));
     }
     await render(browser, featureGraphic(), 1024, 500, path.join(OUT, 'google-play', 'feature-graphic-1024x500.png'));
     await render(browser, sheet(512, 512, `<img src="${pathToFileURL(LOGO).href}" width="512" height="512">`), 512, 512, path.join(OUT, 'google-play', 'icone-512.png'));

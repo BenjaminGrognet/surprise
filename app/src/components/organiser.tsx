@@ -20,7 +20,7 @@ import { bookedSteps, saveBookedSteps, type Vote } from '@/lib/account';
 import { place, redoPart, refusal, type SoireeRoute, type SoireeStep } from '@/lib/api';
 import { cluesFor, inTime, nextClue, shownClues, type RevealMode } from '@/lib/clues';
 import { formatTime, longDay } from '@/lib/dates';
-import { syncNotifications } from '@/lib/notifications';
+import { syncPhone } from '@/lib/phone';
 
 const ROLE_LABELS: Record<SoireeStep['role'], string> = { repas: 'Dîner', verre: 'Un verre', sortie: 'Sortie', nuit: 'La nuit' };
 
@@ -48,10 +48,10 @@ export function Organiser({
     bookedSteps(pageName).then(setBooked).catch(() => {});
   }, [pageName]);
 
-  // The instigateur's reminders and the passager's week, told again on this phone as the evening changes: kept, a plan
+  // The instigateur's reminders, the passager's week and the widget, told again on this phone as the evening changes: kept, a plan
   // B, another reveal mode; a booking ticked, once saved (toggle).
   useEffect(() => {
-    syncNotifications();
+    syncPhone();
   }, [route, mode]);
 
   // Plan B: another activity in place of an upcoming step, the rest of the evening kept. What was booked for the old one goes.
@@ -81,7 +81,7 @@ export function Organiser({
     const next = booked.includes(id) ? booked.filter((b) => b !== id) : [...booked, id];
     setBooked(next);
     setError('');
-    saveBookedSteps(pageName, next).then(() => syncNotifications()).catch((e: Error) => {
+    saveBookedSteps(pageName, next).then(() => syncPhone()).catch((e: Error) => {
       setBooked(before);
       setError(e.message);
     });

@@ -2,14 +2,18 @@ import { useState } from 'react';
 import { Platform, Pressable, Share, StyleSheet, View } from 'react-native';
 
 import { GhostButton, PrimaryButton, TextButton } from '@/components/buttons';
+import { InvitationCarton } from '@/components/invitation-carton';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { EveningHistoryRow } from '@/lib/account';
 import { invitationLink, resetPassager } from '@/lib/couple';
 
-// The instigateur's side of one evening: invite its passager (one at most) by a link, see that they joined, or start over.
-export function PassagerInvite({ evening, onChange }: { evening: EveningHistoryRow; onChange: () => void }) {
+// The instigateur's side of one evening: invite its passager (one at most) by a link, or a printed card with its QR code
+// (`card`: the evening's secret name and day), see that they joined, or start over.
+export function PassagerInvite({
+  evening, onChange, card,
+}: { evening: EveningHistoryRow; onChange: () => void; card: { secretTitle: string; when: string } }) {
   const theme = useTheme();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -74,6 +78,7 @@ export function PassagerInvite({ evening, onChange }: { evening: EveningHistoryR
           <PrimaryButton wide disabled={busy} onPress={() => share(link)}>
             {Platform.OS === 'web' ? (copied ? '✓ Lien copié' : 'Copier le lien') : 'Envoyer le lien'}
           </PrimaryButton>
+          <InvitationCarton {...card} link={link} />
           <ThemedText type="small" themeColor="textSecondary">En attente de votre passager…</ThemedText>
         </>
       )}

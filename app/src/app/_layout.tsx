@@ -14,7 +14,8 @@ import { Colors } from '@/constants/theme';
 import { CoupleContext } from '@/hooks/use-couple';
 import { myRole, type CoupleState } from '@/lib/couple';
 import { claimDevice } from '@/lib/local-store';
-import { clearNotifications, onNotificationOpen, syncNotifications } from '@/lib/notifications';
+import { onNotificationOpen } from '@/lib/notifications';
+import { clearPhone, syncPhone } from '@/lib/phone';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 
 // The navigator's own surfaces (between screens, behind a transition) in the brand's night.
@@ -59,7 +60,7 @@ export default function RootLayout() {
       setSignedIn(!!session);
       if (!session) {
         setCouple(null);
-        void clearNotifications(); // another account may use this phone next
+        void clearPhone(); // another account may use this phone next
       }
     });
     return () => data.subscription.unsubscribe();
@@ -81,15 +82,16 @@ export default function RootLayout() {
     });
   }, [signedIn]);
 
-  // The phone's notifications (lib/notifications.ts) told again from the account's evenings: once signed in, when a
-  // passager joins (their role changes), and whenever the app comes back to the front. A touch on one opens its page.
+  // The phone's notifications and widget (lib/phone.ts) told again from the account's evenings: once signed in, when a
+  // passager joins (their role changes), and whenever the app comes back to the front. A touch on a notification opens
+  // its page.
   const account = couple?.userId;
   const role = couple?.role;
   useEffect(() => {
     if (!account) return;
-    syncNotifications(0);
+    syncPhone(0);
     const foreground = AppState.addEventListener('change', (state) => {
-      if (state === 'active') syncNotifications();
+      if (state === 'active') syncPhone();
     });
     const opened = onNotificationOpen((url) => router.push(url as Href));
     return () => {

@@ -72,3 +72,22 @@ def test_categories_avoid_false_matches():
 def test_a_driving_simulator_is_not_on_the_water():
     assert "sur_l_eau" not in describe({"title": "Sim Drivers", "categories": []})["tags"]
     assert "sur_l_eau" in describe({"title": "River Café", "categories": []})["tags"]
+
+
+@pytest.mark.parametrize(
+    ("title", "venue", "categories", "description", "meal"),
+    [
+        ("Dîner De Famille", "Café de la Gare", ["theatre"], None, False),  # a play named after a dinner
+        ("Le Dîner de cons", None, [], "Une comédie culte, mise en scène par…", False),  # no category: its text says so
+        ("Dîner de gala", "Théâtre de l'Atelier", [], None, False),  # played in a theatre
+        ("Dîner-spectacle au Paradis Latin", None, ["cabaret"], None, True),
+        ("Dîner & revue au Lido", None, ["cabaret"], None, True),
+        ("Spectacle de magie, dîner compris", None, ["spectacle"], None, True),
+        ("Dîner aux chandelles", None, ["restaurant"], None, True),
+        ("Dîner-croisière sur la Seine", None, ["croisiere", "restaurant"], None, True),
+    ],
+)
+def test_a_show_named_after_a_meal_is_not_one_unless_its_text_serves_it(title, venue, categories, description, meal):
+    found = describe({**activity(title, venue, categories), "description": description})
+    assert ("diner" in found["tags"]) is meal
+    assert ("savourer" in found["vibes"]) is meal

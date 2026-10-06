@@ -29,6 +29,18 @@ def test_the_dates_move_by_whole_weeks():
         real_catalogue.items(later + timedelta(days=1))
 
 
+def test_a_play_of_the_base_named_after_a_dinner_is_never_the_evenings_dinner(api):
+    # "Dîner De Famille", a play at the Café de la Gare: its title named a meal, the clues promised a table.
+    play = next(i for i in real_catalogue.items() if i["activity"]["title"] == "Dîner De Famille")
+    assert "theatre" in play["activity"]["categories"]
+    page = api("/api/soirees", {"envies": ["rire"], "diner": True, "day": DAY.isoformat()})
+    steps = [step for route in page["routes"] for step in route["steps"]]
+    assert steps
+    for step in steps:
+        if step["title"] == "Dîner De Famille":
+            assert step["role"] == "sortie" and "savourer" not in step["vibes"], step
+
+
 @pytest.mark.parametrize("profiled", [True, False], ids=["profil", "sans profil"])
 @pytest.mark.parametrize("envies, diner", snapshot_catalogue.WISHES, ids=lambda value: str(value))
 def test_each_wish_gets_routes_shown_whole(api, envies, diner, profiled):

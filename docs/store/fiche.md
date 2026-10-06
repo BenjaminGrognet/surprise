@@ -9,22 +9,21 @@ aux questionnaires, et ce qui bloque encore. Préparé le 6 octobre 2026.
    (`lead_text`). Il faut régler les deux avant tout usage public (CLAUDE.md) : photos sous licence ou de la maison,
    textes réécrits. Les captures de `captures/` ne montrent que les images de l'app (bannières) ; il faut vérifier
    que leurs droits sont bien acquis.
-2. **Une activité mal rangée, visible sur les captures 03, 04 et 08** : la pièce « Dîner De Famille » (Café de la
-   Gare) est prise pour un dîner (« Valider la table », indice « une table est prévue »). Une tâche à part est
-   proposée. Refaire les captures une fois corrigé.
-3. **Identifiants de l'app** (`app/app.json`) : il manque `ios.bundleIdentifier` et `android.package`, et le
-   `slug` vaut `app`. Choisir par exemple `fr.secretdate.app`, une fois pour toutes : ils ne changent plus après
-   la première publication.
-4. **Un serveur public** : l'API Python en HTTPS (`EXPO_PUBLIC_API_URL`), et le Supabase du projet à jour de
-   toutes ses migrations (`20261006000000_gouts.sql` n'y est pas encore).
-5. **Trois pages web** :
+2. **Identifiants de l'app** (`app/app.json`) : `fr.secretdate.app` est posé pour iOS et Android (le widget en a
+   besoin), avec `fr.secretdate.app.widgets` et `group.fr.secretdate.app` pour le widget iPhone. À confirmer avant
+   la première build : ils ne changent plus après la première publication. Le `slug` vaut encore `app`.
+3. **Un serveur public** : l'API Python en HTTPS (`EXPO_PUBLIC_API_URL`). Le Supabase du projet a reçu le
+   6 octobre ses deux migrations manquantes (`reveal_mode`, `gouts`). Il n'a pas d'historique de migrations :
+   `supabase db push` voudrait tout rejouer. Marquer d'abord les migrations comme appliquées
+   (`supabase migration repair --status applied …`).
+4. **Trois pages web** :
    - une politique de confidentialité ;
    - une page d'assistance (contact) ;
    - pour Google Play, une page qui permet de demander la suppression du compte sans l'app.
-6. **Les textes de permission en français** : localisation (« Je suis arrivé(e) ») et notifications. Les déclarer
+5. **Les textes de permission en français** : localisation (« Je suis arrivé(e) ») et notifications. Les déclarer
    dans `app.json` (plugin `expo-location`, `locationWhenInUsePermission`) plutôt que les messages anglais par
    défaut. Ajouter aussi l'icône Android des notifications, monochrome.
-7. **Des comptes de démonstration pour la vérification Apple** : un instigateur avec une soirée gardée à venir, et
+6. **Des comptes de démonstration pour la vérification Apple** : un instigateur avec une soirée gardée à venir, et
    son passager.
 
 ## App Store Connect
@@ -63,11 +62,16 @@ POUR L'INSTIGATEUR
 • La boussole du jour J : l'étape en cours, la suivante, l'heure de partir
 • Un plan B en un geste si une étape tombe à l'eau
 • Les coulisses : ce que lit votre passager, et ce que son téléphone lui dira
+• Un carton d'invitation à imprimer, avec son QR code, à glisser sous l'oreiller
 
 POUR LE PASSAGER
 • Une invitation, puis rien que des indices
 • Un récit en notifications, du pli scellé une semaine avant au rideau qui se lève
 • Des mots mystères qui deviennent des noms, étape après étape
+
+POUR TOUS LES DEUX
+• Un widget sur l'écran d'accueil : le compte à rebours et le dernier indice
+• Une carte postale de la soirée à partager en story, sans rien dévoiler
 
 APRÈS LA SOIRÉE
 • Le Livre des Secrets : chacun scelle sa page, une photo et un mot, puis découvre celle de l'autre
@@ -111,7 +115,7 @@ Secret Date se joue à deux comptes. Compte instigateur : <email> / <mot de pass
 | Catégorie | | Style de vie |
 
 - **Images** :
-  - `captures/google-play/` : 8 captures en 1080 x 1920 (9:16) ;
+  - `captures/google-play/` : 8 captures en 1080 x 1920 (9:16), le maximum de Google Play ;
   - `feature-graphic-1024x500.png` (obligatoire) ;
   - `icone-512.png`.
 - **Classification du contenu** (questionnaire IARC) : mêmes réponses qu'Apple ; une note PEGI 16 ou 18 est probable.
@@ -122,8 +126,8 @@ Secret Date se joue à deux comptes. Compte instigateur : <email> / <mot de pass
 
 ## Les captures
 
-`captures/app-store/` (1320 x 2868, l'écran de 6,9 pouces que demande Apple) et `captures/google-play/` (1080 x
-1920), dans cet ordre :
+`captures/app-store/` (1320 x 2868, l'écran de 6,9 pouces que demande Apple : les 10) et `captures/google-play/`
+(1080 x 1920 : les 8 sans la 02 ni la 08), dans cet ordre :
 
 | # | Écran | Légende |
 | --- | --- | --- |
@@ -135,6 +139,10 @@ Secret Date se joue à deux comptes. Compte instigateur : <email> / <mot de pass
 | 06 | Les indices du passager, en chapitres | Un indice chaque matin |
 | 07 | La semaine du passager vue des coulisses | Une semaine en chapitres |
 | 08 | Les coulisses : réservations, ce que voit le passager | Vous tirez les ficelles |
+| 09 | La carte postale de la soirée | Une carte pour vos stories |
+| 10 | Le carton d'invitation à imprimer, avec son QR code | Un carton à glisser sous l'oreiller |
+
+`captures/exemple-carte-postale.png` montre la carte postale telle qu'elle est partagée (1080 x 1920).
 
 L'icône de l'App Store est celle de l'app, `app/assets/images/logo-secretdate.png` : 1024 x 1024, sans transparence, comme Apple le veut.
 

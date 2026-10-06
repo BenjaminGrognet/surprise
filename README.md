@@ -217,6 +217,12 @@ Se cultiver, Prendre l'air, Frissonner, L'insolite, Pimenter, Romantique) : un m
 Calculés à la lecture par des règles sur le titre et le lieu (plus les catégories), ils s'affinent sans recollecter ;
 la modération les affiche et filtre par vibe.
 
+Un spectacle qui porte un repas dans son titre (« Dîner De Famille », « Le Dîner de cons ») n'est pas un dîner. Le texte
+le dit : une catégorie de scène (théâtre, humour, spectacle, cabaret, concert), ou « théâtre », « comédie »,
+« spectacle », « stand-up », « mise en scène »… dans le titre, le lieu ou la description. Il perd alors le tag « dîner »,
+donc la vibe « Savourer », et la composition en fait une sortie. Exceptions : un restaurant reste un restaurant, et un
+spectacle dont le texte dit que le repas est compris (dîner-spectacle, dîner & revue, « dîner compris ») garde son repas.
+
 ```bash
 uv run python -m surprise.tags --untagged   # couverture par tag et vibe, activités sans vibe
 ```
@@ -431,6 +437,36 @@ coulisses de l'instigateur montrent la semaine du passager telle que son télép
 
 Limites : sans push envoyé par un serveur, le téléphone du passager n'apprend un changement (plan B, mode) qu'en
 rouvrant l'app. L'icône Android des notifications (monochrome) reste à fournir avant publication.
+
+Le widget de l'écran d'accueil (« Prochaine soirée »), `app/src/lib/widget.ts` pour ce qu'il montre, `src/widgets/`
+pour son dessin. Il montre :
+- le nom secret de la prochaine soirée et son compte à rebours (« J-3 », « Demain · 19:30 », « Ce soir · 19:30 ») ;
+- pour le passager, son dernier indice ;
+- pour l'instigateur, les réservations encore à faire, puis le jour J l'étape suivante.
+
+Toucher le widget ouvre la soirée. Le téléphone reçoit une chronologie pour les dix jours à venir (une entrée par
+changement : chaque minuit, chaque indice, chaque étape, la fin), renouvelée avec les notifications (`lib/phone.ts`).
+- **iPhone** : `expo-widgets`, en petit, moyen et sur l'écran verrouillé. Le plugin crée la cible du widget
+  (`fr.secretdate.app.widgets`) et son groupe d'apps (`group.fr.secretdate.app`).
+- **Android** : `react-native-android-widget`. La chronologie est gardée sur le téléphone, et le widget se redessine
+  seul toutes les demi-heures (gestionnaire enregistré dans `app/index.js`, l'entrée de l'app).
+- Le module d'Expo ne fait encore qu'une ébauche sur Android, d'où deux bibliothèques.
+- Il faut une build de développement (pas Expo Go). Le projet Android se génère (`npx expo prebuild`) ; le projet iOS
+  se génère sur un Mac ou dans EAS.
+- Les identifiants `fr.secretdate.app…` sont à confirmer avant la première build : ils ne changent plus une fois l'app
+  publiée.
+
+La carte postale (`app/src/lib/postcard.ts`, `components/postcard.tsx`), en bas de la révélation, pour les deux :
+- une image de story (1080 x 1920) avec le nom secret, le jour et l'heure, et les mots mystères tels que le passager
+  les connaît (« ? » tant qu'un mot n'est pas venu) ;
+- les étapes seulement une fois la soirée finie : partagée avant, elle ne dévoile rien ;
+- partagée depuis un téléphone (`react-native-view-shot`, `expo-sharing`), téléchargée sur le web (`html-to-image`).
+
+Le carton d'invitation (`app/src/lib/invitation-card.ts`), dans la carte « Votre passager » tant que personne n'a
+rejoint la soirée :
+- un carton A6 à imprimer, avec le nom secret, le jour et l'heure, et un QR code vers le lien d'invitation, pour le
+  glisser sous un oreiller ;
+- imprimé ou envoyé en PDF depuis un téléphone (`expo-print`) ; ouvert dans une fenêtre qui lance l'impression sur le web.
 
 ```bash
 # app/.env, lu au build : publiques par nature (clé anon), jamais la service role key

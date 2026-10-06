@@ -59,10 +59,13 @@ function named(step: SoireeStep) {
 const revelation = (pageName: string) => `/revelation?soiree=${encodeURIComponent(pageName)}`;
 const book = (pageName: string) => `/livre?soiree=${encodeURIComponent(pageName)}`;
 
+// Days from `at` to the evening's day, on the calendar: 1 the day before, 0 on the day, -1 the morning after.
+export const daysBefore = (day: string, at: number) => Math.round((localAt(day, 0, 12) - localAt(isoDay(new Date(at)), 0, 12)) / DAY);
+
 // "J-5", "Jour J", "H-2" in its last three hours, "Ce soir" once begun, "Le lendemain", then "J+4".
 export function countdown(route: SoireeRoute, at: number) {
   const start = Date.parse(route.start);
-  const days = Math.round((localAt(route.day, 0, 12) - localAt(isoDay(new Date(at)), 0, 12)) / DAY);
+  const days = daysBefore(route.day, at);
   if (days > 0) return `J-${days}`;
   if (at < start) return at >= start - 3 * HOUR ? `H-${Math.ceil((start - at) / HOUR)}` : 'Jour J';
   if (at < Date.parse(route.end) || days === 0) return 'Ce soir';
