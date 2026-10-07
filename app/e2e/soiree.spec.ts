@@ -370,7 +370,18 @@ test('a band’s evening: its own look, no profile, eight of them, its guests by
   await expect(fewer).toBeDisabled();
   for (let i = 0; i < 6; i++) await page.getByRole('button', { name: 'Une personne de plus' }).click();
   await expect(page.getByText(/À partir de 8, moins de lieux/)).toBeVisible();
-  await page.getByText('Rire aux larmes', { exact: true }).click();
+  // Several moods, the middle one chosen until then: three wishes in all with the secret options.
+  const mood = (name: string) => page.getByRole('checkbox', { name, exact: true });
+  await expect(mood('Se défier entre potes')).toBeChecked();
+  await mood('Rire aux larmes').click();
+  await expect(mood('Se défier entre potes')).toBeChecked();
+  await expect(mood('Rire aux larmes')).toBeChecked();
+  await expect(page.getByText("Jusqu'à 1, glissées dans le programme.")).toBeVisible();
+  await mood('Trinquer').click();
+  await expect(page.getByText('Vos humeurs prennent les 3 envies : retirez-en une pour en glisser.')).toBeVisible();
+  await expect(mood('Faire la fête')).toBeDisabled();
+  await mood('Trinquer').click();
+  await expect(mood('Faire la fête')).toBeEnabled();
   await page.getByText('Un EVJF ou un EVG', { exact: true }).click();
   await page.getByText('Non, déjà mangé').click();
   // What the band never wants, asked with the order in place of a profile's refusals.
@@ -383,11 +394,15 @@ test('a band’s evening: its own look, no profile, eight of them, its guests by
   const response = await composing;
   const composed: ComposedSoiree = await response.json();
   expect(response.request().postDataJSON()).toMatchObject({
-    formule: 'squad', personnes: 8, occasion: 'evjf', envies: ['rire'], decoucher: false, profile: null, eviter: ['alcool'], votes: {},
+    formule: 'squad', personnes: 8, occasion: 'evjf', envies: ['jouer', 'rire'], decoucher: false, profile: null, eviter: ['alcool'], votes: {},
   });
   expect(composed).toMatchObject({ formule: 'squad', personnes: 8 });
   expect(composed.routes.length).toBeGreaterThan(0);
   await expect(page.getByText('Trois virées pour la bande')).toBeVisible();
+  // The way between two steps: on foot or by metro, its icon in a round badge, a link to the itinerary.
+  if (composed.routes[0].steps.length > 1) {
+    await expect(page.getByRole('link', { name: /^(À pied|En métro), \d+ min, / }).first()).toBeVisible();
+  }
   // A band's steps are not voted on: the couple's tastes are not the band's.
   await expect(page.getByRole('checkbox', { name: 'On aime ce genre' })).toHaveCount(0);
   // Each one's share, never the couple's price.

@@ -3,6 +3,7 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { TextButton } from '@/components/buttons';
 import { CompassGuide } from '@/components/compass-guide';
+import { Hop } from '@/components/hop';
 import { Countdown, PageCard } from '@/components/intrigue-card';
 import { NotifyAsk } from '@/components/notify-ask';
 import { PassagerWeek } from '@/components/passager-week';
@@ -164,7 +165,7 @@ function SilkThread({
       <View style={[styles.threadLine, { backgroundColor: theme.accentSoft }]} />
       {steps.map((step, i) => (
         <View key={step.id + i}>
-          {i > 0 ? <Hop previous={steps[i - 1]} step={step} /> : null}
+          {i > 0 ? <Hop previous={steps[i - 1]} step={step} style={styles.hop} /> : null}
           <ThreadStep
             step={step}
             party={party}
@@ -230,19 +231,6 @@ function ThreadStep({
         {onVote ? <TasteVote vote={vote} onVote={onVote} said /> : null}
       </View>
     </View>
-  );
-}
-
-function Hop({ previous, step }: { previous: SoireeStep; step: SoireeStep }) {
-  const walking = step.distance_km <= 1.3;
-  const distance = step.distance_km < 1 ? `${(step.distance_km * 1000).toFixed(0)} m` : `${step.distance_km.toFixed(1)} km`;
-  const maps = `https://www.google.com/maps/dir/?api=1&origin=${previous.lat},${previous.lon}&destination=${step.lat},${step.lon}&travelmode=${walking ? 'walking' : 'transit'}`;
-  return (
-    <Pressable onPress={() => Linking.openURL(maps)} style={styles.hop}>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.hopText}>
-        {walking ? 'à pied' : 'en métro'} · {step.travel_minutes} min · {distance}
-      </ThemedText>
-    </Pressable>
   );
 }
 
@@ -384,7 +372,6 @@ const styles = StyleSheet.create({
   stepFoot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.one },
   links: { flexDirection: 'row', gap: Spacing.three },
   hop: { paddingLeft: ANCHOR + Spacing.three, paddingTop: Spacing.one, paddingBottom: Spacing.three },
-  hopText: { fontFamily: Fonts.headingItalic, fontSize: 16 },
   block: { gap: Spacing.three },
   blockHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   booking: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingBottom: Spacing.three, borderBottomWidth: 1 },

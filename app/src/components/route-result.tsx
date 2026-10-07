@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, TextButton } from '@/components/buttons';
+import { Hop } from '@/components/hop';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { Spinner, busyStyle } from '@/components/spinner';
@@ -52,13 +53,13 @@ export function RouteResult({
       <View style={styles.steps}>
         {route.steps.map((step, i) => (
           <View key={i}>
-            {i > 0 ? <Hop previous={route.steps[i - 1]} step={step} /> : null}
+            {i > 0 ? <Hop previous={route.steps[i - 1]} step={step} style={styles.hop} /> : null}
             <StepRow step={step} party={route} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={removable} vote={votes?.[step.id]} onVote={onVote} />
           </View>
         ))}
         {route.night ? (
           <View>
-            <Hop previous={route.steps[route.steps.length - 1]} step={route.night} />
+            <Hop previous={route.steps[route.steps.length - 1]} step={route.night} style={styles.hop} />
             <StepRow step={route.night} busyRedo={busyRedo ?? null} onRedo={onRedo} removable={false} />
           </View>
         ) : null}
@@ -67,17 +68,6 @@ export function RouteResult({
       {!onChoose ? null : (
         <PrimaryButton wide disabled={chosen} onPress={onChoose}>{chosen ? '✓ Gardée dans vos intrigues' : 'Garder cette intrigue'}</PrimaryButton>
       )}
-    </View>
-  );
-}
-
-function Hop({ previous, step }: { previous: SoireeStep; step: SoireeStep }) {
-  const walking = step.distance_km <= 1.3;
-  const label = `${step.travel_minutes} min` + (step.distance_km < 1 ? ` · ${(step.distance_km * 1000).toFixed(0)} m` : ` · ${step.distance_km.toFixed(1)} km`);
-  const maps = `https://www.google.com/maps/dir/?api=1&origin=${previous.lat},${previous.lon}&destination=${step.lat},${step.lon}&travelmode=${walking ? 'walking' : 'transit'}`;
-  return (
-    <View style={styles.hop}>
-      <TextButton onPress={() => Linking.openURL(maps)}>{`${walking ? '🚶' : '🚇'} ${label}`}</TextButton>
     </View>
   );
 }
@@ -155,7 +145,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
   eyebrow: { flexShrink: 1 },
   steps: { gap: 2, marginVertical: 2 },
-  hop: { paddingLeft: Spacing.two, paddingVertical: 0 },
+  hop: { paddingLeft: Spacing.two, paddingVertical: Spacing.one },
   card: { flexDirection: 'row', gap: Spacing.two + 2, borderWidth: 1, borderRadius: 16, padding: Spacing.two },
   thumb: { width: 72, height: 72, borderRadius: 12, overflow: 'hidden' },
   thumbImg: { width: '100%', height: '100%' },

@@ -23,7 +23,8 @@ import { isoDay, longDay, nextFriday, shortDay } from '@/lib/dates';
 import { rememberedProfile } from '@/lib/local-store';
 
 // The mood cards, from "Tamisé & Intime" to "Aventureux & Insolite": each one is one of
-// the server's wishes (surprise.quiz.ENVIES, its MOODS; a band's, SQUAD_MOODS). The other wishes are the "secret options".
+// the server's wishes (surprise.quiz.ENVIES, its MOODS; a band's, SQUAD_MOODS), the middle one chosen until the couple
+// picks; several of them if they like. The other wishes are the "secret options": data.max wishes in all.
 const MOODS = ['cocooning', 'romantique', 'nous', 'curieux', 'surprise'];
 const MIDDLE_MOOD = 2;
 // A band's evening (Secret Squad): how many they are, the instigateur counted (surprise.quiz.SQUAD_PERSONNES); from
@@ -55,7 +56,7 @@ export default function SoireeScreen() {
   const [data, setData] = useState<SoireeData | null>(null);
   const [vibes, setVibes] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [mood, setMood] = useState(MIDDLE_MOOD);
+  const [picked, setPicked] = useState<string[] | null>(null); // the moods chosen, null: the middle one
   const [secrets, setSecrets] = useState<string[]>([]);
   // What the band never wants (Secret Squad): asked with the order, a band having no profile.
   const [eviter, setEviter] = useState<string[]>([]);
@@ -95,7 +96,7 @@ export default function SoireeScreen() {
       setData(null);
       setSecrets([]);
       setEviter([]);
-      setMood(MIDDLE_MOOD);
+      setPicked(null);
       setNight((n) => ({ ...n, occasion: null, budget: null, decoucher: false }));
     }
     setFormule(chosen);
@@ -145,8 +146,10 @@ export default function SoireeScreen() {
   const moodKeys = data.moods ?? MOODS;
   const moods = moodKeys.map((value) => data.envies.find((e) => e.value === value)).filter((e): e is NonNullable<typeof e> => !!e);
   const others = data.envies.filter((e) => !moodKeys.includes(e.value));
-  const moodValue = moods[Math.min(mood, moods.length - 1)]?.value;
-  const envies = [...(moodValue ? [moodValue] : []), ...secrets].slice(0, data.max);
+  const middle = moods[Math.min(MIDDLE_MOOD, moods.length - 1)]?.value;
+  const chosenMoods = picked ?? (middle ? [middle] : []);
+  const room = data.max - chosenMoods.length; // the secret options left
+  const envies = [...chosenMoods, ...secrets].slice(0, data.max);
 
   async function compose() {
     setStatus('composing');
@@ -261,8 +264,10 @@ export default function SoireeScreen() {
     );
   }
 
+  const toggleMood = (value: string) =>
+    setPicked(chosenMoods.includes(value) ? chosenMoods.filter((v) => v !== value) : [...chosenMoods, value]);
   const toggleSecret = (value: string) =>
-    setSecrets((s) => (s.includes(value) ? s.filter((v) => v !== value) : s.length < data.max - 1 ? [...s, value] : s));
+    setSecrets((s) => (s.includes(value) ? s.filter((v) => v !== value) : s.length < room ? [...s, value] : s));
   const toggleEviter = (value: string) => setEviter((e) => (e.includes(value) ? e.filter((v) => v !== value) : [...e, value]));
   const toggleOccasion = (value: string) => setNight((n) => ({ ...n, occasion: n.occasion === value ? null : value }));
   const toggleStart = (value: string) => setNight((n) => ({ ...n, start: n.start === value ? null : value }));
@@ -303,11 +308,12 @@ export default function SoireeScreen() {
           </Section>
         ) : null}
 
-        <Section title="L'humeur du soir">
+        <Section title="L'humeur du soir" hint={`Une ou plusieurs : ${data.max} envies en tout avec les options secrètes.`}>
           <OptionGrid>
-            {moods.map((m, i) => (
-              <OptionCard key={m.value} label={m.label} icon={m.icon} emoji={m.emoji} selected={Math.min(mood, moods.length - 1) === i}
-                onPress={() => setMood(i)} />
+            {moods.map((m) => (
+              <OptionCard key={m.value} label={m.label} icon={m.icon} emoji={m.emoji} selected={chosenMoods.includes(m.value)}
+                disabled={!chosenMoods.includes(m.value) && chosenMoods.length + secrets.length >= data.max}
+                onPress={() => toggleMood(m.value)} />
             ))}
           </OptionGrid>
         </Section>
@@ -321,12 +327,14 @@ export default function SoireeScreen() {
           </OptionGrid>
         </Section>
 
-        <Section title="Les options secrètes" hint={`Jusqu'à ${data.max - 1}, glissées dans le programme.`}>
+        <Section
+          title="Les options secrètes"
+          hint={room > 0 ? `Jusqu'à ${room}, glissées dans le programme.` : `Vos humeurs prennent les ${data.max} envies : retirez-en une pour en glisser.`}>
           <OptionGrid>
             {others.map((o) => (
               <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={secrets.includes(o.value)}
                 tint={squad ? 'secret' : undefined}
-                disabled={!secrets.includes(o.value) && secrets.length >= data.max - 1}
+                disabled={!secrets.includes(o.value) && secrets.length >= room}
                 onPress={() => toggleSecret(o.value)} />
             ))}
           </OptionGrid>

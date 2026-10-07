@@ -45,6 +45,20 @@ const UI_ICONS: Record<string, ReactNode> = {
       <Path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
     </>
   ),
+  // The way from a step to the next (components/hop.tsx): footprints, a metro train seen from the front.
+  a_pied: (
+    <>
+      <Path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z" />
+      <Path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z" />
+      <Path d="M16 17h4M4 13h4" />
+    </>
+  ),
+  metro: (
+    <>
+      <Rect x="4" y="3" width="16" height="16" rx="2" />
+      <Path d="M4 11h16M12 3v8M8 19l-2 3M18 22l-2-3M8 15h.01M16 15h.01" />
+    </>
+  ),
   // The couple's evenings: a closed grimoire, the secrets' ✦ on its cover.
   grimoire: (
     <>
