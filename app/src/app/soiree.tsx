@@ -312,21 +312,22 @@ export default function SoireeScreen() {
           </OptionGrid>
         </Section>
 
-        <Section title="Les options secrètes" hint={`Jusqu'à ${data.max - 1}, glissées dans le programme.`}>
-          <OptionGrid>
-            {others.map((o) => (
-              <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={secrets.includes(o.value)}
-                disabled={!secrets.includes(o.value) && secrets.length >= data.max - 1}
-                onPress={() => toggleSecret(o.value)} />
-            ))}
-          </OptionGrid>
-        </Section>
-
         <Section title="Le dîner fait-il partie du complot ?">
           <OptionGrid>
             {MEALS.map((o) => (
               <OptionCard key={String(o.value)} label={o.label} icon={o.icon} selected={night.diner === o.value}
                 onPress={() => setNight((n) => ({ ...n, diner: o.value }))} />
+            ))}
+          </OptionGrid>
+        </Section>
+
+        <Section title="Les options secrètes" hint={`Jusqu'à ${data.max - 1}, glissées dans le programme.`}>
+          <OptionGrid>
+            {others.map((o) => (
+              <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={secrets.includes(o.value)}
+                tint={squad ? 'secret' : undefined}
+                disabled={!secrets.includes(o.value) && secrets.length >= data.max - 1}
+                onPress={() => toggleSecret(o.value)} />
             ))}
           </OptionGrid>
         </Section>

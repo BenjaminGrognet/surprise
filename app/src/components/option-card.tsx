@@ -4,13 +4,14 @@ import Svg from 'react-native-svg';
 
 import { QUIZ_ICONS } from '@/components/quiz-icons';
 import { ThemedText } from '@/components/themed-text';
-import { Fonts, Spacing } from '@/constants/theme';
+import { Fonts, Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 // A small tile of the night: emerald line icon on the left, title and a word of description beside it;
 // an emerald border, a soft halo and an emerald dot once chosen. Two side by side, so a question fits on a screen.
+// `tint`: another colour of the palette in place of the accent, outlining it at rest too (Secret Squad's secret options).
 export function OptionCard({
-  label, desc, icon, emoji, selected, disabled, onPress,
+  label, desc, icon, emoji, selected, disabled, onPress, tint,
 }: {
   label: string;
   desc?: string;
@@ -19,8 +20,10 @@ export function OptionCard({
   selected: boolean;
   disabled?: boolean;
   onPress: () => void;
+  tint?: ThemeColor;
 }) {
   const theme = useTheme();
+  const accent = theme[tint ?? 'accent'];
   return (
     <Pressable
       disabled={disabled}
@@ -30,14 +33,14 @@ export function OptionCard({
       style={({ pressed }) => [
         styles.card,
         !desc && styles.compact,
-        { backgroundColor: theme.velvet, borderColor: selected ? theme.accent : theme.accentHair },
-        selected && { boxShadow: `0 4px 14px ${theme.glow}` },
+        { backgroundColor: theme.velvet, borderColor: selected ? accent : tint ? `${accent}B3` : theme.accentHair },
+        selected && { boxShadow: tint ? `0 0 18px ${accent}A6` : `0 4px 14px ${theme.glow}` },
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}>
       <View style={styles.icon}>
         {icon && icon in QUIZ_ICONS ? (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
             {QUIZ_ICONS[icon]}
           </Svg>
         ) : (
@@ -48,7 +51,7 @@ export function OptionCard({
         <ThemedText style={[styles.title, { color: theme.cream }]}>{label}</ThemedText>
         {desc ? <ThemedText style={[styles.desc, { color: theme.cream }]} numberOfLines={1}>{desc}</ThemedText> : null}
       </View>
-      {selected ? <View style={[styles.dot, { backgroundColor: theme.accent }]} /> : null}
+      {selected ? <View style={[styles.dot, { backgroundColor: accent }]} /> : null}
     </Pressable>
   );
 }

@@ -93,13 +93,13 @@ export function CardEmblem() {
   );
 }
 
-// A gold outlined pill in spaced capitals, like a membership tier: "INSTIGATEUR", "≈ 180 € À DEUX". Secret Squad's is a
-// sticker: filled with its electric yellow, in the night's ink.
+// A gold outlined pill in spaced capitals, like a membership tier: "INSTIGATEUR", "≈ 180 € À DEUX". Secret Squad's is
+// filled with its gold, in the night's ink.
 export function Badge({ children }: { children: string }) {
   const theme = useTheme();
   const squad = usePalette() === 'squad';
   return (
-    <View style={[styles.badge, { borderColor: theme.goldSoft }, squad && { backgroundColor: theme.gold, borderColor: theme.gold, transform: [{ rotate: '-2deg' }] }]}>
+    <View style={[styles.badge, { borderColor: theme.goldSoft }, squad && { backgroundColor: theme.gold, borderColor: theme.gold }]}>
       <ThemedText style={[styles.badgeLabel, { color: squad ? theme.background : theme.gold }]}>{children}</ThemedText>
     </View>
   );

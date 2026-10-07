@@ -325,7 +325,8 @@ test('the instigateur votes on steps: kept on the account, sent with the next ev
   expect(next.composed.routes.flatMap((r) => r.steps).map((s) => s.id)).not.toContain(down.id);
 });
 
-const NEON = 'rgb(255, 46, 147)';
+const NEON = 'rgb(63, 224, 230)';
+const SECRET = '255, 43, 214'; // the fuchsia neon of a band's secret options
 
 test('a band’s evening: its own look, no profile, eight of them, its guests by one link and its complices by another', async ({ page, browser }) => {
   await page.goto('/');
@@ -343,10 +344,18 @@ test('a band’s evening: its own look, no profile, eight of them, its guests by
   // Its headings in poster capitals, lit, where a couple's are in a serif.
   const look = await title.evaluate((t) => {
     const css = getComputedStyle(t);
-    return { font: css.fontFamily, transform: css.textTransform, glow: css.textShadow };
+    return { font: css.fontFamily, transform: css.textTransform, glow: css.textShadow, color: css.color };
   });
-  expect(look).toMatchObject({ font: expect.stringContaining('Anton'), transform: 'uppercase' });
+  expect(look).toMatchObject({ font: expect.stringContaining('Anton'), transform: 'uppercase', color: NEON });
   expect(look.glow).not.toBe('none');
+  // The dinner asked right after the mood, before the secret options (the couple's form is the same).
+  const top = async (text: string) => (await page.getByText(text).boundingBox())!.y;
+  const diner = await top('Le dîner fait-il partie du complot');
+  expect(diner).toBeGreaterThan(await top("L'humeur du soir"));
+  expect(diner).toBeLessThan(await top('Les options secrètes'));
+  // Its secret options outlined in a second neon, fuchsia.
+  const borders = await page.getByRole('checkbox').evaluateAll((boxes) => boxes.map((box) => getComputedStyle(box).borderColor));
+  expect(borders.filter((border) => border.includes(SECRET)).length).toBeGreaterThan(0);
   // No profile asked nor applied: nothing of the couple's quiz, nor a wish that would take its vibes.
   await expect(page.getByText(/profil|Faire le quiz/).filter({ visible: true })).toHaveCount(0);
   await expect(page.getByText('Fidèles à la bande', { exact: true })).toHaveCount(0);

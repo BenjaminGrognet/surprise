@@ -12,21 +12,25 @@ export type ThemedTextProps = TextProps & {
 const keepTogether = (text: string) => text.replace(/ ([?!:;»])/g, '\u00a0$1').replace(/« /g, '«\u00a0');
 
 // Secret Squad speaks in neon: where Secret Date sets a serif, Anton's poster capitals, a fifth smaller (they stand
-// taller), lit in their own colour once big enough to glow; a clue, a sentence to read, in plain sans.
+// taller), lit once big enough to glow: in the neon when they were in the text's white, else in their own colour (a
+// gold name); a clue, a sentence to read, in plain sans.
 const SERIFS: (string | undefined)[] = [Fonts.heading, Fonts.headingBold, Fonts.headingItalic];
 
-function neon(style: TextStyle, clue: boolean): TextStyle {
+function neon(style: TextStyle, clue: boolean, white: string, lit: string): TextStyle {
   if (!SERIFS.includes(style.fontFamily)) return style;
   if (clue) return { ...style, fontFamily: Fonts.sansMedium, fontSize: Math.round((style.fontSize ?? 19) * 0.85) };
   const fontSize = Math.round((style.fontSize ?? 15) * 0.8);
+  const glows = fontSize >= 16 && typeof style.color === 'string';
+  const color = glows && style.color === white ? lit : style.color;
   return {
     ...style,
+    color,
     fontFamily: Fonts.poster,
     fontSize,
     lineHeight: Math.round(fontSize * 1.18),
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    ...(fontSize >= 16 && typeof style.color === 'string' ? { textShadowColor: style.color, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } } : null),
+    ...(glows ? { textShadowColor: color as string, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } } : null),
   };
 }
 
@@ -49,7 +53,7 @@ export function ThemedText({ style, type = 'default', themeColor, children, ...r
   ]);
 
   return (
-    <Text style={squad ? neon(flat, type === 'clue') : flat} {...rest}>
+    <Text style={squad ? neon(flat, type === 'clue', theme.text, theme.accent) : flat} {...rest}>
       {typeof children === 'string' ? keepTogether(children) : children}
     </Text>
   );

@@ -37,43 +37,45 @@ const brand = {
   ok: '#6FD3A8',
   info: '#8DB8E8',
   warn: '#E6B866',
+  secret: '#3DB787', // Secret Squad's second neon, for its secret options; the brand keeps its emerald (unused)
 } as const;
 
 export const Colors = { light: brand, dark: brand } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-// Secret Squad's "Very Bad Night", for a band of friends' evenings: the Vegas strip at 4 a.m., an ink night lit by a
-// hot pink neon sign, electric yellow where the brand has its gold (figures, badges, its name), every surface outlined
-// in neon. Same words as the brand's: a screen wrapped in <PaletteProvider name="squad"> takes it whole, its headings
-// in Anton's poster capitals, lit (themed-text.tsx).
+// Secret Squad's "Underground", for a band of friends' evenings: a club in a cellar, black brushed metal, cyan neon
+// for what lives (its headings, icons, a chosen option, the main button), a fuchsia one for its secret options, gold
+// kept from the brand for what is precious (badges, figures, the hints). Same words as the brand's: a screen wrapped in
+// <PaletteProvider name="squad"> takes it whole, its headings in Anton's poster capitals, lit in cyan (themed-text.tsx).
 const squad: Record<ThemeColor, string> = {
-  text: '#FFF0F7', // the pink-white of a neon's core
-  background: '#0B0610', // ink, a hint of violet
-  backgroundElement: '#170B1F',
-  backgroundSelected: '#26102F',
-  textSecondary: '#B7A4C2', // lilac grey
-  line: 'rgba(255, 46, 147, 0.32)', // a neon pink hairline around every surface
-  accent: '#FF2E93', // hot pink neon: icons, a chosen option, the main button
-  accentInk: '#FF6DB4',
-  accentSoft: 'rgba(255, 46, 147, 0.75)', // a card's border: the tube, lit
-  accentFaint: 'rgba(255, 46, 147, 0.4)',
-  satin: '#FF2E93',
-  onAccent: '#1A0010',
-  accentHair: 'rgba(255, 46, 147, 0.3)',
-  glass: 'rgba(255, 240, 247, 0.04)',
-  velvet: '#170B1F',
-  gold: '#FFE03A', // electric yellow: figures, badges, the brand
-  goldSoft: 'rgba(255, 224, 58, 0.7)',
-  glow: 'rgba(255, 46, 147, 0.6)',
-  cream: '#FFF0F7',
-  creamSoft: 'rgba(255, 240, 247, 0.8)',
-  creamFaint: 'rgba(255, 240, 247, 0.42)',
-  danger: '#FF5C5C',
-  dangerFaint: 'rgba(255, 92, 92, 0.16)',
+  text: '#EDEFF2', // a cold white
+  background: '#0A0A0C', // black metal
+  backgroundElement: '#131317',
+  backgroundSelected: '#1C1C22',
+  textSecondary: '#C9A66B', // the hints in old gold
+  line: 'rgba(217, 178, 106, 0.3)', // a gold hairline around every surface, as the brand's
+  accent: '#3FE0E6', // cyan neon: headings, icons, a chosen option, the main button
+  accentInk: '#6FEAEE',
+  accentSoft: 'rgba(217, 178, 106, 0.6)', // a card's frame, in gold
+  accentFaint: 'rgba(63, 224, 230, 0.35)',
+  satin: '#3FE0E6',
+  onAccent: '#021617',
+  accentHair: 'rgba(63, 224, 230, 0.45)', // an option at rest, outlined in neon
+  glass: 'rgba(237, 239, 242, 0.04)',
+  velvet: '#131317',
+  gold: '#E2BC6E', // gold: figures, badges, the brand
+  goldSoft: 'rgba(226, 188, 110, 0.6)',
+  glow: 'rgba(63, 224, 230, 0.45)',
+  cream: '#EDEFF2',
+  creamSoft: 'rgba(237, 239, 242, 0.75)',
+  creamFaint: 'rgba(237, 239, 242, 0.4)',
+  danger: '#FF6B6B',
+  dangerFaint: 'rgba(255, 107, 107, 0.16)',
   ok: '#3DF5A6',
-  info: '#38D9FF',
-  warn: '#FFE03A',
+  info: '#3FE0E6',
+  warn: '#E2BC6E',
+  secret: '#FF2BD6', // fuchsia neon: the secret options
 };
 
 // The two formulas' looks: Secret Date (a couple, the brand) and Secret Squad (a band of friends).
