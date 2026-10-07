@@ -10,8 +10,8 @@ import { supabase } from '@/lib/supabase';
 
 export type PushPlatform = 'web' | 'android';
 
-// The Firebase project's web app (console › Project settings › Your apps) and its Web Push key (Cloud Messaging):
-// public values, as Supabase's anon key.
+// The Firebase project's web app (console › Project settings › Your apps), and its own Web Push key if it has one
+// (Cloud Messaging), else Firebase's: public values, as Supabase's anon key.
 function firebaseWeb() {
   return {
     config: {
@@ -28,8 +28,8 @@ function firebaseWeb() {
 export function pushPlatform(): PushPlatform | null {
   if (Platform.OS === 'android') return 'android';
   if (Platform.OS !== 'web') return null;
-  const { config, vapidKey } = firebaseWeb();
-  if (!config.apiKey || !config.projectId || !vapidKey) return null;
+  const { config } = firebaseWeb();
+  if (!config.apiKey || !config.projectId || !config.appId) return null;
   // Not while the static pages are rendered (Node, no service worker), nor in a browser without push.
   const browser = typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
   return browser && 'PushManager' in globalThis && 'Notification' in globalThis ? 'web' : null;
@@ -49,7 +49,7 @@ async function webToken() {
   const app = getApps()[0] ?? initializeApp(config);
   await navigator.serviceWorker.register('/firebase-messaging-sw.js');
   const serviceWorkerRegistration = await navigator.serviceWorker.ready;
-  return getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration });
+  return getToken(getMessaging(app), { serviceWorkerRegistration, ...(vapidKey ? { vapidKey } : {}) });
 }
 
 // The FCM token itself, on Android: a build without google-services.json has none, and throws.

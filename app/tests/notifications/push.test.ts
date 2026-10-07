@@ -128,8 +128,16 @@ describe('the browser', () => {
     expect(await kept(mockWeb.token)).toEqual([]);
   });
 
-  test('without Firebase configured, nothing is asked', async () => {
+  test('without a Web Push key of the project’s own, Firebase’s', async () => {
+    await newAccount('push-cle');
     delete process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY;
+    expect(await askPush()).toBe('granted');
+    expect(mockWeb.calls).toEqual([{ serviceWorkerRegistration: worker }]);
+    expect(await kept(mockWeb.token)).toHaveLength(1);
+  });
+
+  test('without Firebase configured, nothing is asked', async () => {
+    delete process.env.EXPO_PUBLIC_FIREBASE_APP_ID;
     expect(pushPlatform()).toBeNull();
     expect(await pushState()).toBe('unsupported');
     expect(await askPush()).toBe('unsupported');

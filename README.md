@@ -514,8 +514,8 @@ format qu'expo-notifications affiche. Un jeton que FCM ne connaît plus (app dé
 à l'envoi. Rien n'est encore envoyé automatiquement : les pushes des soirées sont à brancher sur `surprise.push.send`.
 
 Mise en place, dans la console Firebase (un projet) :
-1. Paramètres du projet › Vos applications : une app Web, dont les valeurs vont dans `app/.env` ; puis Cloud Messaging ›
-   Certificats Web Push : générer la paire de clés (la clé VAPID).
+1. Paramètres du projet › Vos applications : une app Web, dont les valeurs vont dans `app/.env`. Une clé Web Push
+   (VAPID) du projet est facultative : sans elle, Firebase prend la sienne.
 2. Une app Android `fr.secretdate.app` : son `google-services.json` dans `app/`.
 3. Comptes de service › Générer une nouvelle clé privée : le fichier JSON hors du dépôt (par exemple dans `data/`,
    ignoré par git), son chemin dans `.env`.
@@ -527,6 +527,7 @@ EXPO_PUBLIC_FIREBASE_API_KEY=...
 EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
 EXPO_PUBLIC_FIREBASE_SENDER_ID=...
 EXPO_PUBLIC_FIREBASE_APP_ID=...
+# facultative : Cloud Messaging › Certificats Web Push
 EXPO_PUBLIC_FIREBASE_VAPID_KEY=...
 # .env, pour le serveur seulement : la clé du compte de service (son chemin, ou son contenu JSON)
 FIREBASE_SERVICE_ACCOUNT=data/firebase-service-account.json
