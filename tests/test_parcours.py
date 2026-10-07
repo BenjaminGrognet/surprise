@@ -479,6 +479,17 @@ def test_never_a_step_without_photo_or_text():
     assert not parcours.shown(fiche)
 
 
+def test_without_the_photo_filters_a_step_may_have_no_photo(monkeypatch):
+    monkeypatch.undo()  # unshown itself, not conftest's
+    monkeypatch.setattr(parcours, "IMAGE_FILTERS", False)
+    fiche = item("f", "Le Festin Nu", ["bar"])
+    fiche["enrichment"]["description"] = "Grignote d'insectes dans un bar psyché."
+    fiche["activity"]["image"] = None
+    assert parcours.shown(fiche)
+    req, candidates, route = _night()
+    assert parcours.unshown(route.steps) == set()  # no image asked for
+
+
 def test_a_redrawn_step_is_close_to_the_one_before():
     req = request(vibes=["insolite"])
     entries = [
@@ -552,6 +563,7 @@ def test_never_a_route_whose_image_does_not_show(monkeypatch):
 
 def test_a_dead_image_is_replaced_by_the_official_sites_before_leaving_the_step_out(tmp_path, monkeypatch):
     monkeypatch.undo()  # the real check (conftest leaves images out of the other tests)
+    monkeypatch.setattr(parcours, "IMAGE_FILTERS", True)
     monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")
     monkeypatch.setattr(parcours, "_IMAGES", {})
     req, candidates, route = _night()

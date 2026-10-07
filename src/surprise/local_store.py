@@ -371,6 +371,24 @@ class LocalStore:
             ).fetchall())
         return found
 
+    def activities_with_rejection(self) -> list[tuple[str, str, str | None, str | None]]:
+        """Every normalized record: source, id, activity (JSON, None if never built), rejection."""
+        return self._run("select source_id, external_id, activity, rejection from normalized").fetchall()
+
+    def kept_activities(self) -> set[tuple[str, str]]:
+        """The activities an account's history holds: every step, even replaced, of an evening chosen. Votes are
+        Supabase's (PostgresStore)."""
+        return set(self._run(
+            "select distinct s.source_id, s.external_id from soiree_steps s join soirees p on p.id = s.soiree_id"
+            " where p.chosen_at is not null"
+        ).fetchall())
+
+    def delete_activities(self, keys: Sequence[tuple[str, str]]) -> None:
+        """These activities and all kept of them, with the steps of evenings never chosen that showed them."""
+        with self._transaction():
+            for table in ("soiree_steps", "availability", "keywords", "enrichment", "moderation", "raw_records", "normalized"):
+                self._run_many(f"delete from {table} where source_id = ? and external_id = ?", keys)
+
     def keep_route(self, soiree_id: str, route: int) -> bool:
         """The couple chose this route: the evening keeps it alone, as route 0, the other routes and its candidates
         gone. Chosen again, nothing changes. False if the evening has no such route."""
@@ -639,6 +657,11 @@ class PostgresStore(LocalStore):
 
     def _transaction(self) -> Any:
         return self._db.transaction()
+
+    def kept_activities(self) -> set[tuple[str, str]]:
+        # A vote's activity too: its kind still counts in the couple's tastes (surprise.parcours.tastes_from).
+        voted = {tuple(a.split(":", 1)) for (a,) in self._run("select activity_id from public.gouts").fetchall()}
+        return super().kept_activities() | voted
 
     def version(self) -> Any:
         return self._run(

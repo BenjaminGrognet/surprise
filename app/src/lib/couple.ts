@@ -41,6 +41,14 @@ export const guests = (evening: Guests, role?: GuestRole) => (evening.invites ??
 // A band's evening: Secret Squad's look and words.
 export const isSquad = (evening: Pick<EveningHistoryRow, 'formule'> | null | undefined) => evening?.formule === 'squad';
 
+// The evenings in time: those to come first, the next one on top, then those gone, the latest first; one without a
+// day last. `today` as isoDay gives it.
+export function chronological<T extends Pick<EveningHistoryRow, 'day'>>(evenings: T[], today: string): T[] {
+  const ahead = (e: T) => !!e.day && e.day >= today;
+  return [...evenings].sort((a, b) =>
+    ahead(a) !== ahead(b) ? (ahead(a) ? -1 : 1) : ahead(a) ? a.day!.localeCompare(b.day!) : (b.day ?? '').localeCompare(a.day ?? ''));
+}
+
 // Its places left for guests (the instigateur counted among its personnes).
 export const placesLeft = (evening: Pick<EveningHistoryRow, 'personnes'> & Guests) => Math.max(0, (evening.personnes ?? 2) - 1 - guests(evening).length);
 

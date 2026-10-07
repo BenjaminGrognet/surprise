@@ -5,7 +5,9 @@ from surprise import availability, enrich, images, parcours
 
 @pytest.fixture(autouse=True)
 def images_show(monkeypatch):
-    """Evenings are composed without asking the test images' sites whether they answer (see test_parcours)."""
+    """Evenings are composed with the photo filters, without asking the test images' sites whether they answer (see
+    test_parcours)."""
+    monkeypatch.setattr(parcours, "IMAGE_FILTERS", True)
     monkeypatch.setattr(parcours, "unshown", lambda steps: set())
 
 

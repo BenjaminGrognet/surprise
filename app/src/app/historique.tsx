@@ -4,14 +4,14 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { PrimaryLink, TextButton, TextLink } from '@/components/buttons';
-import { PageCard } from '@/components/intrigue-card';
+import { CardHead, IntrigueCard, PageCard } from '@/components/intrigue-card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { deleteEvening, eveningsHistory, type EveningHistoryRow } from '@/lib/account';
-import { eveningRole, isSquad, organises } from '@/lib/couple';
+import { chronological, eveningRole, isSquad, organises } from '@/lib/couple';
 import { isoDay, longDay } from '@/lib/dates';
 import { photoUrls } from '@/lib/souvenirs';
 import { supabaseConfigured } from '@/lib/supabase';
@@ -20,9 +20,10 @@ const monthYear = (iso: string) => new Date(`${iso}T12:00`).toLocaleDateString('
 
 type State = 'loading' | 'error' | EveningHistoryRow[];
 
-// "Mes soirées": the couple's evenings along a gold thread, newest first. A sealed evening is a relic — only its
-// Photo Témoin and Note Confidentielle remain, the route has faded — and the older it is, the more it fades too.
-// An evening still to come, or one whose book is still open, is a plain anchor on the thread.
+// "Mes soirées": the couple's evenings along a gold thread, the next one to come on top, then those gone, the latest
+// first; each one a card in its formula's look (Secret Date's emerald, Secret Squad's disco wall in neon). A sealed
+// evening is a relic — only its Photo Témoin and Note Confidentielle remain, the route has faded — and the older it
+// is, the more it fades too. An evening still to come, or one whose book is still open, is a plain anchor on the thread.
 export default function ArchivesScreen() {
   const theme = useTheme();
   const [state, setState] = useState<State>(supabaseConfigured ? 'loading' : 'error');
@@ -32,7 +33,7 @@ export default function ArchivesScreen() {
     if (!supabaseConfigured) return;
     eveningsHistory()
       .then(async (rows) => {
-        setState([...rows].sort((a, b) => (b.day ?? '').localeCompare(a.day ?? '')));
+        setState(chronological(rows, isoDay(new Date())));
         setPhotos(await photoUrls(rows.flatMap((r) => r.souvenirs?.map((p) => p.photo) ?? [])));
       })
       .catch(() => setState('error'));
@@ -104,15 +105,7 @@ function patina(age: number) {
     photo: `grayscale(${20 + 80 * t}%) sepia(${10 - 10 * t}%) brightness(${85 - 10 * t}%)`,
     photoOpacity: 1 - 0.4 * t,
     text: 0.75 - 0.25 * t,
-    card: 1 - 0.4 * t,
-    border: 0.18 - 0.08 * t,
   };
-}
-
-// A colour of the palette ("#0F1420"), worn by time: as rgba at this opacity.
-function veiled(hex: string, opacity: number) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 }
 
 function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: number; photos: Record<string, string>; onDeleted: () => void }) {
@@ -125,11 +118,11 @@ function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: n
   return (
     <Pressable onPress={open} style={styles.entry}>
       <View style={[styles.dot, age === 0 ? { backgroundColor: theme.gold, boxShadow: `0 0 8px ${theme.gold}` } : styles.dimDot]} />
-      <ThemedText style={[styles.date, { color: theme.gold, opacity: age === 0 ? 1 : 0.6 }]}>
-        {isSquad(row) ? 'SQUAD • ' : ''}INTRIGUE SCELLÉE • {row.day ? monthYear(row.day) : 'DATE LIBRE'}
-      </ThemedText>
-      <ThemedText style={[styles.name, { color: theme.cream, opacity: age === 0 ? 1 : 0.8 }]}>{row.secret_title ?? row.title}</ThemedText>
-      <View style={[styles.card, { backgroundColor: veiled(theme.velvet, p.card), borderColor: veiled(theme.gold, p.border) }]}>
+      <IntrigueCard align="start">
+        <CardHead badge="Scellée" title={row.secret_title ?? row.title} />
+        <ThemedText style={[styles.date, { color: theme.gold, opacity: age === 0 ? 1 : 0.6 }]}>
+          {row.day ? monthYear(row.day) : 'DATE LIBRE'}
+        </ThemedText>
         {photo ? (
           <View style={[styles.photo, { opacity: p.photoOpacity }]}>
             <View style={[StyleSheet.absoluteFill, { filter: p.photo }]}>
@@ -150,8 +143,8 @@ function Relic({ row, age, photos, onDeleted }: { row: EveningHistoryRow; age: n
         {notes.map((n, i) => (
           <ThemedText key={i} style={[styles.note, { color: theme.cream, opacity: p.text }]}>« {n} »</ThemedText>
         ))}
-      </View>
-      <DeleteEvening row={row} onDeleted={onDeleted} />
+        <DeleteEvening row={row} onDeleted={onDeleted} />
+      </IntrigueCard>
     </Pressable>
   );
 }
@@ -167,14 +160,14 @@ function Anchor({ row, onDeleted }: { row: EveningHistoryRow; onDeleted: () => v
   return (
     <Pressable onPress={() => router.push(href)} style={styles.entry}>
       <View style={[styles.dot, styles.hollow, { borderColor: theme.accent, backgroundColor: theme.background }]} />
-      <ThemedText style={[styles.date, { color: theme.accent, opacity: 0.8 }]}>
-        {isSquad(row) ? 'SQUAD • ' : ''}{ahead ? 'À VENIR' : 'À SCELLER'} • {row.day ? longDay(row.day).toUpperCase() : 'DATE LIBRE'}
-      </ThemedText>
-      <ThemedText style={[styles.name, { color: theme.cream, opacity: 0.8 }]}>{row.secret_title ?? (hidden ? 'Une intrigue en préparation' : row.title)}</ThemedText>
-      <TextLink href={href}>
-        {ahead ? (role === 'passager' ? 'Voir les indices →' : 'Voir la feuille de route →') : 'Ouvrir le Livre des Secrets →'}
-      </TextLink>
-      <DeleteEvening row={row} onDeleted={onDeleted} />
+      <IntrigueCard align="start">
+        <CardHead badge={ahead ? 'À venir' : 'À sceller'} title={row.secret_title ?? (hidden ? 'Une intrigue en préparation' : row.title)} />
+        <ThemedText style={[styles.date, { color: theme.accent }]}>{row.day ? longDay(row.day).toUpperCase() : 'DATE LIBRE'}</ThemedText>
+        <TextLink href={href}>
+          {ahead ? (role === 'passager' ? 'Voir les indices →' : 'Voir la feuille de route →') : 'Ouvrir le Livre des Secrets →'}
+        </TextLink>
+        <DeleteEvening row={row} onDeleted={onDeleted} />
+      </IntrigueCard>
     </Pressable>
   );
 }
@@ -223,12 +216,10 @@ const styles = StyleSheet.create({
   thread: { gap: Spacing.five, paddingTop: Spacing.two },
   line: { position: 'absolute', left: LINE_X, top: Spacing.three, bottom: Spacing.three, width: 1, backgroundColor: 'rgba(219, 193, 140, 0.2)' },
   entry: { paddingLeft: 40 },
-  dot: { position: 'absolute', left: LINE_X - DOT / 2 + 0.5, top: 5, width: DOT, height: DOT, borderRadius: DOT / 2, zIndex: 1 },
+  dot: { position: 'absolute', left: LINE_X - DOT / 2 + 0.5, top: 34, width: DOT, height: DOT, borderRadius: DOT / 2, zIndex: 1 },
   dimDot: { backgroundColor: 'rgba(219, 193, 140, 0.4)' },
   hollow: { borderWidth: 1 },
   date: { fontFamily: Fonts.sansBold, fontSize: 10, lineHeight: 16, letterSpacing: 1.6 },
-  name: { fontFamily: Fonts.heading, fontSize: 22, lineHeight: 27, marginTop: 2 },
-  card: { marginTop: Spacing.three, padding: Spacing.three, borderRadius: Radius.tile, borderWidth: 1, gap: Spacing.three },
   photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(219, 193, 140, 0.08)' },
   note: { fontFamily: Fonts.headingItalic, fontSize: 17, lineHeight: 23 },
   delete: { marginTop: Spacing.two, gap: Spacing.one },

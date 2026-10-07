@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { DiscoBall, DiscoFacets } from '@/components/disco-ball';
 import { EmeraldFacets } from '@/components/emerald-facets';
 import { LogoSecretDate } from '@/components/logo-secretdate';
-import { ThemedText } from '@/components/themed-text';
+import { OverWall, ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui-icons';
 import { Brands, Fonts, Radius, Spacing } from '@/constants/theme';
 import { usePalette, useTheme } from '@/hooks/use-theme';
@@ -34,7 +34,9 @@ export function IntrigueCard({
         pressed && styles.pressed,
       ]}>
       {squad ? <DiscoFacets /> : <EmeraldFacets />}
-      <View style={[styles.body, align === 'start' ? styles.start : styles.centred]}>{children}</View>
+      <View style={[styles.body, align === 'start' ? styles.start : styles.centred]}>
+        <OverWall.Provider value={squad}>{children}</OverWall.Provider>
+      </View>
     </Pressable>
   );
 }

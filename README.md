@@ -49,6 +49,15 @@ Tous les scripts se lancent avec `uv run --env-file .env …` pour la lire.
 uv run --env-file .env python -m surprise.local_store --db data/surprise.db
 ```
 
+Ménage des activités passées (dernière séance, fin de période, ou rejet « passé ») que nul historique ne garde (étape
+d'une soirée choisie, vote d'un compte) : pages brutes, fiche, modération, enrichissement, mots-clés, disponibilités, et
+les étapes des soirées jamais choisies qui les montraient. Sans `--apply`, compte seulement, par source :
+
+```bash
+uv run --env-file .env python -m surprise.purge
+uv run --env-file .env python -m surprise.purge --apply
+```
+
 Les migrations (`supabase/migrations/`) s'appliquent au Supabase du projet avec `supabase db push`, qui ne passe que
 celles que son historique (`supabase_migrations.schema_migrations`) ne connaît pas encore. L'historique a été remis à
 jour le 6 octobre 2026 (`supabase migration repair --status applied`, les 26 premières vérifiées une à une) : les
@@ -217,6 +226,9 @@ moteur `image`, revue après un mois) : l'activité n'est plus proposée dans le
 moins d'un mois sont passées (`--refresh` pour tout revoir). Les parcours vérifient en plus les images de leurs étapes
 avant de les proposer, de la même façon : une image morte y est d'abord remplacée par celle du site officiel ;
 sans elle, ou si l'image ne répond pas, l'étape est remplacée.
+
+À l'essai, ces filtres sont coupés (`IMAGE_FILTERS = False` dans `surprise/parcours.py`) : une activité sans photo, ou à
+la photo morte, peut être proposée, et l'app montre alors sa bannière (ci-dessous). `True` les remet.
 
 Dans l'app, une image d'étape qui ne charge pas est redemandée après 2 s, puis signalée au serveur
 (`POST /api/images/broken`), qui la revérifie et la remplace ou la note morte de la même façon ; à défaut, l'étape

@@ -888,7 +888,11 @@ def pick(routes: list[Route], count: int = 3, taken: list[Route] | None = None) 
     return chosen[len(taken or []):]
 
 
-# Images checked by this process: an evening never shows a step without its photo.
+# The photo filters: an activity without a photo, or whose photo is dead or does not show now, is never proposed.
+# Off to try evenings without them: a step without its photo shows the app's picture of its kind (app/src/lib/step-images.ts).
+IMAGE_FILTERS = False
+
+# Images checked by this process: an evening never shows a step without its photo (IMAGE_FILTERS).
 _IMAGES: dict[str, bool] = {}
 
 
@@ -896,8 +900,10 @@ def unshown(steps: list[Step]) -> set:
     """The activities of these steps whose image a page cannot show: dead, refused, or not answering now.
 
     A dead image is first replaced by the official site's when that one shows (`_replace_dead`). Each image is
-    checked once per process.
+    checked once per process. None without the photo filters.
     """
+    if not IMAGE_FILTERS:
+        return set()
     todo = list({images.of(s.candidate.item) for s in steps} - _IMAGES.keys() - {None})
     if todo:
         with httpx.Client(timeout=8, follow_redirects=True, headers=BROWSER_HEADERS) as client, ThreadPoolExecutor(8) as pool:
@@ -1525,8 +1531,9 @@ def _weekday(day: date) -> str:
 
 
 def shown(item: dict[str, Any]) -> bool:
-    """An evening's step is shown with a photo and a text: an activity lacking either is never proposed."""
-    return bool(images.of(item)) and bool(item["enrichment"].get("description") or (item.get("lead_text") or "").strip())
+    """An evening's step is shown with a photo and a text: an activity lacking either is never proposed (a photo only
+    with IMAGE_FILTERS)."""
+    return (not IMAGE_FILTERS or bool(images.of(item))) and bool(item["enrichment"].get("description") or (item.get("lead_text") or "").strip())
 
 
 @dataclass
@@ -1538,8 +1545,8 @@ class Base:
 
     @classmethod
     def load(cls, store: LocalStore) -> "Base":
-        # Nor an image recorded dead (python -m surprise.images).
-        dead = {url for url, (engine, closed, _) in store.page_checks().items() if engine == images.CHECK and closed}
+        # Nor an image recorded dead (python -m surprise.images), with the photo filters.
+        dead = {url for url, (engine, closed, _) in store.page_checks().items() if engine == images.CHECK and closed} if IMAGE_FILTERS else set()
         items = [
             item for item in store.list_for_moderation()
             if item["status"] not in ("rejected", "filtered") and shown(item) and images.of(item) not in dead

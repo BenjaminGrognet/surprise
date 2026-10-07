@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import { Platform, StyleSheet, Text, type TextProps, type TextStyle } from 'react-native';
 
 import { Fonts, ThemeColor } from '@/constants/theme';
@@ -34,9 +35,15 @@ function neon(style: TextStyle, clue: boolean, white: string, lit: string): Text
   };
 }
 
+// Over a band's mirror wall (IntrigueCard): a line not lit in neon gets a drop shadow, to read over the tiles (not the
+// ink of a filled pill or button), and an aside in see-through cream turns full white.
+export const OverWall = createContext(false);
+const HALO: TextStyle = { textShadowColor: '#000000', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } };
+
 export function ThemedText({ style, type = 'default', themeColor, children, ...rest }: ThemedTextProps) {
   const theme = useTheme();
   const squad = usePalette() === 'squad';
+  const overWall = useContext(OverWall);
   const flat = StyleSheet.flatten([
     { color: theme[themeColor ?? (type === 'eyebrow' ? 'textSecondary' : 'text')] },
     type === 'default' && styles.default,
@@ -52,8 +59,11 @@ export function ThemedText({ style, type = 'default', themeColor, children, ...r
     style,
   ]);
 
+  const lit: TextStyle = squad ? neon(flat, type === 'clue', theme.text, theme.accent) : flat;
+  const haloed = overWall && !lit.textShadowRadius && lit.color !== theme.background && lit.color !== theme.onAccent;
+  const shown = haloed ? { ...lit, ...HALO, ...(lit.color === theme.creamSoft ? { color: theme.cream } : null) } : lit;
   return (
-    <Text style={squad ? neon(flat, type === 'clue', theme.text, theme.accent) : flat} {...rest}>
+    <Text style={shown} {...rest}>
       {typeof children === 'string' ? keepTogether(children) : children}
     </Text>
   );

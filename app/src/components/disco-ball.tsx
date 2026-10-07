@@ -5,7 +5,7 @@ import Svg, { ClipPath, Circle, Defs, G, LinearGradient, RadialGradient, Rect, S
 // and fuchsia, and the gold.
 
 // A seeded draw, so the ball is the same on every render and every phone.
-function seeded(seed: number) {
+export function seeded(seed: number) {
   let s = seed;
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
@@ -15,7 +15,7 @@ const H = 240;
 const TILE = 12;
 // From the tiles in the shade to those catching the light: black steel, and often the neons (cyan, gold, fuchsia).
 const STEEL = ['#0A0A0C', '#111114', '#18181D', '#202027', '#2A2A33', '#363642'];
-const GLINTS = ['#3FE0E6', '#E2BC6E', '#FF2BD6'];
+export const GLINTS = ['#3FE0E6', '#E2BC6E', '#FF2BD6'];
 
 // The card's mirror wall: a grid of tiles, each lit by its distance to a spot at the top right, a few of them flashing.
 function tiles() {
@@ -40,7 +40,7 @@ function tiles() {
 const TILES = tiles();
 
 // Behind a band's card: the mirror wall, the cyan neon's gleam at the top right and a fuchsia one at the foot left,
-// darkened under the text so it reads.
+// darkened under the text so it reads: the tiles glint above the title, they glow below.
 export function DiscoFacets({ id = 'disco' }: { id?: string }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -52,14 +52,14 @@ export function DiscoFacets({ id = 'disco' }: { id?: string }) {
             <Stop offset="1" stopColor="#3FE0E6" stopOpacity={0} />
           </RadialGradient>
           <RadialGradient id={`${id}-cold`} cx="4%" cy="100%" r="70%">
-            <Stop offset="0" stopColor="#FF2BD6" stopOpacity={0.5} />
-            <Stop offset="0.45" stopColor="#FF2BD6" stopOpacity={0.16} />
+            <Stop offset="0" stopColor="#FF2BD6" stopOpacity={0.32} />
+            <Stop offset="0.45" stopColor="#FF2BD6" stopOpacity={0.1} />
             <Stop offset="1" stopColor="#FF2BD6" stopOpacity={0} />
           </RadialGradient>
           <LinearGradient id={`${id}-shade`} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#0A0A0C" stopOpacity={0.05} />
-            <Stop offset="0.45" stopColor="#0A0A0C" stopOpacity={0.5} />
-            <Stop offset="1" stopColor="#0A0A0C" stopOpacity={0.75} />
+            <Stop offset="0" stopColor="#0A0A0C" stopOpacity={0.15} />
+            <Stop offset="0.35" stopColor="#0A0A0C" stopOpacity={0.68} />
+            <Stop offset="1" stopColor="#0A0A0C" stopOpacity={0.82} />
           </LinearGradient>
         </Defs>
         {TILES.map((t, i) => (
