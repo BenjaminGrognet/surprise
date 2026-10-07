@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { DiscoBall, DiscoFacets } from '@/components/disco-ball';
+import { DiscoFacets, NeonDiscoBall } from '@/components/disco-ball';
 import { EmeraldFacets } from '@/components/emerald-facets';
 import { LogoSecretDate } from '@/components/logo-secretdate';
 import { OverWall, ThemedText } from '@/components/themed-text';
@@ -85,12 +85,14 @@ export function PageCard({
   );
 }
 
-// The card's emblem, top left like an issuer's: the SecretDate monogram in a gold ring (Secret Squad's disco ball).
+// The card's emblem, top left like an issuer's: the SecretDate monogram in a gold ring (Secret Squad's disco ball in
+// neon, on the night so it lights up over the mirror wall).
 export function CardEmblem() {
   const theme = useTheme();
+  const squad = usePalette() === 'squad';
   return (
-    <View style={[styles.emblem, { borderColor: theme.goldSoft }]}>
-      {usePalette() === 'squad' ? <DiscoBall size={30} /> : <LogoSecretDate size={30} round />}
+    <View style={[styles.emblem, { borderColor: theme.goldSoft }, squad && { backgroundColor: theme.background }]}>
+      {squad ? <NeonDiscoBall size={30} /> : <LogoSecretDate size={30} round />}
     </View>
   );
 }

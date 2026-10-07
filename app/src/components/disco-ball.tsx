@@ -1,5 +1,5 @@
 import { StyleSheet, View } from 'react-native';
-import Svg, { ClipPath, Circle, Defs, G, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { ClipPath, Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 // Secret Squad's jewel, where Secret Date has its emerald: a disco ball, mirror tiles throwing back its neons, cyan
 // and fuchsia, and the gold.
@@ -117,6 +117,44 @@ export function DiscoBall({ size = 30 }: { size?: number }) {
           <Rect key={i} x={c.x + 0.8} y={c.y + 0.8} width={c.w - 1.6} height={c.h - 1.6} rx={1} fill={c.fill} />
         ))}
         <Circle cx={50} cy={50} r={50} fill="url(#ball-light)" />
+      </G>
+    </Svg>
+  );
+}
+
+// The band's emblem in a card's ring: a disco ball drawn as a neon sign, hung from its mount, gold fading to fuchsia,
+// each line over two wider, fainter strokes of itself for its glow.
+const R = 32;
+const NEON_BALL = (
+  <>
+    <Rect x={30} y={4} width={40} height={9} rx={1.5} />
+    <Rect x={41} y={13} width={18} height={6} rx={1} />
+    <Path d="M50 19v7" />
+    <Rect x={43} y={26} width={14} height={5} rx={1} />
+    <Circle cx={50} cy={64} r={R} />
+    <Path d={`M50 ${64 - R}v${2 * R}`} />
+    <Ellipse cx={50} cy={64} rx={18} ry={R} />
+    {[-18, 0, 18].map((dy) => {
+      const half = Math.sqrt(R * R - dy * dy);
+      return <Path key={dy} d={`M${50 - half} ${64 + dy}H${50 + half}`} />;
+    })}
+  </>
+);
+
+export function NeonDiscoBall({ size = 30 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100" accessibilityLabel="Secret Squad">
+      <Defs>
+        <LinearGradient id="neon-ball" x1="0" y1="4" x2="0" y2="96" gradientUnits="userSpaceOnUse">
+          <Stop offset="0" stopColor="#FFD15C" />
+          <Stop offset="0.45" stopColor="#FF8A5B" />
+          <Stop offset="1" stopColor="#FF2BD6" />
+        </LinearGradient>
+      </Defs>
+      <G fill="none" stroke="url(#neon-ball)" strokeLinecap="round" strokeLinejoin="round">
+        <G strokeWidth={14} strokeOpacity={0.12}>{NEON_BALL}</G>
+        <G strokeWidth={7} strokeOpacity={0.25}>{NEON_BALL}</G>
+        <G strokeWidth={3.6}>{NEON_BALL}</G>
       </G>
     </Svg>
   );
