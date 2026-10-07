@@ -6,3 +6,5 @@ data/
 # Firebase's service account key (surprise.push): never in the repository
 *firebase-adminsdk*.json
 firebase-service-account*.json
+secretdate-firebas.json
+app/google-services.json
