@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 
@@ -17,6 +17,8 @@ import {
   accountProfile, currentUser, signOut, deleteMyAccount, myTastes, saveTaste, type AccountProfile, type TasteRow,
 } from '@/lib/account';
 import { getQuiz, type QuizData } from '@/lib/api';
+import type { NotifyState } from '@/lib/notifications';
+import { askPush, pushState } from '@/lib/push';
 import { supabaseConfigured } from '@/lib/supabase';
 
 export default function CompteScreen() {
@@ -91,6 +93,7 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
       />
       <CoupleProfile />
       <CoupleTastes />
+      <PushNotifications />
       <TextLink href="/historique">Mes soirées →</TextLink>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
       <DeleteAccount onDeleted={onSignOut} />
@@ -175,6 +178,38 @@ function CoupleTastes() {
             <TextButton onPress={() => setAll(!all)}>{all ? 'Moins' : `Tout voir (${rows.length})`}</TextButton>
           ) : null}
         </View>
+      )}
+      {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
+    </View>
+  );
+}
+
+// The server's notifications on this device (lib/push.ts), allowed here for each device of the account; nothing where
+// they can't reach it (iOS, a browser without push, Firebase not configured).
+function PushNotifications() {
+  const [state, setState] = useState<NotifyState>('unsupported');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    pushState().then(setState).catch(() => {});
+  }, []);
+  if (state === 'unsupported') return null;
+  const closed = Platform.OS === 'web' ? 'même la page fermée' : 'même l’app fermée';
+  const ask = () => {
+    setError('');
+    askPush().then(setState).catch(() => setError('Les notifications n’ont pas pu être activées sur cet appareil : réessayez.'));
+  };
+  return (
+    <View style={styles.section}>
+      <ThemedText type="eyebrow">Notifications</ThemedText>
+      {state === 'granted' ? (
+        <Notice>{`Activées sur cet appareil : Secret Date vous y prévient, ${closed}.`}</Notice>
+      ) : state === 'denied' ? (
+        <Notice>Refusées sur cet appareil : autorisez-les dans les réglages du navigateur ou du téléphone.</Notice>
+      ) : (
+        <>
+          <Notice>{`Recevez les notifications de Secret Date sur cet appareil, ${closed}.`}</Notice>
+          <GhostButton onPress={ask}>Activer les notifications</GhostButton>
+        </>
       )}
       {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
     </View>

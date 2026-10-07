@@ -10,7 +10,7 @@ Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo), `c
 uv run pytest
 # Dans app/, Docker Desktop ouvert : un Supabase local (jamais celui du projet), puis les comptes et les
 # notifications (Jest) et le site dans un navigateur (Playwright : compte, soirée, étape changée, passager invité,
-# soirée Secret Squad)
+# soirée Secret Squad, notifications push)
 npm run db:start
 npm test
 npm run e2e
@@ -492,8 +492,52 @@ Tout est reprogrammé au retour dans l'app et à chaque changement (soirée gard
 dévoilement), et effacé à la déconnexion ; hors ligne, rien ne bouge. Toucher une notification ouvre sa page. Les
 coulisses de l'instigateur montrent la semaine du passager telle que son téléphone la dira.
 
-Limites : sans push envoyé par un serveur, le téléphone du passager n'apprend un changement (plan B, mode) qu'en
-rouvrant l'app. L'icône Android des notifications (monochrome) reste à fournir avant publication.
+Limites : les pushes du serveur (ci-dessous) ne disent encore rien des soirées ; le téléphone du passager n'apprend un
+changement (plan B, mode) qu'en rouvrant l'app. L'icône Android des notifications (monochrome) reste à fournir avant
+publication.
+
+### Notifications push (Firebase Cloud Messaging)
+
+Les pushes envoyés par le serveur (`app/src/lib/push.ts` côté app, `surprise.push` côté serveur), sur le web et Android :
+- **Activation** : Mon compte › Notifications, « Activer les notifications » demande la permission. Le jeton FCM de
+  l'appareil est alors gardé pour le compte (table `push_tokens`, fonction `register_push_token`). Il est repris à
+  chaque démarrage (FCM le renouvelle) et oublié à la déconnexion. Un appareil n'a qu'un compte : connecté à un autre,
+  son jeton le suit.
+- **Web** : le SDK web de Firebase et son service worker (`app/public/firebase-messaging-sw.js`). Le push s'affiche même
+  la page fermée ; le toucher ouvre sa page.
+- **Android** : le jeton FCM natif d'expo-notifications. Accepter les notifications du téléphone (indices, rappels) le
+  garde aussi. Il faut `app/google-services.json` (pris par `app.config.js` s'il est là) et une build de développement.
+- **iOS** : pas de FCM, qui demanderait le SDK natif de Firebase ; ses notifications locales restent.
+
+Le message est le même partout : des données seules (`title`, `message`, et `body`, un JSON de la page à ouvrir), le
+format qu'expo-notifications affiche. Un jeton que FCM ne connaît plus (app désinstallée, permission retirée) est oublié
+à l'envoi. Rien n'est encore envoyé automatiquement : les pushes des soirées sont à brancher sur `surprise.push.send`.
+
+Mise en place, dans la console Firebase (un projet) :
+1. Paramètres du projet › Vos applications : une app Web, dont les valeurs vont dans `app/.env` ; puis Cloud Messaging ›
+   Certificats Web Push : générer la paire de clés (la clé VAPID).
+2. Une app Android `fr.secretdate.app` : son `google-services.json` dans `app/`.
+3. Comptes de service › Générer une nouvelle clé privée : le fichier JSON hors du dépôt (par exemple dans `data/`,
+   ignoré par git), son chemin dans `.env`.
+4. La migration `push_tokens` appliquée au Supabase du projet (`supabase db push`, plus haut).
+
+```bash
+# app/.env, lu au build : publiques par nature, comme la clé anon
+EXPO_PUBLIC_FIREBASE_API_KEY=...
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
+EXPO_PUBLIC_FIREBASE_SENDER_ID=...
+EXPO_PUBLIC_FIREBASE_APP_ID=...
+EXPO_PUBLIC_FIREBASE_VAPID_KEY=...
+# .env, pour le serveur seulement : la clé du compte de service (son chemin, ou son contenu JSON)
+FIREBASE_SERVICE_ACCOUNT=data/firebase-service-account.json
+```
+
+```bash
+# un push test vers chaque appareil du compte
+uv run --env-file .env python -m surprise.push vous@exemple.fr
+# simulé : ce que FCM recevrait, sans rien envoyer
+uv run --env-file .env python -m surprise.push vous@exemple.fr --dry-run
+```
 
 Le widget de l'écran d'accueil (« Prochaine soirée »), `app/src/lib/widget.ts` pour ce qu'il montre, `src/widgets/`
 pour son dessin. Il montre :

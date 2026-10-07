@@ -43,7 +43,11 @@ export async function askNotify(): Promise<NotifyState> {
   const N = await lib();
   await channels(N);
   const { status } = await N.requestPermissionsAsync();
-  if (status === 'granted') syncPhone(0);
+  if (status === 'granted') {
+    syncPhone(0);
+    // The server's pushes too (lib/push.ts), on Android.
+    import('@/lib/push').then((push) => push.registerPush()).catch(() => {});
+  }
   return status === 'granted' ? 'granted' : 'denied';
 }
 

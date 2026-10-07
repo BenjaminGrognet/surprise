@@ -16,6 +16,7 @@ import { myRole, type CoupleState } from '@/lib/couple';
 import { claimDevice } from '@/lib/local-store';
 import { onNotificationOpen } from '@/lib/notifications';
 import { clearPhone, syncPhone } from '@/lib/phone';
+import { onPushTokenChange, registerPush } from '@/lib/push';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 
 // The navigator's own surfaces (between screens, behind a transition) in the brand's night.
@@ -84,19 +85,22 @@ export default function RootLayout() {
 
   // The phone's notifications and widget (lib/phone.ts) told again from the account's evenings: once signed in, when a
   // passager joins (their role changes), and whenever the app comes back to the front. A touch on a notification opens
-  // its page.
+  // its page. The server's pushes (lib/push.ts) reach this device for the account, once allowed, its token renewed.
   const account = couple?.userId;
   const role = couple?.role;
   useEffect(() => {
     if (!account) return;
     syncPhone(0);
+    registerPush().catch(() => {});
     const foreground = AppState.addEventListener('change', (state) => {
       if (state === 'active') syncPhone();
     });
     const opened = onNotificationOpen((url) => router.push(url as Href));
+    const renewed = onPushTokenChange();
     return () => {
       foreground.remove();
       opened();
+      renewed();
     };
   }, [account, role]);
 

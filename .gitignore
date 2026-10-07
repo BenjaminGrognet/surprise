@@ -3,3 +3,6 @@ __pycache__/
 .pytest_cache/
 data/
 .env
+# Firebase's service account key (surprise.push): never in the repository
+*firebase-adminsdk*.json
+firebase-service-account*.json

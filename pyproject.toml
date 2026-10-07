@@ -5,6 +5,7 @@ description = "Collecte d'activités de couple originales à Paris"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=1.8.0",
+    "google-auth>=2.60.0",
     "httpx>=0.28.1",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.7",

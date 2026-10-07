@@ -15,5 +15,13 @@ try {
 } catch {
   console.log('Comptes : aucun (Supabase local pas lancé)');
 }
+// A Firebase project of the tests' own, never app/.env's: the browser tests stand in for Google (e2e/push.spec.ts).
+Object.assign(env, {
+  EXPO_PUBLIC_FIREBASE_API_KEY: 'e2e-api-key',
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: 'secret-date-e2e',
+  EXPO_PUBLIC_FIREBASE_SENDER_ID: '424242',
+  EXPO_PUBLIC_FIREBASE_APP_ID: '1:424242:web:e2e',
+  EXPO_PUBLIC_FIREBASE_VAPID_KEY: 'BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc',
+});
 // --clear: Metro's cache would keep the variables of the last build.
 execSync('npx expo export -p web --output-dir dist-e2e --clear', { cwd: path.resolve(__dirname, '..'), env, stdio: 'inherit' });

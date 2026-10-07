@@ -3,6 +3,7 @@
 import { currentUser, supabase } from '@/lib/supabase';
 import type { Formule, Profile } from '@/lib/api';
 import type { RevealMode } from '@/lib/clues';
+import { forgetPush } from '@/lib/push';
 import { removePhotos } from '@/lib/souvenirs';
 
 export { currentUser };
@@ -39,7 +40,11 @@ export async function signUp(email: string, password: string) {
   if (error) throw authError(error);
 }
 
-export const signOut = () => supabase.auth.signOut();
+// The server's pushes reach this device no more for the account (lib/push.ts): forgotten while still signed in.
+export async function signOut() {
+  await forgetPush().catch(() => {});
+  await supabase.auth.signOut();
+}
 
 export type AccountProfile = { id: string; answers: Record<string, unknown>; profile: Profile };
 
