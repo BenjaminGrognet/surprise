@@ -14,8 +14,8 @@ and tastes come from the profile, when there is one. From both,
 surprise.parcours composes the evening.
 
 An evening is a couple's (Secret Date) or a band of friends' (Secret Squad,
-?formule=squad): 2 to 10, its own wishes, occasions and budgets per person, the
-band's settings in place of the couple's profile.
+?formule=squad): 2 to 10, its own wishes, occasions and budgets per person; no profile, everything
+from the order of the evening, what the band never wants included.
 
     uv run python -m surprise.quiz            # http://127.0.0.1:8001
 
@@ -253,8 +253,8 @@ DEFAULT_END = "00:30"
 MOODS = ["cocooning", "romantique", "nous", "curieux", "surprise"]
 
 # Secret Squad: an evening for a band of friends (a hen or stag party, a birthday, a farewell drink…), with its own
-# wishes, occasions and budgets, per person as a band counts. A couple's profile is not the band's: the band's
-# settings (squad_profile) apply, the account's votes and its evenings done still do.
+# wishes, occasions and budgets, per person as a band counts. No profile, nor the account's votes: everything comes
+# from the order of the evening (squad_profile), what the band never wants included; only the evenings done still count.
 # From two: an evening out with a friend is no date. Ten at most: of 48 activities bookable online (checked for
 # 2026-10-16), 27 seated two, 26 six, 16 ten, only 9 twelve.
 SQUAD_PERSONNES = {"min": 2, "max": 10, "default": 6}
@@ -273,7 +273,6 @@ def _wish(value: str, **changes: Any) -> dict[str, Any]:
 
 
 SQUAD_ENVIES: list[dict[str, Any]] = [
-    {"value": "bande", "label": "Fidèles à la bande", "icon": "bande", "emoji": "🤘", "vibes": []},
     {"value": "trinquer", "label": "Trinquer", "icon": "verre", "emoji": "🍻", "vibes": ["savourer", "rire"], "start": "18:30"},
     _wish("fete"),
     _wish("rire", label="Rire aux larmes"),
@@ -285,9 +284,12 @@ SQUAD_ENVIES: list[dict[str, Any]] = [
     _wish("creer", label="Créer ensemble"),
     _wish("curieux"),
     _wish("air"),
-    _wish("surprise"),
+    # A couple's surprise takes its profile's vibes; a band has none, so its own.
+    _wish("surprise", vibes=["rire", "defi"]),
 ]
-SQUAD_MOODS = ["trinquer", "rire", "bande", "jouer", "fete"]
+SQUAD_MOODS = ["trinquer", "rire", "jouer", "chanter", "fete"]
+# What the band never wants, asked with the order: the quiz's refusals, the couple's profile not applying.
+SQUAD_EVITER: list[dict[str, Any]] = next(q for q in QUESTIONS if q["id"] == "eviter")["options"]
 # The vibes said as a band says them (a kept evening's moods, in its history); the others keep their words.
 SQUAD_VIBE_LABELS = {
     "bouger": "Se dépenser ensemble", "defi": "Défis entre potes", "rire": "Fous rires", "creer": "Créer ensemble",
@@ -304,9 +306,10 @@ SQUAD_OCCASIONS: list[dict[str, Any]] = [
 ]
 
 
-def squad_profile() -> dict[str, Any]:
-    """The band's settings, in place of a couple's profile: what a group shares, a little daring, the usual budget."""
-    return profile_from({}) | {"vibes": ["rire", "fete", "savourer", "defi"], "budget": SQUAD_BUDGET * SQUAD_PERSONNES["default"]}
+def squad_profile(eviter: list[str] | None = None) -> dict[str, Any]:
+    """The band's settings, from its order alone (no couple's profile): what a group shares, a little daring, the usual
+    budget, and what it said it never wants (`eviter`: SQUAD_EVITER values)."""
+    return profile_from({"eviter": eviter or []}) | {"vibes": ["rire", "fete", "savourer", "defi"], "budget": SQUAD_BUDGET * SQUAD_PERSONNES["default"]}
 
 
 def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
@@ -535,7 +538,7 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
                     return self._send_json(HTTPStatus.OK, {
                         "formule": "squad", "envies": SQUAD_ENVIES, "moods": SQUAD_MOODS, "occasions": SQUAD_OCCASIONS,
                         "max": MAX_ENVIES, "starts": START_OPTIONS, "ends": END_OPTIONS, "budgets": SQUAD_BUDGET_OPTIONS,
-                        "personnes": SQUAD_PERSONNES,
+                        "personnes": SQUAD_PERSONNES, "eviter": SQUAD_EVITER,
                         "vibes": {key: SQUAD_VIBE_LABELS.get(key, v["label"]) for key, v in VIBES.items()},
                     })
                 self._send_json(HTTPStatus.OK, {
@@ -607,8 +610,8 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
         def _compose(self, body: dict[str, Any]) -> None:
             """An evening's routes: its wishes, occasion and day, with the profile given or default settings.
 
-            `formule` "squad": a band's evening (Secret Squad), for `personnes`; its budget is per person, and the
-            couple's profile gives way to the band's settings."""
+            `formule` "squad": a band's evening (Secret Squad), for `personnes`; its budget is per person, and nothing
+            but its order counts (`eviter`, what it never wants): no profile, no votes."""
             squad = body.get("formule") == "squad"
             party = body.get("personnes") if squad else 2
             if squad and not (isinstance(party, int) and not isinstance(party, bool) and SQUAD_PERSONNES["min"] <= party <= SQUAD_PERSONNES["max"]):
@@ -631,7 +634,8 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
             day = valid_day(body.get("day"))
             days = [date.fromisoformat(day)] if day else None
             if squad:
-                profile = squad_profile()
+                eviter = body.get("eviter") if isinstance(body.get("eviter"), list) else []
+                profile = squad_profile([e for e in eviter[:len(SQUAD_EVITER)] if isinstance(e, str)])
             elif body.get("profile") is None:
                 profile = profile_from({})
             elif (profile := valid_profile(body.get("profile"))) is None:
@@ -640,7 +644,7 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
             chosen = body.get("done") if isinstance(body.get("done"), list) else []
             chosen = [name for name in chosen[:200] if isinstance(name, str)]
             # Their votes on the steps of evenings before: the kinds liked come first, those voted out never.
-            votes = valid_votes(body.get("votes"))
+            votes = {} if squad else valid_votes(body.get("votes"))
             with open_store(db) as store:
                 found = base(store)
                 # Never again: the activities of the evenings chosen, and those voted down.

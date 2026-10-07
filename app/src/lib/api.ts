@@ -60,7 +60,7 @@ export const getQuiz = () => api<QuizData>('/api/quiz');
 export const saveProfile = (answers: Record<string, unknown>) =>
   api<{ profile: Profile }>('/api/profiles', { method: 'POST', body: JSON.stringify({ answers }) }).then((r) => r.profile);
 
-export type ChipOption = { value: string; label: string; emoji?: string; icon?: string };
+export type ChipOption = { value: string; label: string; desc?: string; emoji?: string; icon?: string };
 export type BudgetOption = { budget: number; label: string; desc?: string; emoji?: string; icon?: string };
 // Secret Date, a couple's evening, or Secret Squad, a band of friends' (surprise.quiz SQUAD_…).
 export type Formule = 'duo' | 'squad';
@@ -75,6 +75,7 @@ export type SoireeData = {
   budgets: BudgetOption[]; // a band's: per person
   personnes?: { min: number; max: number; default: number }; // a band's size
   vibes?: Record<string, string>; // a band's words for the vibes
+  eviter?: ChipOption[]; // what a band may never want, asked with its order (it has no profile)
 };
 export type Night = {
   // A band's evening (Secret Squad), for `personnes`, its budget per person; a couple's otherwise.
@@ -89,6 +90,8 @@ export type Night = {
   budget: number | null;
   day: string;
   profile: Profile | null;
+  // A band's: what it never wants (SoireeData.eviter values), in place of a profile's refusals.
+  eviter?: string[];
   // The evenings the couple chose (its history, by their pages): their activities are never proposed again.
   done?: string[];
   // Their votes on steps (lib/account.ts votesOf): the kinds of outing liked come first, those voted out never.

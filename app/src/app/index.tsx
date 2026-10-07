@@ -273,9 +273,9 @@ function Call({ icon, title, text, onPress }: { icon: string; title: string; tex
   );
 }
 
-// No profile yet: the quiz first, two minutes, so the evenings fit the couple.
+// No profile yet: the quiz, two minutes, so a couple's evenings fit them (a band's needs none).
 const ProfileCall = () => (
-  <Call icon="coeur" title="D’abord, faire notre profil" text="Deux minutes, pour des soirées à votre image" onPress={() => router.push('/profil')} />
+  <Call icon="coeur" title="Faire notre profil de couple" text="Deux minutes, pour des soirées à deux à votre image" onPress={() => router.push('/profil')} />
 );
 
 // The passager's turn: an evening of their own, whose secret they keep this time.

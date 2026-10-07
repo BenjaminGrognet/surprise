@@ -43,36 +43,37 @@ export const Colors = { light: brand, dark: brand } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-// Secret Squad's "Néon de minuit", for a band of friends' evenings: an asphalt night, blue-black, lit by an orange
-// neon sign — the Vegas strip at 3 a.m. as much as a hen party —, with the brand's champagne gold kept for what is
-// precious. Same words as the brand's: a screen wrapped in <PaletteProvider name="squad"> takes it whole.
+// Secret Squad's "Very Bad Night", for a band of friends' evenings: the Vegas strip at 4 a.m., an ink night lit by a
+// hot pink neon sign, electric yellow where the brand has its gold (figures, badges, its name), every surface outlined
+// in neon. Same words as the brand's: a screen wrapped in <PaletteProvider name="squad"> takes it whole, its headings
+// in Anton's poster capitals, lit (themed-text.tsx).
 const squad: Record<ThemeColor, string> = {
-  text: '#ECE8DF',
-  background: '#070A12',
-  backgroundElement: '#0F1420',
-  backgroundSelected: '#18202F',
-  textSecondary: '#959DAD',
-  line: 'rgba(232, 194, 122, 0.14)',
-  accent: '#FF7A3D',
-  accentInk: '#FF9A66',
-  accentSoft: 'rgba(232, 194, 122, 0.26)',
-  accentFaint: 'rgba(255, 122, 61, 0.24)',
-  satin: '#FF7A3D',
-  onAccent: '#170A03',
-  accentHair: 'rgba(232, 194, 122, 0.14)',
-  glass: 'rgba(236, 232, 223, 0.03)',
-  velvet: '#0F1420',
-  gold: '#E8C27A',
-  goldSoft: 'rgba(232, 194, 122, 0.5)',
-  glow: 'rgba(255, 122, 61, 0.3)',
-  cream: '#F3EEE4',
-  creamSoft: 'rgba(243, 238, 228, 0.62)',
-  creamFaint: 'rgba(243, 238, 228, 0.36)',
-  danger: '#F2727F',
-  dangerFaint: 'rgba(242, 114, 127, 0.14)',
-  ok: '#6FD3A8',
-  info: '#8DB8E8',
-  warn: '#E6B866',
+  text: '#FFF0F7', // the pink-white of a neon's core
+  background: '#0B0610', // ink, a hint of violet
+  backgroundElement: '#170B1F',
+  backgroundSelected: '#26102F',
+  textSecondary: '#B7A4C2', // lilac grey
+  line: 'rgba(255, 46, 147, 0.32)', // a neon pink hairline around every surface
+  accent: '#FF2E93', // hot pink neon: icons, a chosen option, the main button
+  accentInk: '#FF6DB4',
+  accentSoft: 'rgba(255, 46, 147, 0.75)', // a card's border: the tube, lit
+  accentFaint: 'rgba(255, 46, 147, 0.4)',
+  satin: '#FF2E93',
+  onAccent: '#1A0010',
+  accentHair: 'rgba(255, 46, 147, 0.3)',
+  glass: 'rgba(255, 240, 247, 0.04)',
+  velvet: '#170B1F',
+  gold: '#FFE03A', // electric yellow: figures, badges, the brand
+  goldSoft: 'rgba(255, 224, 58, 0.7)',
+  glow: 'rgba(255, 46, 147, 0.6)',
+  cream: '#FFF0F7',
+  creamSoft: 'rgba(255, 240, 247, 0.8)',
+  creamFaint: 'rgba(255, 240, 247, 0.42)',
+  danger: '#FF5C5C',
+  dangerFaint: 'rgba(255, 92, 92, 0.16)',
+  ok: '#3DF5A6',
+  info: '#38D9FF',
+  warn: '#FFE03A',
 };
 
 // The two formulas' looks: Secret Date (a couple, the brand) and Secret Squad (a band of friends).
@@ -81,8 +82,9 @@ export const Palettes: Record<PaletteName, Record<ThemeColor, string>> = { date:
 // Each one's name, on its cards like a card issuer's.
 export const Brands: Record<PaletteName, string> = { date: 'Secret Date', squad: 'Secret Squad' };
 
-// Cormorant Garamond for titles and names, Manrope for the text (loaded in _layout.tsx).
+// Cormorant Garamond for titles and names, Manrope for the text, Anton for Secret Squad's headings (loaded in _layout.tsx).
 export const Fonts = {
+  poster: 'Anton_400Regular', // Secret Squad's headings in place of the serif, by themed-text.tsx
   sans: 'Manrope_400Regular',
   sansThin: 'Manrope_200ExtraLight', // watchmaking-fine figures: the countdown
   sansLight: 'Manrope_300Light',

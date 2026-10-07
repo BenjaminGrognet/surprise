@@ -138,7 +138,7 @@ function Tabs({ tab, onTab, pending }: { tab: Tab; onTab: (tab: Tab) => void; pe
   );
 }
 
-// The instigateur's votes on the steps (hooks/use-tastes.ts), for the evenings to come.
+// The instigateur's votes on the steps (hooks/use-tastes.ts), for a couple's evenings to come: a band's are not voted on.
 type Votes = { votes: Record<string, Vote>; onVote: (step: SoireeStep, vote: Vote) => void };
 
 // L'Aventure: the evening as a silk thread, a fine gold line with each step hung on a glowing anchor.
@@ -171,7 +171,7 @@ function SilkThread({
             busy={swapping === step.id}
             onSwap={step.redo && Date.parse(step.start) > now && swapping === null ? () => onSwap(step) : null}
             vote={votes[step.id]}
-            onVote={step.role === 'nuit' ? null : (v) => onVote(step, v)}
+            onVote={step.role === 'nuit' || party.formule === 'squad' ? null : (v) => onVote(step, v)}
           />
         </View>
       ))}

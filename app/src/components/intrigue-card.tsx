@@ -11,7 +11,7 @@ import { Brands, Fonts, Radius, Spacing } from '@/constants/theme';
 import { usePalette, useTheme } from '@/hooks/use-theme';
 
 // The sealed invitation, cut like a membership card: a faceted emerald under a gold hairline, with its halo (a band's
-// evening, Secret Squad: a disco ball's mirror tiles).
+// evening, Secret Squad: a disco ball's mirror tiles behind a neon tube, glowing inside and out).
 // Centred by default; `align="start"` lays it out like the card itself, from the left.
 export function IntrigueCard({
   children, onPress, align = 'center', label,
@@ -26,7 +26,11 @@ export function IntrigueCard({
       accessibilityLabel={label}
       style={({ pressed }) => [
         styles.card,
-        { borderColor: theme.accentSoft, backgroundColor: theme.backgroundElement, boxShadow: `0 24px 48px -24px ${theme.glow}` },
+        {
+          borderColor: theme.accentSoft, backgroundColor: theme.backgroundElement,
+          boxShadow: squad ? `0 0 26px -4px ${theme.glow}, inset 0 0 22px -10px ${theme.glow}` : `0 24px 48px -24px ${theme.glow}`,
+        },
+        squad && styles.tube,
         pressed && styles.pressed,
       ]}>
       {squad ? <DiscoFacets /> : <EmeraldFacets />}
@@ -89,12 +93,14 @@ export function CardEmblem() {
   );
 }
 
-// A gold outlined pill in spaced capitals, like a membership tier: "INSTIGATEUR", "≈ 180 € À DEUX".
+// A gold outlined pill in spaced capitals, like a membership tier: "INSTIGATEUR", "≈ 180 € À DEUX". Secret Squad's is a
+// sticker: filled with its electric yellow, in the night's ink.
 export function Badge({ children }: { children: string }) {
   const theme = useTheme();
+  const squad = usePalette() === 'squad';
   return (
-    <View style={[styles.badge, { borderColor: theme.goldSoft }]}>
-      <ThemedText style={[styles.badgeLabel, { color: theme.gold }]}>{children}</ThemedText>
+    <View style={[styles.badge, { borderColor: theme.goldSoft }, squad && { backgroundColor: theme.gold, borderColor: theme.gold, transform: [{ rotate: '-2deg' }] }]}>
+      <ThemedText style={[styles.badgeLabel, { color: squad ? theme.background : theme.gold }]}>{children}</ThemedText>
     </View>
   );
 }
@@ -135,6 +141,7 @@ function Unit({ value, label }: { value: number; label: string }) {
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: Radius.card, overflow: 'hidden' },
+  tube: { borderWidth: 1.5 },
   pressed: { opacity: 0.9 },
   body: { padding: Spacing.four - 2, gap: Spacing.two },
   centred: { alignItems: 'center' },

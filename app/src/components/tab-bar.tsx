@@ -8,9 +8,9 @@ import { DiscoBall } from '@/components/disco-ball';
 import { Icon } from '@/components/ui-icons';
 import { Spacing, type PaletteName } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
-import { usePalette, useTheme } from '@/hooks/use-theme';
+import { PaletteProvider, usePalette, useTheme } from '@/hooks/use-theme';
 import { upcomingEvenings, type EveningHistoryRow } from '@/lib/account';
-import { eveningRole } from '@/lib/couple';
+import { eveningRole, isSquad } from '@/lib/couple';
 import { eveningDay } from '@/lib/dates';
 
 const BAR_HEIGHT = 68;
@@ -28,12 +28,10 @@ type Item = { icon: string; label: string; href: Href | null; active: boolean; c
 // intrigue for the instigateur, the next evening's clues for the passager —, the instigateur's compass to the next
 // evening (its guide on the day) or the passager's own new intrigue, and the account, where the couple's profile now
 // lives. Every icon is drawn in emerald, as the home's calls; only the tab one is on is lit, as the jewel: an emerald
-// disc, its icon in the night's ink, a halo under it.
+// disc, its icon in the night's ink, a halo under it. On a band's pages (its form, its evening), in Secret Squad's neon.
 export function TabBar() {
-  const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const path = usePathname();
-  const params = useGlobalSearchParams<{ soiree?: string }>();
+  const params = useGlobalSearchParams<{ soiree?: string; formule?: string }>();
   const { role, userId } = useCouple();
   const [upcoming, setUpcoming] = useState<EveningHistoryRow[]>([]);
   // The passager's key opens the next evening they are surprised by, else the next one they compose.
@@ -64,6 +62,18 @@ export function TabBar() {
       { icon: 'profil', label: 'Mon compte', href: '/compte', active: path === '/compte' || path === '/profil' },
     ];
 
+  const squad = (path === '/soiree' && params.formule === 'squad')
+    || (path === '/revelation' && isSquad(upcoming.find((e) => e.page_name === params.soiree)));
+  return (
+    <PaletteProvider name={squad ? 'squad' : 'date'}>
+      <Dock items={items} />
+    </PaletteProvider>
+  );
+}
+
+function Dock({ items }: { items: Item[] }) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   // Home unwinds the stack back to it; any other tab comes back to its page if it is already open, else opens it.
   const go = (item: Item) => {
     if (!item.href || item.active) return;

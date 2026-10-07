@@ -325,9 +325,9 @@ test('the instigateur votes on steps: kept on the account, sent with the next ev
   expect(next.composed.routes.flatMap((r) => r.steps).map((s) => s.id)).not.toContain(down.id);
 });
 
-const NEON = 'rgb(255, 122, 61)';
+const NEON = 'rgb(255, 46, 147)';
 
-test('a band’s evening: its own look, eight of them, its guests by one link and its complices by another', async ({ page, browser }) => {
+test('a band’s evening: its own look, no profile, eight of them, its guests by one link and its complices by another', async ({ page, browser }) => {
   await page.goto('/');
   await createAccount(page, 'cerveau');
   await page.getByText('Lancer une nouvelle intrigue').click();
@@ -338,7 +338,18 @@ test('a band’s evening: its own look, eight of them, its guests by one link an
   await expect(page).toHaveURL(/formule=squad/);
 
   // The band's form: its neon, its number, its wishes and occasions; no night out.
-  await expect(page.getByText('Quelle virée pour la bande ?')).toBeVisible();
+  const title = page.getByText('Quelle virée pour la bande ?');
+  await expect(title).toBeVisible();
+  // Its headings in poster capitals, lit, where a couple's are in a serif.
+  const look = await title.evaluate((t) => {
+    const css = getComputedStyle(t);
+    return { font: css.fontFamily, transform: css.textTransform, glow: css.textShadow };
+  });
+  expect(look).toMatchObject({ font: expect.stringContaining('Anton'), transform: 'uppercase' });
+  expect(look.glow).not.toBe('none');
+  // No profile asked nor applied: nothing of the couple's quiz, nor a wish that would take its vibes.
+  await expect(page.getByText(/profil|Faire le quiz/).filter({ visible: true })).toHaveCount(0);
+  await expect(page.getByText('Fidèles à la bande', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Secret Squad', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Et quand la nuit tombe ?')).toHaveCount(0);
   await expect(page.getByText('Romantique', { exact: true })).toHaveCount(0);
@@ -353,16 +364,23 @@ test('a band’s evening: its own look, eight of them, its guests by one link an
   await page.getByText('Rire aux larmes', { exact: true }).click();
   await page.getByText('Un EVJF ou un EVG', { exact: true }).click();
   await page.getByText('Non, déjà mangé').click();
+  // What the band never wants, asked with the order in place of a profile's refusals.
+  await expect(page.getByText('Ce que la bande ne veut pas')).toBeVisible();
+  await page.getByText("L'alcool", { exact: true }).click();
   const button = page.getByText('Tramer la virée à 8', { exact: true });
   expect(await button.evaluate((label) => getComputedStyle(label.parentElement!).backgroundColor)).toBe(NEON);
   const composing = posted(page, /^\/api\/soirees$/);
   await button.click();
   const response = await composing;
   const composed: ComposedSoiree = await response.json();
-  expect(response.request().postDataJSON()).toMatchObject({ formule: 'squad', personnes: 8, occasion: 'evjf', envies: ['rire'], decoucher: false, profile: null });
+  expect(response.request().postDataJSON()).toMatchObject({
+    formule: 'squad', personnes: 8, occasion: 'evjf', envies: ['rire'], decoucher: false, profile: null, eviter: ['alcool'], votes: {},
+  });
   expect(composed).toMatchObject({ formule: 'squad', personnes: 8 });
   expect(composed.routes.length).toBeGreaterThan(0);
   await expect(page.getByText('Trois virées pour la bande')).toBeVisible();
+  // A band's steps are not voted on: the couple's tastes are not the band's.
+  await expect(page.getByRole('checkbox', { name: 'On aime ce genre' })).toHaveCount(0);
   // Each one's share, never the couple's price.
   await expect(page.getByText(/€\/pers\.$/).first()).toBeVisible();
   await expectImagesAndTexts(page, composed.routes[0].steps);

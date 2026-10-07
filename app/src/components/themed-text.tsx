@@ -1,7 +1,7 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
+import { Platform, StyleSheet, Text, type TextProps, type TextStyle } from 'react-native';
 
 import { Fonts, ThemeColor } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { usePalette, useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
   type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'eyebrow' | 'clue' | 'link' | 'linkPrimary' | 'code';
@@ -11,26 +11,45 @@ export type ThemedTextProps = TextProps & {
 // French typography: a no-break space before ? ! : ; » and after «, so a sign never wraps alone onto a line.
 const keepTogether = (text: string) => text.replace(/ ([?!:;»])/g, '\u00a0$1').replace(/« /g, '«\u00a0');
 
+// Secret Squad speaks in neon: where Secret Date sets a serif, Anton's poster capitals, a fifth smaller (they stand
+// taller), lit in their own colour once big enough to glow; a clue, a sentence to read, in plain sans.
+const SERIFS: (string | undefined)[] = [Fonts.heading, Fonts.headingBold, Fonts.headingItalic];
+
+function neon(style: TextStyle, clue: boolean): TextStyle {
+  if (!SERIFS.includes(style.fontFamily)) return style;
+  if (clue) return { ...style, fontFamily: Fonts.sansMedium, fontSize: Math.round((style.fontSize ?? 19) * 0.85) };
+  const fontSize = Math.round((style.fontSize ?? 15) * 0.8);
+  return {
+    ...style,
+    fontFamily: Fonts.poster,
+    fontSize,
+    lineHeight: Math.round(fontSize * 1.18),
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    ...(fontSize >= 16 && typeof style.color === 'string' ? { textShadowColor: style.color, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } } : null),
+  };
+}
+
 export function ThemedText({ style, type = 'default', themeColor, children, ...rest }: ThemedTextProps) {
   const theme = useTheme();
+  const squad = usePalette() === 'squad';
+  const flat = StyleSheet.flatten([
+    { color: theme[themeColor ?? (type === 'eyebrow' ? 'textSecondary' : 'text')] },
+    type === 'default' && styles.default,
+    type === 'title' && styles.title,
+    type === 'small' && styles.small,
+    type === 'smallBold' && styles.smallBold,
+    type === 'subtitle' && styles.subtitle,
+    type === 'eyebrow' && styles.eyebrow,
+    type === 'clue' && styles.clue,
+    type === 'link' && styles.link,
+    type === 'linkPrimary' && styles.linkPrimary,
+    type === 'code' && styles.code,
+    style,
+  ]);
 
   return (
-    <Text
-      style={[
-        { color: theme[themeColor ?? (type === 'eyebrow' ? 'textSecondary' : 'text')] },
-        type === 'default' && styles.default,
-        type === 'title' && styles.title,
-        type === 'small' && styles.small,
-        type === 'smallBold' && styles.smallBold,
-        type === 'subtitle' && styles.subtitle,
-        type === 'eyebrow' && styles.eyebrow,
-        type === 'clue' && styles.clue,
-        type === 'link' && styles.link,
-        type === 'linkPrimary' && styles.linkPrimary,
-        type === 'code' && styles.code,
-        style,
-      ]}
-      {...rest}>
+    <Text style={squad ? neon(flat, type === 'clue') : flat} {...rest}>
       {typeof children === 'string' ? keepTogether(children) : children}
     </Text>
   );

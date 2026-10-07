@@ -222,19 +222,29 @@ def test_a_bands_wishes_and_occasions_name_known_vibes_and_tags():
     # The mood cards are wishes, the band's never a couple's.
     assert set(quiz.MOODS) <= quiz.ENVIE_KEYS.keys() and set(quiz.SQUAD_MOODS) <= quiz.SQUAD_ENVIE_KEYS.keys()
     assert not {"romantique", "pimenter", "cocooning", "nous"} & quiz.SQUAD_ENVIE_KEYS.keys()
+    # No profile behind a band's wish: each one says its own vibes ("Fidèles à la bande" would have needed one).
+    assert all(wish["vibes"] for wish in quiz.SQUAD_ENVIES) and "bande" not in quiz.SQUAD_ENVIE_KEYS
 
 
 def test_a_bands_evening_is_its_own():
     band = quiz.squad_profile()
-    [hen] = quiz.requests_for(band, [date(2026, 10, 10)], ["bande", "chanter"], "evjf", budget=240, party=4, formule="squad")
+    [hen] = quiz.requests_for(band, [date(2026, 10, 10)], ["surprise", "chanter"], "evjf", budget=240, party=4, formule="squad")
     assert (hen.party, hen.formule, hen.budget) == (4, "squad", 240) and hen.squad
-    # "Fidèles à la bande": the band's vibes, not a couple's romance; a hen party's offers and karaoke come first.
+    # "Surprenez-nous": the band's own vibes, not a couple's romance; a hen party's offers and karaoke come first.
     assert "romantique" not in hen.vibes and {"rire", "fete"} <= set(hen.vibes)
     assert {"evjf", "karaoke", "quiz"} <= hen.prefer
     # The same word, another occasion: a band's birthday is a party, a couple's a romantic dinner.
     [birthday] = quiz.requests_for(band, [date(2026, 10, 10)], ["fete"], "anniversaire", party=8, formule="squad")
     [theirs] = quiz.requests_for(band, [date(2026, 10, 10)], ["fete"], "anniversaire")
     assert "romantique" not in birthday.vibes and "romantique" in theirs.vibes and not theirs.squad
+
+
+def test_what_a_band_never_wants_comes_with_its_order():
+    # The quiz's refusals, asked with the order: no alcohol nor swimsuit for this band, whatever it wishes.
+    band = quiz.squad_profile(["alcool", "maillot", "inconnu"])
+    [evening] = quiz.requests_for(band, [date(2026, 10, 10)], ["trinquer"], party=6, formule="squad")
+    assert {"cocktails", "vin", "spa", "baignade"} <= evening.avoid
+    assert not quiz.squad_profile()["avoid"] and {o["value"] for o in quiz.SQUAD_EVITER} >= {"alcool", "peur", "effort"}
 
 
 def test_a_band_says_its_vibes_its_own_way():

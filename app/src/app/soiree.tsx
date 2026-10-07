@@ -57,6 +57,8 @@ export default function SoireeScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mood, setMood] = useState(MIDDLE_MOOD);
   const [secrets, setSecrets] = useState<string[]>([]);
+  // What the band never wants (Secret Squad): asked with the order, a band having no profile.
+  const [eviter, setEviter] = useState<string[]>([]);
   const [night, setNight] = useState<Night>({
     envies: [], diner: null, decoucher: false, occasion: null, start: null, end: null, budget: null, day: nextFriday(), profile: null,
   });
@@ -74,7 +76,8 @@ export default function SoireeScreen() {
       setData(soiree);
       // A band says its vibes its own way.
       setVibes({ ...quiz.vibes, ...soiree.vibes });
-      const remembered = await rememberedProfile();
+      // A couple's profile; a band's evening comes from its order alone.
+      const remembered = formule === 'duo' ? await rememberedProfile() : null;
       if (remembered) {
         setProfile(remembered.profile);
         setNight((n) => ({
@@ -91,6 +94,7 @@ export default function SoireeScreen() {
     if (chosen !== formule) {
       setData(null);
       setSecrets([]);
+      setEviter([]);
       setMood(MIDDLE_MOOD);
       setNight((n) => ({ ...n, occasion: null, budget: null, decoucher: false }));
     }
@@ -148,8 +152,11 @@ export default function SoireeScreen() {
     setStatus('composing');
     try {
       const signedIn = !!(await currentUser());
-      const [history, votes] = signedIn ? await Promise.all([eveningsHistory().catch(() => []), myTastes().catch(() => [])]) : [[], []];
-      const band = squad ? { formule: 'squad' as const, personnes, profile: null, decoucher: false } : { formule: 'duo' as const };
+      // A band's evening: neither the couple's profile nor its votes, only the evenings done (never the same activity twice).
+      const [history, votes] = signedIn
+        ? await Promise.all([eveningsHistory().catch(() => []), squad ? [] : myTastes().catch(() => [])])
+        : [[], []];
+      const band = squad ? { formule: 'squad' as const, personnes, profile: null, decoucher: false, eviter } : { formule: 'duo' as const };
       const fresh = await composeSoiree({ ...night, ...band, envies, done: history.map((h) => h.page_name), votes: votesOf(votes) });
       setComposed(fresh);
       router.setParams({ soiree: fresh.name });
@@ -221,7 +228,9 @@ export default function SoireeScreen() {
             ? "Élargissez les horaires, le budget ou les envies, et relancez l'intrigue."
             : chosen
               ? undefined
-              : `Une étape ne vous plaît pas ? Changez-la ou retirez-la, et d'un pouce dites-nous si son genre vous plaît : les prochaines soirées en tiendront compte. Une fois gardée, ${surprised}.`}>
+              : band
+                ? `Une étape ne vous plaît pas ? Changez-la ou retirez-la. Une fois gardée, ${surprised}.`
+                : `Une étape ne vous plaît pas ? Changez-la ou retirez-la, et d'un pouce dites-nous si son genre vous plaît : les prochaines soirées en tiendront compte. Une fois gardée, ${surprised}.`}>
           {chosen && inHistory ? (
             <PrimaryLink href={{ pathname: '/revelation', params: { soiree: composed.name } }}>Ouvrir la révélation</PrimaryLink>
           ) : null}
@@ -245,7 +254,7 @@ export default function SoireeScreen() {
             onRedo={redo}
             onChoose={() => choose(route)}
             votes={tastes.votes}
-            onVote={tastes.vote}
+            onVote={band ? undefined : tastes.vote}
           />
         ))}
       </Screen>
@@ -254,6 +263,7 @@ export default function SoireeScreen() {
 
   const toggleSecret = (value: string) =>
     setSecrets((s) => (s.includes(value) ? s.filter((v) => v !== value) : s.length < data.max - 1 ? [...s, value] : s));
+  const toggleEviter = (value: string) => setEviter((e) => (e.includes(value) ? e.filter((v) => v !== value) : [...e, value]));
   const toggleOccasion = (value: string) => setNight((n) => ({ ...n, occasion: n.occasion === value ? null : value }));
   const toggleStart = (value: string) => setNight((n) => ({ ...n, start: n.start === value ? null : value }));
   const toggleEnd = (value: string) => setNight((n) => ({ ...n, end: n.end === value ? null : value }));
@@ -270,7 +280,7 @@ export default function SoireeScreen() {
           <PageCard
             badge="Squad"
             title="Quelle virée pour la bande ?"
-            text="Une soirée secrète entre potes : un EVJF, un anniversaire, des retrouvailles ou juste l'envie. Le profil du couple ne s'applique pas, on trame pour la bande ; les invités ne verront que les indices.">
+            text="Une soirée secrète entre potes : un EVJF, un anniversaire, des retrouvailles ou juste l'envie. Tout se décide ici, pour la bande ; les invités ne verront que les indices.">
             <TextButton onPress={() => pickFormule('duo')}>← Plutôt une soirée à deux</TextButton>
           </PageCard>
         ) : (
@@ -367,6 +377,17 @@ export default function SoireeScreen() {
             ))}
           </OptionGrid>
         </Section>
+
+        {squad && data.eviter ? (
+          <Section title="Ce que la bande ne veut pas" hint="Aucune étape ne le proposera. Autant de réponses que vous voulez.">
+            <OptionGrid>
+              {data.eviter.map((o) => (
+                <OptionCard key={o.value} label={o.label} desc={o.desc} icon={o.icon} emoji={o.emoji} selected={eviter.includes(o.value)}
+                  onPress={() => toggleEviter(o.value)} />
+              ))}
+            </OptionGrid>
+          </Section>
+        ) : null}
 
         <DayField label="Le jour J" value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />
 

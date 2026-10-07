@@ -3,6 +3,7 @@
   "main": "index.js",
   "version": "1.0.0",
   "dependencies": {
+    "@expo-google-fonts/anton": "^0.4.2",
     "@expo-google-fonts/cormorant-garamond": "^0.4.1",
     "@expo-google-fonts/manrope": "^0.4.2",
     "@expo/ui": "~57.0.20",

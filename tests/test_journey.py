@@ -195,6 +195,8 @@ def test_a_band_composes_and_keeps_its_evening(api):
     assert options["formule"] == "squad" and options["personnes"] == quiz.SQUAD_PERSONNES
     assert "evjf" in {o["value"] for o in options["occasions"]} and "romantique" not in {e["value"] for e in options["envies"]}
     assert all(b["desc"].startswith("Par personne") for b in options["budgets"])
+    # No profile for a band: what it never wants is asked with its order.
+    assert [o["value"] for o in options["eviter"]] == [o["value"] for o in quiz.SQUAD_EVITER] and "eviter" not in json.loads(urlopen(f"{api.url}/api/soiree").read())
     assert options["vibes"]["rire"] == "Fous rires" and options["vibes"]["cultiver"] == "Se cultiver"
     assert json.loads(urlopen(f"{api.url}/api/soiree").read())["formule"] == "duo"
 

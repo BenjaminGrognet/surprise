@@ -1,3 +1,4 @@
+import { Anton_400Regular } from '@expo-google-fonts/anton';
 import {
   CormorantGaramond_500Medium, CormorantGaramond_500Medium_Italic, CormorantGaramond_600SemiBold,
 } from '@expo-google-fonts/cormorant-garamond';
@@ -39,6 +40,7 @@ export default function RootLayout() {
     CormorantGaramond_500Medium,
     CormorantGaramond_500Medium_Italic,
     CormorantGaramond_600SemiBold,
+    Anton_400Regular,
   });
   const path = usePathname();
   // null while the stored session is read. Without accounts configured, everything stays locked.
