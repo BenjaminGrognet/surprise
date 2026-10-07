@@ -2,8 +2,12 @@
 
 The score adds up explainable signals, each with its reason, so it can be
 tuned like the tags:
-- what the activity is: tags of offbeat places and experiences (hidden bar,
-  underground, in the dark, flotation, immersive), "lieu insolite" category;
+- what the outing is, how far from an ordinary evening (a restaurant, a film, a
+  concert: nothing): an escape game, a karaoke, a workshop are not done every
+  week, a dinner in the dark hardly ever. From its tags (title and venue) and
+  from what its texts say an evening there holds (karaoke, blind tests,
+  performers, an immersive set), as a bar's name rarely tells; "lieu insolite"
+  category;
 - how rare it is in the base: an activity whose kind (its rarest tag) is rare
   here is more original than the hundredth stand-up;
 - what its texts say: keywords "insolite", "secret", "immersif", "éphémère"…;
@@ -24,17 +28,37 @@ from typing import Any
 from surprise.keywords import extract, texts
 from surprise.tags import describe
 
-_OFFBEAT_TAGS = {
-    "cache": 14, "souterrain": 14, "dans_le_noir": 16, "flottaison": 14, "defouloir": 12, "immersif": 10,
-    "frisson": 6, "sur_l_eau": 5, "vue": 4, "chandelles": 6, "drag": 8, "magie": 6, "cirque": 5,
-    "murder_party": 8, "escape_game": 4, "jeu_de_piste": 6, "artisanat": 5, "parfum_bougie": 5, "shooting": 5,
+# How far from an ordinary evening each kind of outing is, by its tags (a restaurant, a film, a concert: 0).
+_NATURE = {
+    "dans_le_noir": 32, "flottaison": 32, "defouloir": 30, "murder_party": 30, "escape_game": 28, "immersif": 28,
+    "souterrain": 28, "cache": 26, "hauteur": 26, "karaoke": 24, "jeu_de_piste": 24, "drag": 24, "magie": 22,
+    "cirque": 22, "cabaret": 22, "coquin": 22, "shooting": 22, "artisanat": 22, "ceramique": 22, "parfum_bougie": 22,
+    "jeu_video": 20, "quiz": 18, "jeu_actif": 18, "mixologie": 18, "cuisine": 18, "peinture_dessin": 18, "floral": 18,
+    "mini_golf": 15, "jeux_de_societe": 15, "sur_l_eau": 14, "chandelles": 14, "vin": 12, "comedie_musicale": 10,
+    "danse": 10, "vue": 10, "massage": 10, "spa": 10, "degustation": 10, "frisson": 10,
 }
+# A workshop's tags, which a restaurant or a bar has in its name ("La Cuisine de…", "Gin Bar"): not one.
+_WORKSHOP = {"cuisine", "mixologie", "vin", "peinture_dessin", "floral"}
+# What an evening there holds, said in its texts only (a bar's name rarely tells): label, points, pattern. A label
+# that is a tag's ("karaoke") is not counted twice when the title already says it.
+_NATURE_TEXTS = [
+    ("karaoke", 24, re.compile(r"karaok", re.IGNORECASE)),
+    ("quiz", 18, re.compile(r"blind[- ]tests?|\bquiz", re.IGNORECASE)),
+    ("performeurs, show", 20, re.compile(r"performeu|cracheurs? de feu|effeuill|burlesque|drag queens?|acrobat|show (?:de|live)", re.IGNORECASE)),
+    ("immersif", 20, re.compile(r"décors? immersif|univers immersif|immersion totale|décors? de cinéma", re.IGNORECASE)),
+    ("soirée à thème", 20, re.compile(
+        r"halloween|bal masqué|soirée (?:costumée|déguisée|à thème)|déguis|entièrement décoré|décor(?:é|ations?) (?:d'halloween|pour l'occasion)",
+        re.IGNORECASE,
+    )),
+]
+# A setting out of the ordinary, said in the title or the venue's name (a text's "near Château-Rouge" is not one).
+_SETTING = re.compile(r"ch[âa]teaux?(?![- ](?:rouge|d'eau|landon)| de cartes)|manoir|abbaye|hôtel particulier", re.IGNORECASE)
 _OFFBEAT_WORDS = {
     "insolite": 8, "secret": 8, "mystérieux": 5, "immersif": 5, "interactif": 4, "éphémère": 5,
     "cave voûtée": 5, "dans le noir": 6, "aux chandelles": 4, "rétro / vintage": 3, "atelier d'artisan": 4,
     "privatisé": 3, "coucher de soleil": 3, "sensations": 3, "bohème": 3,
 }
-_CURATED = {"paris_zigzag": 12, "selections_couple": 12, "paris_secret": 10, "le_bonbon": 8, "time_out": 6, "paris_friendly": 6, "paris_city_game": 6}
+_CURATED = {"paris_zigzag": 12, "selections_couple": 12, "selections_squad": 12, "paris_secret": 10, "le_bonbon": 8, "time_out": 6, "paris_friendly": 6, "paris_city_game": 6}
 # Classics every visitor does: good, but nothing to tell.
 _COMMON = re.compile(
     r"tour eiffel|bateaux?[- ]mouches?|bateaux parisiens|croisière (?:commentée|d'une heure)|louvre|arc de triomphe|"
@@ -75,14 +99,22 @@ class Scorer:
         # A classic's boat or view is what everyone does: no bonus for its setting nor its rarity here.
         common = bool(_COMMON.search(title))
 
-        offbeat = sorted(
-            ((_OFFBEAT_TAGS[t], t) for t in found["tags"] if t in _OFFBEAT_TAGS and not (common and t in ("vue", "sur_l_eau"))),
-            reverse=True,
-        )
-        if offbeat:
-            value += min(24, sum(points for points, _ in offbeat))
-            reasons.append("cadre ou expérience insolite : " + ", ".join(t.replace("_", " ") for _, t in offbeat[:2]))
-        if "lieu_insolite" in (activity.get("categories") or []):
+        categories = set(activity.get("categories") or [])
+        nature = {
+            t.replace("_", " "): _NATURE[t] for t in found["tags"]
+            if t in _NATURE and not (common and t in ("vue", "sur_l_eau")) and not (t in _WORKSHOP and {"restaurant", "bar"} & categories)
+        }
+        text = texts(item)
+        nature |= {label: points for label, points, pattern in _NATURE_TEXTS if label not in nature and pattern.search(text)}
+        if _SETTING.search(title):
+            nature["château, manoir"] = 16
+        if nature:
+            # The most unusual of what it is, and half the next: a murder party in a hidden place, a Halloween night in a
+            # castle, a karaoke with performers.
+            best = sorted(nature.items(), key=lambda pair: -pair[1])
+            value += min(40, best[0][1] + (best[1][1] / 2 if len(best) > 1 else 0))
+            reasons.append("hors du quotidien : " + ", ".join(label for label, _ in best[:2]))
+        if "lieu_insolite" in categories:
             value += 10
             reasons.append("lieu insolite")
 
@@ -113,10 +145,10 @@ class Scorer:
             value -= 12
             reasons.append("grande salle")
         # Only for places to eat or drink: a tour's meeting point may be "in front of Five Guys".
-        if {"restaurant", "bar"} & set(activity.get("categories") or []) and _CHAIN.search(title):
+        if {"restaurant", "bar"} & categories and _CHAIN.search(title):
             value -= 20
             reasons.append("chaîne")
-        if "restaurant" in (activity.get("categories") or []) and _GENERIC_CUISINE.search(title):
+        if "restaurant" in categories and _GENERIC_CUISINE.search(title):
             value -= 8
             reasons.append("cuisine courante")
         return Originality(max(0, min(100, round(value))), reasons)

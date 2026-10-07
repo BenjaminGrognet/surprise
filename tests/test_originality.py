@@ -35,3 +35,34 @@ def test_chains_only_count_for_places_to_eat():
     tour = item("Visite de Montmartre", ["visite"], venue="Devant le restaurant Five Guys, métro Blanche")
     burger = item("Five Guys Opéra", ["restaurant"])
     assert "chaîne" not in scorer.score(tour).reasons and "chaîne" in scorer.score(burger).reasons
+
+
+def test_an_outing_out_of_the_ordinary_by_nature():
+    # An escape game is not done every week: by what it is, well above a restaurant, without any text saying so.
+    scorer = Scorer([])
+    escape, restaurant = scorer.score(item("Escape game : Mission Mars", ["jeux"])), scorer.score(item("Chez Léa", ["restaurant"]))
+    assert escape.score >= 55 and restaurant.score <= 35
+    assert "hors du quotidien : escape game" in escape.reasons
+    # A restaurant named after a workshop's tag ("La Cuisine de…") is no cooking class.
+    assert not [r for r in scorer.score(item("La Cuisine de Léa", ["restaurant"])).reasons if r.startswith("hors du quotidien")]
+
+
+def test_texts_tell_what_an_evening_there_holds():
+    # A bar's name says nothing; the media's text says karaoke, blind tests and performers.
+    text = "Bar-restaurant festif : karaoké endiablé, blind-tests, performeurs, un décor immersif."
+    bar = Scorer([]).score(item("Casa Loca", ["bar"], source_id="selections_squad", lead_text=text))
+    plain = Scorer([]).score(item("Casa Loca", ["bar"], source_id="privateaser", lead_text="Un bar à cocktails."))
+    assert bar.score >= 70 and plain.score <= 35
+    assert any(r.startswith("hors du quotidien : karaoke") for r in bar.reasons) and "repéré par un média de curation" in bar.reasons
+    # A quiz said in the title and the text counts once.
+    quiz = Scorer([]).score(item("Quiz game", ["jeux"], lead_text="Un quiz entre amis"))
+    assert quiz.reasons[0] == "hors du quotidien : quiz"
+
+
+def test_a_themed_night_in_a_castle():
+    scorer = Scorer([])
+    night = scorer.score(item("Soirée Halloween au Château de Vincennes", ["concert"], lead_text="Château entièrement décoré, concert et animations."))
+    visit = scorer.score(item("Visite du Château de Vincennes", ["visite"]))
+    play = scorer.score(item("Un Château de Cartes", ["theatre"]))
+    assert night.score > visit.score > play.score
+    assert night.score >= 55 and "château, manoir" not in " ".join(play.reasons)
