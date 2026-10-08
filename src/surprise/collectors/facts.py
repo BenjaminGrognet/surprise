@@ -185,7 +185,7 @@ def complete_place(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: datetime, window: timedelta = WINDOW) -> Normalized:
+def normalize_facts(raw: RawRecord, facts: dict[str, Any], now: datetime, window: timedelta = WINDOW) -> Normalized:
     """An activity for a couple or a band of friends in Paris intra-muros, or why the record is rejected."""
     name = " ".join((facts.get("name") or "").split())
     if not name:
@@ -248,7 +248,7 @@ def normalize_facts(raw: RawRecord, facts: dict[str, Any], license: str, now: da
             ends_on=ends_on,
             duration_minutes=facts.get("duration_minutes") or None,
             website=safe_url(facts.get("website")),
-            image=Image(url=image, license=license, source_url=raw.url) if safe_url(image) else None,
+            image=Image(url=image, source_url=raw.url) if safe_url(image) else None,
             is_evening=evening,
             venue=venue,
             categories=categorize(" ".join(filter(None, [name, facts.get("category_text")])), venue.name, facts.get("tags")),

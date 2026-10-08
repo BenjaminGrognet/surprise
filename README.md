@@ -6,23 +6,31 @@ Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo), `c
 ## Tests
 
 ```bash
-# Python : collecte, composition, le parcours du couple par l'API
+# Python : collecte, composition, le parcours du couple par l'API (~45 s)
 uv run pytest
-# Dans app/, Docker Desktop ouvert : un Supabase local (jamais celui du projet), puis les comptes et les
-# notifications (Jest) et le site dans un navigateur (Playwright : compte, soirée, étape changée, passager invité,
-# soirée Secret Squad, notifications push)
+# Dans app/, Docker Desktop ouvert : un Supabase local pour les comptes, puis les comptes et les notifications
+# (Jest, ~20 s) et le site dans un navigateur (Playwright : compte, soirée, étape changée, passager invité, soirée
+# Secret Squad, notifications push)
 npm run db:start
 npm test
 npm run e2e
 ```
 
-Les tests de l'API et du navigateur composent aussi sur de vraies activités de la base, un quartier
-(`tests/fixtures/catalogue.json`, sans les textes des médias), avec leurs images chargées en direct depuis les sites.
-Les dates sont décalées au jour du test. Pour reprendre l'extrait quand la base a changé (lecture seule) :
+Les tests de l'API (`tests/test_real_catalogue.py`) et du navigateur composent sur les **activités de prod** : celles
+du Supabase du projet (`SUPABASE_DB_URL` de `.env`, lu même sans `--env-file`), pour le vendredi qui vient, comme l'app
+le propose. Elles sont lues par une connexion qui refuse toute écriture (`PostgresStore(read_only=True)`), puis gardées
+12 h dans `data/tests/` (les lire prend une quinzaine de secondes) ; la base est recalculée à chaque lancement avec le
+code du moment (filtres, tags, originalité). Comptes, soirées, candidats et vérifications restent dans le Supabase local
+ou le store du test : rien n'est jamais écrit en prod, et aucun moteur de réservation n'est interrogé (pas de dîner :
+il en faut une table confirmée en direct). Sans `.env` ni copie gardée, ces tests sont sautés et le site des tests ne
+démarre pas. Pour relire la prod tout de suite :
 
 ```bash
-uv run --env-file .env python tests/snapshot_catalogue.py
+SURPRISE_PROD_REFRESH=1 uv run pytest tests/test_real_catalogue.py
 ```
+
+`npm test` reprend la réponse de `supabase status` (`node_modules/.cache`, revérifiée en une requête), et `npm run e2e`
+ne refait le build web que si l'app ou ses variables ont changé (`E2E_REBUILD=1` pour le forcer).
 
 ## Collecteurs
 
@@ -67,7 +75,8 @@ migrations d'avant avaient été passées à la main. Depuis `app/`, avec l'URL 
 uv run --env-file ../.env sh -c 'npx supabase db push --workdir .. --db-url "$SUPABASE_DB_URL" --dry-run'
 ```
 
-Puis sans `--dry-run` si la liste est la bonne.
+Puis sans `--dry-run` si la liste est la bonne. À passer depuis le 8 octobre 2026 : `20261011000000_no_licenses.sql`
+(plus de licence sur les sources ni les images) et `20261012000000_courriers.sql` (les emails).
 
 ### Collecte complète
 
@@ -90,7 +99,7 @@ uv run --env-file .env python -m surprise.collect --limit 50
 uv run --env-file .env python -m surprise.collect --source fever --source tiqets --refresh --minutes 20
 ```
 
-Paris ZigZag (média de curation : nom, lieu, dates, lien officiel et photo de l'article, pas de texte ; ses listes pour
+Paris ZigZag (média de curation : nom, lieu, dates, lien officiel, photo et texte de l'article ; ses listes pour
 une bande d'amis, EVJF et karaokés, `paris_zigzag.GROUP_ARTICLES`, lues d'abord quel que soit leur âge) :
 
 ```bash
@@ -206,7 +215,7 @@ uv run python -m surprise.enrich
 - Réservation : lien « Réserver » du site officiel si la fiche n'en a pas ; si le lien de la fiche mène à la page
   du spectacle sur le site du lieu, son bouton « Acheter » vers la billetterie.
 - Description : par défaut, sans appel extérieur, les premières phrases (280 caractères au plus) du texte de la
-  source (`lead_text` : texte de la fiche ou de l'article, gardé pour ce prototype perso), sinon de l'extrait du
+  source (`lead_text` : texte de la fiche ou de l'article), sinon de l'extrait du
   site officiel, nettoyées (balises, titre de page, listes, emojis) ; `description_model` vaut alors `extrait`.
   Avec `--claude`, rédigée par Claude (`ANTHROPIC_API_KEY`, modèle `SURPRISE_LLM_MODEL`, `claude-opus-5-5` par
   défaut). Une activité déjà enrichie ne reçoit que sa description, sans rien télécharger.
@@ -504,9 +513,55 @@ Tout est reprogrammé au retour dans l'app et à chaque changement (soirée gard
 dévoilement), et effacé à la déconnexion ; hors ligne, rien ne bouge. Toucher une notification ouvre sa page. Les
 coulisses de l'instigateur montrent la semaine du passager telle que son téléphone la dira.
 
-Limites : les pushes du serveur (ci-dessous) ne disent encore rien des soirées ; le téléphone du passager n'apprend un
-changement (plan B, mode) qu'en rouvrant l'app. L'icône Android des notifications (monochrome) reste à fournir avant
+Limites : le téléphone du passager n'apprend un changement (plan B, mode) qu'en rouvrant l'app ; les emails et les pushes
+web (ci-dessous) partent, eux, du serveur. L'icône Android des notifications (monochrome) reste à fournir avant
 publication.
+
+### Emails (et pushes web) des soirées
+
+`surprise.courriers` envoie par email, en plus des notifications, les moments clés de chaque soirée gardée, et les mêmes
+en push aux navigateurs qui l'ont accepté (sur le web, aucune notification locale ne sonne ; les téléphones gardent les
+leurs) :
+- **l'instigateur** : la soirée gardée (ses réservations à faire, avec leurs liens, et le lien d'invitation tant que
+  personne n'a rejoint), les réservations encore à faire à J-3 (18 h), l'invitation pas encore envoyée à J-2, le Livre
+  des Secrets le lendemain, et trois semaines après, la prochaine intrigue (sauf si une autre soirée est gardée) ;
+- **le passager** : le pli scellé à J-7 (le jour et l'heure, rien d'autre ; tout de suite s'il rejoint plus tard), la
+  veille, le Livre des Secrets, et à J+4 « À votre tour » (sauf s'il a composé une soirée depuis) ;
+- **les complices** d'une soirée de bande : les réservations encore à faire et le Livre des Secrets ;
+- **une adresse donnée dans l'app** : l'invitation par email (carte « Votre passager » ou « Votre bande », champ
+  « Ou par email »), tout de suite. Fonction `invite_by_email` : l'instigateur seul (ou un complice, pour le lien des
+  invités), une adresse valide, une soirée à venir, au plus 20 par jour et par compte et quelques-unes par soirée
+  (migration `20261012000000_courriers.sql`).
+
+Chaque moment part une fois (`pipeline.courriers`), entre 9 h et 21 h (sauf une invitation), tant qu'il a un sens. Personne
+ne reçoit ce qu'il a arrêté : Mon compte › Emails (`public.email_prefs`), ou le lien en bas de chaque email
+(`/compte?stop=…&t=…`, signé par `MAIL_SECRET`, aussi en un clic depuis la messagerie, `List-Unsubscribe`, vers
+`POST /api/courriels/stop`), qui note l'adresse (`pipeline.courriels_stop`). Les emails ont leur texte et leur HTML, aux
+couleurs de la nuit et de l'or ; leurs liens mènent à l'app (`APP_URL`), ceux des réservations sont des liens partenaires
+quand un programme est configuré (plus bas, « Liens partenaires »).
+
+Le connecteur est le SMTP de n'importe quel fournisseur (Brevo, Mailjet, Resend, Gmail, OVH…), `surprise.mail` :
+
+```bash
+# .env, pour le serveur seulement
+SMTP_URL=smtps://utilisateur:mot-de-passe@smtp-relay.brevo.com:465   # smtp://…:587 pour STARTTLS
+MAIL_FROM=Secret Date <bonjour@secretdate.fr>
+MAIL_SECRET=une-longue-phrase-secrete   # signe les liens qui arrêtent les emails
+APP_URL=https://secretdate.fr           # l'adresse publique de l'app (http://127.0.0.1:8001 par défaut)
+```
+
+```bash
+# ce qui partirait maintenant, sans rien envoyer
+uv run --env-file .env python -m surprise.courriers --dry-run
+# un passage, ou un toutes les dix minutes
+uv run --env-file .env python -m surprise.courriers
+uv run --env-file .env python -m surprise.courriers --loop 10
+# ou avec le serveur, un passage toutes les dix minutes tant qu'il tourne
+uv run --env-file .env python -m surprise.quiz --courriers
+```
+
+Sans `SMTP_URL`, aucun email ne part (les pushes web, si `FIREBASE_SERVICE_ACCOUNT` est là) ; sans `MAIL_SECRET`, le lien
+en bas des emails mène à Mon compte, où les arrêter.
 
 ### Notifications push (Firebase Cloud Messaging)
 
@@ -523,7 +578,8 @@ Les pushes envoyés par le serveur (`app/src/lib/push.ts` côté app, `surprise.
 
 Le message est le même partout : des données seules (`title`, `message`, et `body`, un JSON de la page à ouvrir), le
 format qu'expo-notifications affiche. Un jeton que FCM ne connaît plus (app désinstallée, permission retirée) est oublié
-à l'envoi. Rien n'est encore envoyé automatiquement : les pushes des soirées sont à brancher sur `surprise.push.send`.
+à l'envoi. Les moments clés des soirées partent en push vers les navigateurs avec les emails (`surprise.courriers`, plus
+haut) ; les téléphones Android ont leurs notifications locales.
 
 Mise en place, dans la console Firebase (un projet) :
 1. Paramètres du projet › Vos applications : une app Web, dont les valeurs vont dans `app/.env`. Une clé Web Push
@@ -590,6 +646,22 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 
 Sans ces variables, l'app reste fermée : `/compte` annonce que les comptes ne sont pas configurés. Dans les réglages Auth
 de Supabase, désactiver la confirmation par email a du sens pour un usage personnel à deux.
+
+### Liens partenaires (affiliation)
+
+Les liens « Réserver » des soirées servies par l'API (`parcours.soiree_json`) et des emails deviennent des liens
+partenaires dès que l'identifiant du programme est dans `.env` (`surprise.affiliation` ; démarches dans
+[docs/affiliation.md](docs/affiliation.md)) ; sans lui, ou pour un site sans programme, le lien reste tel quel. Le nom de
+la page de la soirée sert de sous-identifiant (quelle soirée a mené à une réservation, rien sur le couple) ; `partner`
+le dit sur chaque étape, et Mon compte prévient que certains liens sont partenaires.
+
+```bash
+# .env
+GETYOURGUIDE_PARTNER_ID=...   # ?partner_id=…&cmp=<page>
+CIVITATIS_AID=...             # ?aid=…&cmp=<page>
+AWIN_PUBLISHER_ID=...         # le lien profond d'Awin, clickref=<page>
+AWIN_MERCHANTS=fnacspectacles.com:1234,thefork.fr:5678,tiqets.com:9012   # l'identifiant de chaque site sur Awin
+```
 
 ## Modération
 

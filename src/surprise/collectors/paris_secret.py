@@ -13,9 +13,8 @@ Two kinds of blocks are read in the article body:
 
   named after the heading above them, else the article title.
 
-For this personal prototype the article text about each block (lead_text) and
-the photos are kept, for Claude to rewrite a description: to remove before any
-public use.
+The article text about each block (lead_text) and the photos are kept: the
+description is drawn from the text (or written by Claude).
 """
 
 import html
@@ -193,7 +192,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             kind=ActivityKind.TEMPORARY if starts_on or ends_on else ActivityKind.PERMANENT,
             starts_on=starts_on,
             ends_on=ends_on,
-            image=Image(url=payload["image_url"], license="Paris Secret", source_url=raw.url) if payload.get("image_url") else None,
+            image=Image(url=payload["image_url"], source_url=raw.url) if payload.get("image_url") else None,
             is_evening=evening,
             venue=venue,
             categories=categorize(name, venue.name),

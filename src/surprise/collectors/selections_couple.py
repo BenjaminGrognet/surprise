@@ -1,4 +1,4 @@
-"""Collector for couple-outing selections (blog and guide articles, tier 3: discovery signal).
+"""Collector for couple-outing selections (blog and guide articles, tier 3).
 
 Articles listing date ideas in Paris (Hati Hati, Ryo, Love'n'Room, LoveCapsule,
 Funbooker's blog, Petit Futé): each h2-h4 heading names an idea, the text down
@@ -159,7 +159,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
-    return normalize_facts(to_raw_record(payload), payload, "Sélections couple", now)
+    return normalize_facts(to_raw_record(payload), payload, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

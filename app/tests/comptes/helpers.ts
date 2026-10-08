@@ -12,7 +12,7 @@ export const admin = createClient(url, process.env.SUPABASE_TEST_SERVICE_KEY ?? 
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-export type Account = { email: string; password: string; id: string };
+export type Account = { email: string; password: string; id: string; session: { access_token: string; refresh_token: string } };
 
 const unique = () => Math.random().toString(36).slice(2, 10);
 
@@ -28,19 +28,21 @@ export const PHOTO = {
 export const PAST = '2020-06-12';
 export const FUTURE = '2099-06-12';
 
-// A new account, created through the app's form, and signed in.
+// A new account, created through the app's form, and signed in. The one signed in before keeps its session on the
+// server, as on another phone: `as` takes it back without its password (a sign-in hashes it: a quarter of a second).
 export async function newAccount(label: string): Promise<Account> {
   const email = `${label}-${unique()}@example.com`;
   const password = `secret-${unique()}`;
-  await signOut();
   await signUp(email, password);
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) throw new Error(`${email} : pas connecté après la création du compte`);
-  return { email, password, id: data.user.id };
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) throw new Error(`${email} : pas connecté après la création du compte`);
+  const { access_token, refresh_token } = data.session;
+  return { email, password, id: data.session.user.id, session: { access_token, refresh_token } };
 }
 
-// Signed in as this account, and only this one.
+// Signed in as this account, and only this one: its session taken back, or its password once it signed out.
 export async function as(account: Account) {
+  if (!(await supabase.auth.setSession(account.session)).error) return;
   await signOut();
   await signIn(account.email, account.password);
 }

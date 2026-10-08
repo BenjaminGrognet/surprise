@@ -1,12 +1,11 @@
 import json
-import threading
 from datetime import date
-from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
 
+from serving import serving
 from surprise import parcours, quiz
 from surprise.categories import CATEGORIES
 from surprise.local_store import open_store
@@ -142,10 +141,7 @@ def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
     (web / "_expo" / "entry.js").write_text("app()", encoding="utf-8")
     (tmp_path / "secret.txt").write_text("hors du site", encoding="utf-8")
     monkeypatch.setattr(quiz, "WEB", web)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), quiz.make_handler(tmp_path / "s.db", checks=0))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        url = f"http://127.0.0.1:{server.server_port}"
+    with serving(quiz.make_handler(tmp_path / "s.db", checks=0)) as url:
         body = json.dumps({"answers": ANSWERS}).encode()
         created = json.load(urlopen(Request(f"{url}/api/profiles", data=body, headers={"Content-Type": "application/json"})))
         assert created["profile"]["persona"]["name"] == "Les Romantiques"
@@ -169,21 +165,17 @@ def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
                 assert error.code == code
             else:
                 raise AssertionError(body)
-    finally:
-        server.shutdown()
 
 
 def test_the_route_kept_is_the_pages_only_one(tmp_path, monkeypatch):
     from test_parcours import _night
 
     monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")  # make_handler sets it: put back after
-    server =ThreadingHTTPServer(("127.0.0.1", 0), quiz.make_handler(tmp_path / "s.db", checks=0))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
+    with serving(quiz.make_handler(tmp_path / "s.db", checks=0)) as site:
         req, _, route = _night()
         route.request = req
         parcours.save("essai", {"routes": [route, route], "requests": [req], "seen": set()})
-        url = f"http://127.0.0.1:{server.server_port}/api/parcours"
+        url = f"{site}/api/parcours"
         assert len(json.load(urlopen(f"{url}/essai"))["routes"]) == 2
 
         def choose(name, index):
@@ -196,8 +188,6 @@ def test_the_route_kept_is_the_pages_only_one(tmp_path, monkeypatch):
         with pytest.raises(HTTPError) as error:
             choose("essai", 1)
         assert error.value.code == 409
-    finally:
-        server.shutdown()
 
 
 def test_each_evening_says_whether_they_eat():

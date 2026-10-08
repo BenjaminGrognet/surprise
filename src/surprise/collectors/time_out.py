@@ -80,7 +80,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     # Its page title may follow: "Volver | Restaurants à Roquette".
     name = re.split(r",| \| ", payload.get("name") or "")[0].strip()
     facts = payload | {"name": name, "venue_name": name if payload.get("venue_name") else None}
-    return normalize_facts(to_raw_record(payload), facts, "Time Out", now)
+    return normalize_facts(to_raw_record(payload), facts, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

@@ -14,10 +14,9 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
   (`FRESH_DAYS` par collecteur, 7 jours par défaut ; `--refresh` pour forcer).
 - Enrichissement : descriptions extraites des textes par défaut, sans appel extérieur ; `--claude` seulement sur demande ;
   `--source` pour ne retraiter que les sources modifiées.
-- Images : prendre celles des sites (source ou site officiel) sans se soucier des licences pour
-  l'instant ; garder l'origine pour pouvoir changer de stratégie si le produit est commercialisé.
-- Textes : le texte des médias (Paris ZigZag, Paris-Friendly, Paris Secret, Sortir à Paris) est gardé (`lead_text`) pour que Claude en
-  rédige la description ; à retirer avant tout usage public.
+- Images : celles des sites (source ou site officiel), leur origine gardée (`image_origin`).
+- Textes : le texte des médias (Paris ZigZag, Paris-Friendly, Paris Secret, Sortir à Paris) est gardé (`lead_text`) : la
+  description en est tirée, ou rédigée par Claude (`--claude`).
 - Base : ne garder que des activités possibles pour un couple ou une bande d'amis (Secret Squad, 2 à 10 : offres
   EVJF/EVG, escape games à 3 ou plus), vraiment réservables ou gratuites ; le parcours choisit selon la formule ;
   les autres sont rejetées à la collecte. Exception : bars, clubs, boîtes de nuit et restaurants (dansants ou non)
@@ -31,6 +30,7 @@ Prototype perso : sorties originales en couple à Paris. Les commandes sont dans
 - Tests : toute fonctionnalité nouvelle ou modifiée vient avec ses tests, dans la même livraison, à chaque couche
   touchée : `uv run pytest` (collecte, composition, API), `npm test` dans `app/` (comptes, Supabase local) et
   `npm run e2e` (le site dans un navigateur : ce que voit le couple, images et textes compris). Les trois passent
-  avant un commit. Jamais le Supabase du projet dans les tests : le local (`npm run db:start`, Docker).
+  avant un commit. Les tests composent sur les activités de prod, lues en lecture seule (`tests/prod_activities.py`) ;
+  tout ce qu'ils écrivent (comptes, soirées) va dans le Supabase local (`npm run db:start`, Docker), jamais en prod.
 - Base : Supabase (`public.raw_records` + schéma `pipeline`), par `SUPABASE_DB_URL` (session pooler IPv4). Sans elle,
   les scripts retombent sur `data/surprise.db` (non versionnée) ; `python -m surprise.local_store` la copie dans Supabase.

@@ -76,7 +76,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
     if not payload.get("name"):
         return Normalized(raw, rejection="page illisible")
-    return normalize_facts(raw, payload, "Shotgun", now)
+    return normalize_facts(raw, payload, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

@@ -1,4 +1,4 @@
-"""Collector for Paris ZigZag (curation media, tier 3: discovery signal only).
+"""Collector for Paris ZigZag (curation media, tier 3).
 
 Articles are discovered through the sitemaps (robots.txt allows crawling), after
 its lists for a band of friends (GROUP_ARTICLES), and only their practical
@@ -9,11 +9,10 @@ to the official site, venue, address, dates, price and hours, e.g.
     Venue, 5 rue Example, 75009 Paris<br />
     Du 10 septembre au 31 décembre 2026
 
-The site's terms forbid reusing its content. For this personal prototype the
-article text about each place (lead_text) and the photo shown just above its
-block are kept anyway, for Claude to rewrite a description: to remove before
-any public use. Articles that give the information only in prose are counted
-and left for LLM extraction.
+The article text about each place (lead_text) and the photo shown just above
+its block are kept: the description is drawn from the text (or written by
+Claude). Articles that give the information only in prose are counted and left
+for LLM extraction.
 """
 
 import calendar
@@ -229,7 +228,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             starts_on=starts_on,
             ends_on=ends_on,
             website=safe_url(payload.get("website")),
-            image=Image(url=payload["image_url"], license="Paris ZigZag", source_url=raw.url) if payload.get("image_url") else None,
+            image=Image(url=payload["image_url"], source_url=raw.url) if payload.get("image_url") else None,
             is_evening=is_evening(" ".join(filter(None, [fields.get("dates"), fields.get("hours")]))),
             venue=venue,
             categories=categorize(title, venue.name, section=payload.get("section")),

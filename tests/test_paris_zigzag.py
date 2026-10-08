@@ -27,7 +27,7 @@ def test_only_practical_blocks_in_paris_are_read():
         "Infos pratiques",
         "Salon Passé",
     ]
-    # The editorial text is kept apart, for Claude to rewrite (personal prototype only).
+    # The editorial text is kept apart, the description drawn from it.
     assert all("éditorial" not in str({k: v for k, v in p.items() if k != "lead_text"}) for p in payloads)
 
 

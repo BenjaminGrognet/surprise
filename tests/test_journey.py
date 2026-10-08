@@ -2,13 +2,12 @@
 and taken out, a route drawn again, one kept, and the next evening without its activities."""
 
 import json
-import threading
-from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
 
+from serving import serving
 from surprise import parcours, quiz
 from test_parcours import DAY, at, item
 from test_quiz import ANSWERS
@@ -53,7 +52,7 @@ JSON_HEADERS = {"Content-Type": "application/json"}
 
 @pytest.fixture
 def base():
-    """The activities the server composes from (test_real_catalogue: real ones)."""
+    """The activities the server composes from (test_real_catalogue: the project's own)."""
     return parcours.Base(CATALOGUE, {(i["source_id"], i["external_id"]): 35 for i in CATALOGUE})
 
 
@@ -63,21 +62,18 @@ def api(tmp_path, monkeypatch, base):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(parcours, "DB", tmp_path / "s.db")  # make_handler sets it: put back after
     monkeypatch.setattr(parcours.Base, "load", classmethod(lambda cls, store: base))
-    server = ThreadingHTTPServer(("127.0.0.1", 0), quiz.make_handler(tmp_path / "s.db", checks=0))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{server.server_port}"
+    with serving(quiz.make_handler(tmp_path / "s.db", checks=0)) as url:
 
-    def call(path, body=None):
-        """The answer's JSON, or (code, error) when refused."""
-        request = Request(url + path, data=None if body is None else json.dumps(body).encode(), headers=JSON_HEADERS)
-        try:
-            return json.load(urlopen(request))
-        except HTTPError as error:
-            return error.code, json.load(error)["error"]
+        def call(path, body=None):
+            """The answer's JSON, or (code, error) when refused."""
+            request = Request(url + path, data=None if body is None else json.dumps(body).encode(), headers=JSON_HEADERS)
+            try:
+                return json.load(urlopen(request))
+            except HTTPError as error:
+                return error.code, json.load(error)["error"]
 
-    call.url = url
-    yield call
-    server.shutdown()
+        call.url = url
+        yield call
 
 
 def _keys(page):

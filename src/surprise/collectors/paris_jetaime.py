@@ -90,7 +90,7 @@ def facts(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize(event: dict[str, Any], now: datetime) -> Normalized:
-    return normalize_facts(to_raw_record(event), facts(event), "Paris je t'aime", now)
+    return normalize_facts(to_raw_record(event), facts(event), now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Normalized]:

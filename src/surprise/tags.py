@@ -17,6 +17,7 @@ from functools import lru_cache
 from typing import Any
 
 from surprise.categories import CATEGORIES
+from surprise.patterns import matcher
 
 FACETS = {"activite": "Activité", "cadre": "Cadre", "moment": "Moment"}
 
@@ -107,7 +108,8 @@ _TAG_RULES = [
 
 TAGS = {key: {"label": label, "facet": facet} for key, label, facet, _ in _TAG_RULES}
 # Lowercase patterns on lowercased text: three times faster than IGNORECASE.
-_TAG_PATTERNS = [(key, re.compile(pattern)) for key, _, _, pattern in _TAG_RULES]
+# Told by their leading words first (surprise.patterns): the server tags every activity each time it loads them.
+_TAG_MATCHERS = [(key, matcher(re.compile(pattern))) for key, _, _, pattern in _TAG_RULES]
 
 # Tags implied by a category, for activities whose title says little ("Dipsy", "Le 1802").
 _FROM_CATEGORY = {
@@ -257,20 +259,26 @@ def tag(activity: dict[str, Any]) -> list[str]:
 def _tags(title: str, venue: str, categories: tuple[str, ...]) -> tuple[str, ...]:
     # Cached: the planner, the originality and the admin ask for the same activities in turn.
     text = f"{title} {venue}".lower()
-    found = {key for key, pattern in _TAG_PATTERNS if pattern.search(text)}
+    found = {key for key, matches in _TAG_MATCHERS if matches(text)}
     found |= {_FROM_CATEGORY[c] for c in categories if c in _FROM_CATEGORY}
     return tuple(key for key in TAGS if key in found)
 
 
 def vibes(tags: list[str], categories: list[str]) -> list[str]:
     """Vibes an activity answers, in questionnaire order."""
+    return list(_vibes(tuple(tags), tuple(categories)))
+
+
+@lru_cache(maxsize=100_000)
+def _vibes(tags: tuple[str, ...], categories: tuple[str, ...]) -> tuple[str, ...]:
+    # Cached: each evening composed asks for every activity of the base, twice.
     tags_set, categories_set = set(tags), set(categories)
-    return [key for key, vibe in VIBES.items() if vibe["tags"] & tags_set or vibe["categories"] & categories_set]
+    return tuple(key for key, vibe in VIBES.items() if vibe["tags"] & tags_set or vibe["categories"] & categories_set)
 
 
 def describe(activity: dict[str, Any]) -> dict[str, list[str]]:
     tags = tag(activity)
-    return {"tags": tags, "vibes": vibes(tags, activity.get("categories") or [])}
+    return {"tags": tags, "vibes": vibes(tags, activity.get("categories") or ())}
 
 
 def main() -> None:

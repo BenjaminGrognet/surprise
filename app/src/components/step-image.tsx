@@ -42,10 +42,11 @@ export function StepImage({
     };
   }, [phase, step.id, step.image_url]);
 
+  // testID: which step, and which picture (the browser tests look for one shown at each step).
   if (!url || phase === 'lost' || phase === 'waiting' || phase === 'reporting') {
-    return <Image testID="image-de-secours" source={banner(step)} blurRadius={blurRadius} style={style} />;
+    return <Image testID={`image-de-secours:${step.id}`} source={banner(step)} blurRadius={blurRadius} style={style} />;
   }
   const failed = () => to(phase === 'first' ? 'waiting' : phase === 'again' ? 'reporting' : 'lost');
   // A new key for each try: the image is asked for anew, not taken from the failed one.
-  return <Image key={phase} source={{ uri: imageUri(url) }} onError={failed} blurRadius={blurRadius} style={style} />;
+  return <Image key={phase} testID={`photo:${step.id}`} source={{ uri: imageUri(url) }} onError={failed} blurRadius={blurRadius} style={style} />;
 }

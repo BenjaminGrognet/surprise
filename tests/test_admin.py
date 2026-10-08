@@ -1,13 +1,12 @@
 import json
-import threading
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
 
+from serving import serving
 from surprise.admin import make_handler
 from surprise.collectors import que_faire_a_paris as qfap
 from surprise.local_store import LocalStore
@@ -23,11 +22,8 @@ def base_url(tmp_path):
     with LocalStore(path) as store:
         store.save_raw_records([r.raw for r in results])
         store.save_normalized([(r.raw, r.activity, r.rejection) for r in results])
-    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(path))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{server.server_port}"
-    server.shutdown()
-    server.server_close()
+    with serving(make_handler(path)) as url:
+        yield url
 
 
 def request(url, data=None, content_type="application/json"):
@@ -80,10 +76,7 @@ def test_source_name_and_ids_with_slash_and_hash(tmp_path):
     with LocalStore(path) as store:
         store.save_raw_records([result.raw])
         store.save_normalized([(result.raw, result.activity, result.rejection)])
-    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(path))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    base_url = f"http://127.0.0.1:{server.server_port}"
-    try:
+    with serving(make_handler(path)) as base_url:
         [item] = json.loads(request(f"{base_url}/api/activities")[1])
         assert item["source_name"] == "Paris ZigZag"
         assert item["external_id"] == "bar-restaurant/bar/test#bar-test"
@@ -92,9 +85,6 @@ def test_source_name_and_ids_with_slash_and_hash(tmp_path):
         )
         assert status == 200
         assert json.loads(request(f"{base_url}/api/activities")[1])[0]["status"] == "approved"
-    finally:
-        server.shutdown()
-        server.server_close()
 
 
 def test_meta_lists_categories_and_sources(base_url):

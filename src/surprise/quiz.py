@@ -28,6 +28,7 @@ standard library.
 import argparse
 import json
 import mimetypes
+import os
 import re
 import secrets
 import sys
@@ -41,7 +42,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from surprise import admin, images, parcours
+from surprise import admin, courriers, images, parcours
 from surprise.local_store import LocalStore, open_store
 from surprise.genres import GENRES
 from surprise.tags import VIBES
@@ -493,8 +494,12 @@ _CHOOSE = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)/cho
 BASE_MINUTES = 15
 
 
-def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type[BaseHTTPRequestHandler]:
+def make_handler(db: Path | str | None, checks: int, warm: bool = False, accounts: str | None = None) -> type[BaseHTTPRequestHandler]:
+    """`accounts`: the Supabase where the accounts and their choices live (the emails stopped from a link); by default
+    the base itself when it is Supabase, else SUPABASE_DB_URL."""
     parcours.DB = db
+    if accounts is None:
+        accounts = str(db) if str(db or "").startswith(("postgres://", "postgresql://")) else os.environ.get("SUPABASE_DB_URL")
     # One composition at a time: it checks booking engines and writes the page.
     composing = threading.Lock()
     # The activities take seconds to load: loaded when the server starts, then again in the background
@@ -563,6 +568,8 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
 
         def do_POST(self) -> None:
             path = urlsplit(self.path).path
+            if path == "/api/courriels/stop":
+                return self._stop_emails()
             if path.startswith("/api/activities/"):
                 super().do_POST()
                 # A fiche rejected in moderation is never proposed again: the next evening reloads the activities.
@@ -606,6 +613,25 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False) -> type
             if redo := _REDO.match(path):
                 return self._redo(redo["name"], int(redo["route"]), None if redo["step"] is None else int(redo["step"]))
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
+
+        def _stop_emails(self) -> None:
+            """No more emails to an address, from the signed link of one of them: the app's account page sends it as
+            JSON; a mail client's one-click unsubscribe posts a form, the link's own query saying which (RFC 8058)."""
+            query = parse_qs(urlsplit(self.path).query)
+            given = {key: values[0] for key, values in query.items()}
+            if self.headers.get("Content-Type", "").split(";")[0].strip() == "application/json":
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                except ValueError:
+                    return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "JSON invalide"})
+                given |= {key: str(body[key]) for key in ("stop", "t") if isinstance(body, dict) and body.get(key)}
+            address, signature = given.get("stop", "").strip().lower(), given.get("t", "")
+            if not courriers.signed(address, signature):
+                return self._send_json(HTTPStatus.FORBIDDEN, {"error": "lien invalide"})
+            if not str(accounts or "").startswith(("postgres://", "postgresql://")):
+                return self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "emails indisponibles sur ce serveur"})
+            courriers.stop(str(accounts), address)
+            self._send_json(HTTPStatus.OK, {"stopped": address})
 
         def _compose(self, body: dict[str, Any]) -> None:
             """An evening's routes: its wishes, occasion and day, with the profile given or default settings.
@@ -690,10 +716,14 @@ def main() -> None:
     parser.add_argument("--db", help="base SQLite ou URL postgresql:// (défaut : SUPABASE_DB_URL, sinon data/surprise.db)")
     parser.add_argument("--checks", type=int, default=30, help="vérifications de disponibilité en direct par soirée composée")
     parser.add_argument("--no-open", action="store_true")
+    parser.add_argument("--courriers", type=float, nargs="?", const=10, metavar="MINUTES",
+                        help="envoie aussi les emails et les pushes web des soirées, toutes les MINUTES minutes (10 par défaut)")
     args = parser.parse_args()
     # A Windows console cannot show every character (✓, ✗): replace them rather than fail.
     sys.stdout.reconfigure(errors="replace")
     server = ThreadingHTTPServer((args.host, args.port), make_handler(args.db, args.checks, warm=True))
+    if args.courriers:
+        threading.Thread(target=_courriers, args=(args.db or os.environ.get("SUPABASE_DB_URL"), args.courriers), daemon=True).start()
     url = f"http://127.0.0.1:{args.port}"
     print(f"Site (l'app) : {url}  ·  modération : {url}/admin")
     if args.host == "0.0.0.0":
@@ -706,6 +736,23 @@ def main() -> None:
     if not args.no_open:
         webbrowser.open(url)
     server.serve_forever()
+
+
+def _courriers(db: str | None, minutes: float) -> None:
+    """The evenings' emails and web pushes (surprise.courriers), a pass every few minutes while the server runs."""
+    if not str(db or "").startswith(("postgres://", "postgresql://")):
+        print("Courriers : il faut SUPABASE_DB_URL (les comptes et les soirées sont dans Supabase)")
+        return
+    while True:
+        try:
+            report = courriers.run(db)
+            for moment, channel in report.sent:
+                print(f"Courrier {channel} · {moment.key} · {moment.to.address}")
+            for moment, why in report.failed:
+                print(f"Courrier en échec · {moment.key} · {moment.to.address} : {why}")
+        except Exception as error:  # the next pass tries again: a site down, Supabase out of reach
+            print(f"Courriers : {type(error).__name__} {error}")
+        clock.sleep(minutes * 60)
 
 
 if __name__ == "__main__":

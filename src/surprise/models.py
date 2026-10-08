@@ -87,7 +87,6 @@ class Venue(BaseModel):
 
 class Image(BaseModel):
     url: HttpUrl
-    license: str
     source_url: HttpUrl | None = None
 
 

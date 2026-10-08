@@ -124,7 +124,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     name = html.unescape(payload["name"])  # payloads collected before names were unescaped twice
     facts = payload | {"name": name, "venue_name": name, "tags": ["hôtel"], "evening": True, "per_couple": True}
-    return normalize_facts(to_raw_record(payload), facts, payload["site"], now)
+    return normalize_facts(to_raw_record(payload), facts, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

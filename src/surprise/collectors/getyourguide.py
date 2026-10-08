@@ -72,7 +72,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
         return Normalized(raw, rejection="page illisible")
     # "Paris : croisière aux lueurs du soir…"
     name = re.sub(r"^Paris\s*:\s*", "", payload["name"]).strip()
-    return normalize_facts(raw, payload | {"name": name[:1].upper() + name[1:]}, "GetYourGuide", now)
+    return normalize_facts(raw, payload | {"name": name[:1].upper() + name[1:]}, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

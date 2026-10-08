@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, Pressable, Share, StyleSheet, View } from 'react-native';
 
 import { GhostButton, PrimaryButton, TextButton } from '@/components/buttons';
 import { InvitationCarton } from '@/components/invitation-carton';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { EveningHistoryRow, Invite } from '@/lib/account';
+import type { EveningHistoryRow, GuestRole, Invite } from '@/lib/account';
 import { guests, invitationLink, isSquad, placesLeft, removeGuest, resetPassager } from '@/lib/couple';
+import { emailInvitations, inviteByEmail, type EmailInvitation } from '@/lib/emails';
 
 type Card = { secretTitle: string; when: string };
 
@@ -96,6 +98,7 @@ function CoupleInvite({ evening, onChange, card }: { evening: EveningHistoryRow;
           <PrimaryButton wide disabled={busy} onPress={send}>
             {Platform.OS === 'web' ? (copied === link ? '✓ Lien copié' : 'Copier le lien') : 'Envoyer le lien'}
           </PrimaryButton>
+          <EmailInvite evening={evening} hint="Ou par email : nous lui envoyons l'invitation, à votre nom." />
           <InvitationCarton {...card} link={link} />
           <ThemedText type="small" themeColor="textSecondary">En attente de votre passager…</ThemedText>
         </>
@@ -143,6 +146,7 @@ function BandInvite({ evening, onChange, card, owner }: { evening: EveningHistor
             <PrimaryButton wide onPress={() => share(passagers, 'On te prépare une soirée secrète entre potes. Rejoins la bande sur Secret Squad, tu n\'auras que des indices :')}>
               {copy(passagers, 'le lien des invités')}
             </PrimaryButton>
+            <EmailInvite evening={evening} hint="Ou par email, à chacun : nous lui envoyons le lien des invités." />
             <InvitationCarton {...card} link={passagers} brand="Secret Squad" />
           </View>
           {complices ? (
@@ -155,10 +159,56 @@ function BandInvite({ evening, onChange, card, owner }: { evening: EveningHistor
               <TextButton onPress={() => share(complices, 'Je prépare une soirée secrète pour la bande, et tu es dans la confidence :')}>
                 {copy(complices, 'le lien des complices')}
               </TextButton>
+              {owner ? <EmailInvite evening={evening} role="complice" hint="Ou par email : nous lui envoyons le lien des complices." /> : null}
             </View>
           ) : null}
         </>
       ) : null}
+      {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
+    </View>
+  );
+}
+
+// The evening's link sent by email (lib/emails.ts): the server writes to the address typed here, in the evening's
+// name; those sent already, and those on their way.
+function EmailInvite({ evening, role = 'passager', hint }: { evening: EveningHistoryRow; role?: GuestRole; hint: string }) {
+  const [email, setEmail] = useState('');
+  const [sent, setSent] = useState<EmailInvitation[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const load = () => emailInvitations(evening.id).then((rows) => setSent(rows.filter((r) => r.role === role))).catch(() => {});
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evening.id, role]);
+  async function send() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await inviteByEmail(evening.id, email, role);
+      setEmail('');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <View style={styles.block}>
+      <ThemedText type="small" themeColor="textSecondary">{hint}</ThemedText>
+      <View style={styles.emailRow}>
+        <TextField
+          value={email} onChangeText={setEmail} onSubmitEditing={send} placeholder="son@email.fr" accessibilityLabel={role === 'complice' ? 'Email du complice' : "Email de l'invité"}
+          keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" style={styles.emailField} />
+        <GhostButton onPress={send}>{busy ? 'Envoi…' : 'Envoyer'}</GhostButton>
+      </View>
+      {sent.map((invitation) => (
+        <ThemedText key={invitation.id} type="small" themeColor={invitation.sent_at ? 'ok' : 'textSecondary'}>
+          {invitation.sent_at ? `✓ Invitation envoyée à ${invitation.email}` : `Invitation en route vers ${invitation.email}…`}
+        </ThemedText>
+      ))}
       {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
     </View>
   );
@@ -208,4 +258,6 @@ const styles = StyleSheet.create({
   member: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingBottom: Spacing.two, borderBottomWidth: 1 },
   memberText: { flex: 1, gap: 2 },
   link: { borderWidth: 1, borderRadius: Radius.field, padding: 14 },
+  emailRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  emailField: { flex: 1 },
 });

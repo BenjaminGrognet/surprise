@@ -74,7 +74,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     if not payload.get("name"):
         # Series pages (Candlelight…) list plans of several venues without schema.org data.
         return Normalized(raw, rejection="page de série")
-    return normalize_facts(raw, payload, "Fever", now)
+    return normalize_facts(raw, payload, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

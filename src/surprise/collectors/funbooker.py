@@ -117,7 +117,7 @@ def normalize(payload: dict[str, Any]) -> Normalized:
             players_max=players_max,
             # The listing page is the activity's page.
             website=safe_url(payload["url"]),
-            image=Image(url=payload["image_url"], license="Funbooker", source_url=raw.url) if payload.get("image_url") else None,
+            image=Image(url=payload["image_url"], source_url=raw.url) if payload.get("image_url") else None,
             venue=venue,
             # "Activités gastronomiques" are workshops and tastings, never a restaurant.
             categories=[c for c in categorize(" ".join([payload["name"], *payload["categories"]])) if c != "restaurant"],

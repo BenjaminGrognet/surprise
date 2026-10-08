@@ -28,7 +28,8 @@ l'app Expo qui se lance depuis `app\`. Le détail de chaque commande et de ses o
 - **Dépendances de l'app** : `cd app` puis `npm install`.
 - **Fichiers de configuration** (jamais commités) :
   - `.env` à la racine : `SUPABASE_DB_URL` (URL du *session pooler*, voir README § Base) ; facultatifs : `ANTHROPIC_API_KEY` (titres des parcours et
-    `enrich --claude`), `GOOGLE_PLACES_API_KEY` (photos).
+    `enrich --claude`), `GOOGLE_PLACES_API_KEY` (photos), `SMTP_URL`, `MAIL_FROM`, `MAIL_SECRET` et `APP_URL` (les emails des
+    soirées, README § Emails), les identifiants des programmes d'affiliation (README § Liens partenaires).
   - `app\.env` (modèle : `app\.env.example`) : `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` et
     `EXPO_PUBLIC_API_URL=http://localhost:8001` (le serveur du questionnaire, **8001**, pas 8000).
 

@@ -634,13 +634,16 @@ class LocalStore:
 
 
 class PostgresStore(LocalStore):
-    """The same tables in Supabase: schema pipeline, raw_records in public (SUPABASE_DB_URL)."""
+    """The same tables in Supabase: schema pipeline, raw_records in public (SUPABASE_DB_URL). `read_only`: the
+    connection refuses any write (the tests read the activities of the project's base, and nothing else)."""
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, read_only: bool = False) -> None:
         import psycopg
         from psycopg.types.string import TextLoader
 
         self._db = psycopg.connect(url, autocommit=True)
+        if read_only:
+            self._db.execute("set session characteristics as transaction read only")
         # JSON columns read back as text, like SQLite's.
         for kind in ("json", "jsonb"):
             self._db.adapters.register_loader(kind, TextLoader)

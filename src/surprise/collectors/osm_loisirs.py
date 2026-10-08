@@ -1,4 +1,4 @@
-"""Collector for Paris leisure venues bookable online, from OpenStreetMap (tier 1: open data, ODbL).
+"""Collector for Paris leisure venues bookable online, from OpenStreetMap (tier 1: open data).
 
 Venues of active or unusual outings the media rarely list are found with the
 Overpass API: karaoké boxes, axe throwing, laser games, réalité virtuelle and
@@ -127,7 +127,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
             reason = f"site {payload['site_error']}"
         elif not payload.get("engine"):
             reason = "sans réservation en ligne"
-    return with_reason(reason, normalize_facts(raw, complete_place(payload), "OpenStreetMap (ODbL)", now))
+    return with_reason(reason, normalize_facts(raw, complete_place(payload), now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Normalized]:

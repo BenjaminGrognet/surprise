@@ -3,6 +3,8 @@
 // (npm run db:start).
 import { defineConfig, devices } from '@playwright/test';
 
+import { MAIL_SECRET } from './e2e/mail-secret';
+
 const PORT = 8011;
 
 export default defineConfig({
@@ -25,5 +27,6 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}/api/soiree`,
     reuseExistingServer: true,
     timeout: 60_000,
+    env: { ...(process.env as Record<string, string>), MAIL_SECRET },
   },
 });

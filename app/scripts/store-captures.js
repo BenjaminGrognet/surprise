@@ -4,8 +4,8 @@
 // icon and feature graphic, and an example of the evening's postcard as shared. The App Store's icon is the app's own
 // (assets/images/logo-secretdate.png).
 //
-// Only the app's own pictures: the sites' photos, and the server's copies of them, are not ours to publish. With the
-// local Supabase running (npm run db:start) and the site built (npm run build:e2e):
+// The activities' photos are the sites' own, as the app shows them. With the local Supabase running (npm run db:start)
+// and the site built (npm run build:e2e):
 //   uv run python tests/e2e_server.py --port 8011     (from the repo's root)
 //   node scripts/store-captures.js                     (from app/)
 const fs = require('node:fs');
@@ -46,12 +46,6 @@ async function phone(browser) {
   const context = await browser.newContext({
     viewport: { width: 440, height: 956 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true,
     locale: 'fr-FR', timezoneId: 'Europe/Paris', colorScheme: 'dark', baseURL: BASE,
-  });
-  await context.route('**/*', (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const ours = url.origin === new URL(BASE).origin && !url.pathname.startsWith('/images/');
-    return request.resourceType() === 'image' && !ours ? route.abort() : route.continue();
   });
   return context;
 }

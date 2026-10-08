@@ -225,7 +225,7 @@ function filtered() {
 
 const truncate = (s, n) => s.length > n ? `${s.slice(0, n - 1)}…` : s;
 
-// Claude's description first; otherwise the licensed text we have, labelled so it is never mistaken for ours.
+// Claude's description first; otherwise the source's own text, labelled so it is never mistaken for ours.
 function description(it) {
   const e = it.enrichment || {};
   if (e.description) return { origin: "Description", value: e.description };
@@ -238,7 +238,7 @@ function description(it) {
 function figure(it) {
   const a = it.activity, e = it.enrichment || {};
   const url = a.image?.url || e.image_url;
-  const credit = a.image ? a.image.license : e.image_url ? `Image du site officiel (${hostname(e.image_origin)}) — licence à vérifier` : "";
+  const credit = a.image ? `Image ${it.source_name}` : e.image_url ? `Image du site officiel (${hostname(e.image_origin)})` : "";
   // Some sites forbid showing their images elsewhere: those go through a local copy.
   const img = h("img", { class: "cover", alt: "", loading: "lazy", src: it.image_copy || url });
   const caption = h("figcaption", { title: credit }, credit);

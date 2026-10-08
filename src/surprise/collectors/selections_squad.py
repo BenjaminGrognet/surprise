@@ -1,10 +1,10 @@
-"""Collector for selections of outings with friends (Secret Squad: articles, tier 3: discovery signal).
+"""Collector for selections of outings with friends (Secret Squad: articles, tier 3).
 
 Lists of places where a band of friends goes out in Paris (Paris ZigZag, Topito,
 Le Bonbon): activities to share, bars with games, karaoke, bars and festive
 restaurants for a birthday. Read like the couple selections (selections_couple):
 each h2-h4 heading names a place, the text down to the next one describes it
-(lead_text, to remove before any public use) and may give its address and its
+(lead_text) and may give its address and its
 link. An idea linked to a Funbooker listing or to a bar on Privateaser takes its
 place from it, else it is located by its name on OpenStreetMap.
 """
@@ -41,7 +41,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 
 
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
-    return normalize_facts(to_raw_record(payload), payload, "Sélections entre potes", now)
+    return normalize_facts(to_raw_record(payload), payload, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

@@ -2,9 +2,9 @@
 
 Pages have sequential ids: the RSS feed gives the latest one and the collector
 walks down from it. Only the practical block is read (dates and hours, price,
-venue and its link, booking link), plus the title, the og:image and, for this
-personal prototype, the article text (lead_text, for Claude to rewrite; to remove
-before any public use). Pages without a venue in Paris (products, trips) are rejected.
+venue and its link, booking link), plus the title, the og:image and the article
+text (lead_text, the description drawn from it). Pages without a venue in Paris
+(products, trips) are rejected.
 """
 
 import html
@@ -128,7 +128,7 @@ def normalize(payload: dict[str, Any], now: datetime, window: timedelta = WINDOW
             starts_on=starts_on,
             ends_on=ends_on,
             website=safe_url(payload.get("website")),
-            image=Image(url=payload["image_url"], license="Paris-Friendly", source_url=raw.url) if payload.get("image_url") else None,
+            image=Image(url=payload["image_url"], source_url=raw.url) if payload.get("image_url") else None,
             is_evening=is_evening(dates),
             venue=venue,
             categories=categorize(title, venue.name),

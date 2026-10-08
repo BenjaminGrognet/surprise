@@ -74,7 +74,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     # A single-day event starts on its start time; the dates of a run give its period.
     single = payload.get("starts_on") == payload.get("ends_on") or not payload.get("ends_on")
     facts = payload | ({"starts_on": None, "ends_on": None} if single and payload.get("starts_at") else {})
-    return with_reason("en ligne" if payload.get("online") else None, normalize_facts(raw, facts, "Eventbrite", now))
+    return with_reason("en ligne" if payload.get("online") else None, normalize_facts(raw, facts, now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

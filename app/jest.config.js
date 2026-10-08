@@ -8,4 +8,6 @@ module.exports = {
   // As tsconfig.json: the app's images are outside src/.
   moduleNameMapper: { '^@/assets/(.*)$': '<rootDir>/assets/$1' },
   testTimeout: 30000,
+  // The account tests share the local Supabase: half the cores leave it room (all of them is slower).
+  maxWorkers: '50%',
 };

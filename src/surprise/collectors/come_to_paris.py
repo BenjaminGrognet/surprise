@@ -140,7 +140,7 @@ def normalize(payload: dict[str, Any]) -> Normalized:
             title=title,
             kind=ActivityKind.PERMANENT,
             website=safe_url(payload["url"]),
-            image=Image(url=payload["image_url"], license="Come to Paris", source_url=raw.url) if payload.get("image_url") else None,
+            image=Image(url=payload["image_url"], source_url=raw.url) if payload.get("image_url") else None,
             is_evening=is_evening(payload.get("hours") or ""),
             venue=venue,
             categories=categorize(" ".join([title, *payload["categories"]])),

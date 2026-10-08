@@ -119,6 +119,7 @@ export type SoireeStep = {
   price_estimated: boolean;
   booking_url: string | null;
   booking_action: 'voir_lieu' | 'voir_fiche' | 'reserver';
+  partner?: boolean; // the booking link is a partner site's (surprise.affiliation): it may earn Secret Date a commission
   image_url: string | null;
   text: string | null;
   vibes: string[];

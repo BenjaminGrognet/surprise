@@ -114,7 +114,7 @@ def normalize(payload: dict[str, Any]) -> Normalized:
             title=name,
             kind=ActivityKind.PERMANENT,
             website=safe_url(payload.get("website")),
-            image=Image(url=payload["image_url"], license="Paris City Game", source_url=raw.url) if payload.get("image_url") else None,
+            image=Image(url=payload["image_url"], source_url=raw.url) if payload.get("image_url") else None,
             venue=venue,
             categories=categorize(" ".join(filter(None, [name, payload["slug"].replace("-", " "), payload.get("tagline")]))),
             offers=[

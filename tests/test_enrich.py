@@ -1,3 +1,4 @@
+import sys
 from types import SimpleNamespace
 
 import httpx
@@ -145,7 +146,7 @@ def test_enrich_one_uses_the_official_site_then_the_describer():
     assert fields["image_url"] == "https://cabaret.example/img/salle.jpg"
     assert fields["image_origin"] == SITE
     assert fields["description"] == "Une revue de cabaret dans le 5e."
-    # Without a licensed source text, the official site's excerpt is what gets rewritten.
+    # Without a source text, the official site's excerpt is what gets rewritten.
     assert seen["text"] == "Un cabaret & ses revues depuis 1950."
 
 
@@ -154,13 +155,13 @@ def test_enrich_one_keeps_the_source_image_and_text():
     site = respx.get(SITE).mock(return_value=httpx.Response(200, text=PAGE, headers={"content-type": "text/html"}))
     item = {
         "activity": activity(image={"url": "https://cdn.paris.fr/x.jpg"}, offers=[{"booking_url": "https://billets.example/1"}]),
-        "source_text": "Texte ODbL.",
+        "source_text": "Texte de la source.",
     }
     with httpx.Client() as client:
         fields = enrich.enrich_one(item, client, describer=lambda act, text: text.upper())
     assert not site.called
     assert "image_url" not in fields
-    assert fields["description"] == "TEXTE ODBL."
+    assert fields["description"] == "TEXTE DE LA SOURCE."
 
 
 @respx.mock
@@ -262,6 +263,32 @@ def test_describe_sends_facts_and_source_and_cleans_the_answer():
 def test_describe_ignores_refusals():
     client, _ = fake_client(stop_reason="refusal")
     assert enrich.describe(client, "claude-opus-5-5", activity(), "texte") is None
+
+
+def test_describe_skips_an_outage_and_lets_a_wrong_request_be_seen(monkeypatch):
+    # The SDK's errors, as a stand-in module: the real one takes seconds to load.
+    class APIStatusError(Exception):
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+    class APIConnectionError(Exception):
+        pass
+
+    monkeypatch.setitem(sys.modules, "anthropic", SimpleNamespace(APIStatusError=APIStatusError, APIConnectionError=APIConnectionError))
+
+    def failing(error):
+        def create(**kwargs):
+            raise error
+
+        return SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+
+    # Overloaded, or out of reach: no description this time, the next run writes it.
+    assert enrich.describe(failing(APIStatusError(529)), "claude-opus-5-5", activity(), "texte") is None
+    assert enrich.describe(failing(APIConnectionError()), "claude-opus-5-5", activity(), "texte") is None
+    # A request the API refuses (a model unknown), or anything else: said, not hidden.
+    for error in (APIStatusError(400), APIStatusError(404), ValueError("autre")):
+        with pytest.raises(type(error)):
+            enrich.describe(failing(error), "claude-opus-5-5", activity(), "texte")
 
 
 def test_a_bracketed_template_in_a_page_is_no_link():

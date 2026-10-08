@@ -1,14 +1,13 @@
-import { router, useFocusEffect, useGlobalSearchParams, usePathname, type Href } from 'expo-router';
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { router, useGlobalSearchParams, usePathname, type Href } from 'expo-router';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
-import { DiscoBall } from '@/components/disco-ball';
 import { Icon } from '@/components/ui-icons';
-import { Spacing, type PaletteName } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
-import { PaletteProvider, usePalette, useTheme } from '@/hooks/use-theme';
+import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { upcomingEvenings, type EveningHistoryRow } from '@/lib/account';
 import { eveningRole, isSquad } from '@/lib/couple';
 import { eveningDay } from '@/lib/dates';

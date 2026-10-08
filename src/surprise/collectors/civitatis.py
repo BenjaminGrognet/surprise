@@ -66,7 +66,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     if not payload.get("name"):
         # A page of activities ("balades-bateau"), not an activity.
         return Normalized(raw, rejection="page de catégorie")
-    return normalize_facts(raw, payload, "Civitatis", now)
+    return normalize_facts(raw, payload, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

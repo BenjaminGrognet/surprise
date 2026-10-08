@@ -109,7 +109,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
         # "dès 12 ans" is no children's show: the age is not the audience.
         "audience": None,
     }
-    return with_reason(reason, normalize_facts(raw, facts, "EscapeGame.fr", now))
+    return with_reason(reason, normalize_facts(raw, facts, now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

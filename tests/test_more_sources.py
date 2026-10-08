@@ -29,14 +29,14 @@ def raw(payload):
 
 def test_normalize_facts_rejections():
     # Every reason is kept; a blocking one (no place) ends the fiche, the others let it be built for moderation.
-    assert normalize_facts(raw({}), {"name": "Soirée célibataires"}, "x", NOW).rejection == "pas pour un couple · sans lieu"
+    assert normalize_facts(raw({}), {"name": "Soirée célibataires"}, NOW).rejection == "pas pour un couple · sans lieu"
     workshop = {"name": "Atelier parent-enfant", "address": "1 rue X, 75011 Paris", "ends_on": "2026-09-01"}
-    result = normalize_facts(raw({}), workshop, "x", NOW)
+    result = normalize_facts(raw({}), workshop, NOW)
     assert result.rejection == "jeune public · passé" and result.activity.title == "Atelier parent-enfant"
-    assert normalize_facts(raw({}), {"name": "Visite"}, "x", NOW).rejection == "sans lieu"
-    assert normalize_facts(raw({}), {"name": "Visite", "address": "1 rue X, 91300 Massy"}, "x", NOW).rejection == "hors Paris et proche banlieue"
+    assert normalize_facts(raw({}), {"name": "Visite"}, NOW).rejection == "sans lieu"
+    assert normalize_facts(raw({}), {"name": "Visite", "address": "1 rue X, 91300 Massy"}, NOW).rejection == "hors Paris et proche banlieue"
     past = {"name": "Expo", "address": "1 rue X, 75011 Paris", "ends_on": "2026-09-01"}
-    assert normalize_facts(raw({}), past, "x", NOW).rejection == "passé"
+    assert normalize_facts(raw({}), past, NOW).rejection == "passé"
 
 
 def test_normalize_facts_evening_show():
@@ -48,7 +48,7 @@ def test_normalize_facts_evening_show():
         "price_min": 20,
         "booking_url": "https://shotgun.live/fr/events/x",
     }
-    activity = normalize_facts(raw({}), facts, "Shotgun", NOW).activity
+    activity = normalize_facts(raw({}), facts, NOW).activity
     assert (activity.venue.name, activity.venue.address, activity.venue.postal_code) == ("YOYO", "13 Avenue du Président Wilson", "75016")
     assert activity.is_evening and activity.starts_on.isoformat() == "2026-09-26"
     assert activity.offers[0].online_booking and float(activity.offers[0].price_min) == 20
@@ -285,7 +285,7 @@ def test_stag_party_offers_are_tagged_for_a_band():
 
 def test_stag_party_offers_are_kept_at_collection():
     # A band's (Secret Squad): kept in the base, only a couple's evening leaves them out (parcours.fits_party).
-    assert normalize_facts(raw({}), {"name": "Atelier cocktails EVJF", "address": "3 rue X, 75011 Paris"}, "x", NOW).rejection is None
+    assert normalize_facts(raw({}), {"name": "Atelier cocktails EVJF", "address": "3 rue X, 75011 Paris"}, NOW).rejection is None
 
 
 def test_time_out_venue_name_drops_the_page_title():

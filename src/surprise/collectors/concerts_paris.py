@@ -94,7 +94,7 @@ def facts(event: dict[str, Any]) -> dict[str, Any]:
 def normalize(event: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(event)
     cancelled = "annulé" if event.get("eventStatus") == "EventCancelled" else None
-    return with_reason(cancelled, normalize_facts(raw, facts(event), "concerts.paris", now))
+    return with_reason(cancelled, normalize_facts(raw, facts(event), now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Normalized]:

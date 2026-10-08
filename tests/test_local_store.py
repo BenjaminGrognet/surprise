@@ -236,3 +236,23 @@ def test_an_older_base_reads_its_widget_pages_again_for_the_venues_id(tmp_path):
         db.commit()
     with LocalStore(tmp_path / "s.db") as store:
         assert store.page_checks() == {"https://club.example/": ("Shotgun", False, None)}
+
+
+LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+
+
+def test_a_read_only_store_reads_and_never_writes():
+    # The tests read the project's activities through such a connection (tests/prod_activities.py): here, the local
+    # Supabase's tables, never the project's.
+    import psycopg
+
+    from surprise.local_store import PostgresStore
+
+    try:
+        store = PostgresStore(LOCAL_DB, read_only=True)
+    except psycopg.OperationalError:
+        pytest.skip("Supabase local pas lancé : npm run db:start dans app/")
+    with store:
+        assert isinstance(store.page_checks(), dict) and isinstance(store.list_for_moderation(), list)
+        with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
+            store.save_page_checks({"https://exemple.fr/image.jpg": ("image", True, None)})

@@ -71,7 +71,7 @@ def url_id(url: str) -> str:
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
     off_topic = "hors sujet" if _SKIPPED.search(payload.get("name") or "") else None
-    return with_reason(off_topic, normalize_facts(raw, payload, "Paris je t'aime", now))
+    return with_reason(off_topic, normalize_facts(raw, payload, now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

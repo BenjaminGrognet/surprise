@@ -29,7 +29,9 @@ export function OptionCard({
       disabled={disabled}
       onPress={onPress}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: selected, disabled }}
+      // aria-*, not accessibilityState: react-native-web leaves the latter out of the page.
+      aria-checked={selected}
+      aria-disabled={disabled}
       style={({ pressed }) => [
         styles.card,
         !desc && styles.compact,

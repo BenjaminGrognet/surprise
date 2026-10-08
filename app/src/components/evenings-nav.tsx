@@ -46,7 +46,7 @@ function Arrow({ icon, label, onPress, off }: { icon: string; label: string; onP
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: off }}
+      aria-disabled={off}
       style={({ pressed }) => [styles.arrow, off && styles.off, pressed && styles.pressed]}>
       <Icon name={icon} size={22} strokeWidth={1.6} color={theme.accent} />
     </Pressable>

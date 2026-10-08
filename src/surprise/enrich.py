@@ -1,21 +1,21 @@
 """Enrichment of kept activities: image, excerpt of the official site, short description.
 
 - Image: the activity's own (Que Faire à Paris photo), else the official site's
-  og:image (origin stored; licence to check before publication), else a Google
-  Places photo when GOOGLE_PLACES_API_KEY is set. Google forbids caching photo
-  names, so only the place id is stored; the admin fetches a fresh photo.
+  og:image (its origin stored), else a Google Places photo when
+  GOOGLE_PLACES_API_KEY is set. Google forbids caching photo names, so only the
+  place id is stored; the admin fetches a fresh photo.
 - Booking link: when the activity has none, the official site's "Réserver"
   link (e.g. a theatre page pointing to its ticketing).
 - Place: coordinates, opening hours and, when missing, the address from
-  OpenStreetMap (open data under ODbL): the named places of Paris downloaded once
-  from Overpass, matched by name and postcode or distance, else Nominatim. Each
+  OpenStreetMap (open data): the named places of Paris downloaded once from
+  Overpass, matched by name and postcode or distance, else Nominatim. Each
   venue's answer is stored, so it is asked once. An event with coordinates skips
   it: a venue's opening hours say nothing of an event's dates.
 - Description: the first sentences, up to 280 characters, of the source's own
-  text (Que Faire à Paris, ODbL; a media's article text for this personal
-  prototype) or else of the official site's excerpt, cleaned of markup, page
-  titles and lists; no outside call. With --claude, written by Claude instead
-  (ANTHROPIC_API_KEY) from the facts and that text.
+  text (Que Faire à Paris, a media's article) or else of the official site's
+  excerpt, cleaned of markup, page titles and lists; no outside call. With
+  --claude, written by Claude instead (ANTHROPIC_API_KEY) from the facts and
+  that text.
   An activity already enriched only gets its description: nothing is fetched.
 
 Only activities not enriched yet are processed, so the nightly run stays cheap.
@@ -453,9 +453,7 @@ def describe_only(item: dict[str, Any], describer: Callable[[dict[str, Any], str
 
 
 def describe(anthropic_client: Any, model: str, activity: dict[str, Any], source_text: str | None) -> str | None:
-    """Short description written by Claude from the facts and a licensed source text."""
-    import anthropic
-
+    """Short description written by Claude from the facts and the source's text."""
     try:
         response = anthropic_client.beta.messages.create(
             model=model,
@@ -466,12 +464,12 @@ def describe(anthropic_client: Any, model: str, activity: dict[str, Any], source
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": _prompt(activity, source_text)}],
         )
-    except anthropic.APIStatusError as error:
-        if error.status_code in (400, 404):
-            raise
-        return None
-    except anthropic.APIConnectionError:
-        return None
+    except Exception as error:
+        import anthropic  # for its errors only: the SDK takes seconds to load, the client given is already there
+
+        if isinstance(error, anthropic.APIConnectionError) or (isinstance(error, anthropic.APIStatusError) and error.status_code not in (400, 404)):
+            return None
+        raise
     if response.stop_reason != "end_turn":
         return None
     text = " ".join(block.text for block in response.content if block.type == "text").strip().strip('"«» ')
@@ -489,7 +487,7 @@ def enrich_one(
     preview = SitePreview()
     has_image = bool(activity.get("image"))
     has_booking = any(offer.get("booking_url") for offer in activity.get("offers") or [])
-    # The official site gives the image, the booking link and, when the source has no licensed text, the excerpt to rewrite.
+    # The official site gives the image, the booking link and, when the source has no text, the excerpt to rewrite.
     website = activity.get("website")
     if website and _SOCIAL.search(urlsplit(website).netloc):
         website = None

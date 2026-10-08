@@ -82,7 +82,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
     off_topic = "hors sujet" if _SKIPPED_BREADCRUMB.search(" ".join(payload.get("breadcrumb") or [])) else None
-    return with_reason(off_topic, normalize_facts(raw, payload, "VisitParisRegion", now))
+    return with_reason(off_topic, normalize_facts(raw, payload, now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

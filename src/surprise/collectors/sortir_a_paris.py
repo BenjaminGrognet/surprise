@@ -16,9 +16,8 @@ schema.org microdata:
     <strong>Réservations</strong><br/> <a href="https://…">
 
 with the coordinates of each place on its map. Articles without a place (news,
-video games) are skipped. The first place of the block is kept. The article's
-summary (description) is kept for Claude to rewrite a description: to remove
-before any public use.
+video games) are skipped. The first place of the block is kept, with the
+article's summary (description) as its text.
 """
 
 import html
@@ -158,7 +157,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
         # that ended is not taken for a permanent place.
         starts_on, ends_on = parse_dates(payload.get("hours"), now.astimezone(PARIS).date())
         facts = payload | {"starts_on": starts_on and starts_on.isoformat(), "ends_on": ends_on and ends_on.isoformat()}
-    return normalize_facts(to_raw_record(payload), facts, "Sortir à Paris", now)
+    return normalize_facts(to_raw_record(payload), facts, now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

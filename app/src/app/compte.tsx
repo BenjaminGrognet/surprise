@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { AuthForm } from '@/components/auth-form';
 import { GhostButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
@@ -17,17 +17,28 @@ import {
   accountProfile, currentUser, signOut, deleteMyAccount, myTastes, saveTaste, type AccountProfile, type TasteRow,
 } from '@/lib/account';
 import { getQuiz, type QuizData } from '@/lib/api';
+import { emailsOn, setEmails, stopEmails } from '@/lib/emails';
 import type { NotifyState } from '@/lib/notifications';
 import { askPush, pushState } from '@/lib/push';
 import { supabaseConfigured } from '@/lib/supabase';
 
 export default function CompteScreen() {
   const [user, setUser] = useState<{ email?: string } | null | 'loading'>(supabaseConfigured ? 'loading' : null);
+  // The link at the foot of an email: no more of them, signed in or not.
+  const { stop, t } = useLocalSearchParams<{ stop?: string; t?: string }>();
 
   const refresh = () => currentUser().then(setUser);
   useEffect(() => {
     if (supabaseConfigured) refresh();
   }, []);
+
+  if (stop && t) {
+    return (
+      <Screen>
+        <StopEmails address={stop} token={t} />
+      </Screen>
+    );
+  }
 
   if (!supabaseConfigured) {
     return (
@@ -94,7 +105,12 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
       <CoupleProfile />
       <CoupleTastes />
       <PushNotifications />
+      <EmailChoice />
       <TextLink href="/historique">Mes soirées →</TextLink>
+      <ThemedText type="small" themeColor="textSecondary">
+        Certains liens « Réserver » mènent aux sites partenaires de Secret Date : une réservation peut nous rapporter une
+        commission, sans rien changer à votre prix.
+      </ThemedText>
       <TextButton onPress={onSignOut}>Se déconnecter</TextButton>
       <DeleteAccount onDeleted={onSignOut} />
     </>
@@ -213,6 +229,52 @@ function PushNotifications() {
       )}
       {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
     </View>
+  );
+}
+
+// The evenings' key moments by email too, beside the notifications (lib/emails.ts): turned off and on at a touch.
+function EmailChoice() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    emailsOn().then(setOn).catch(() => {});
+  }, []);
+  if (on === null) return null;
+  const toggle = () => {
+    setError('');
+    setEmails(!on).then(() => setOn(!on)).catch((e: Error) => setError(e.message));
+  };
+  return (
+    <View style={styles.section}>
+      <ThemedText type="eyebrow">Emails</ThemedText>
+      <Notice>
+        {on
+          ? 'Les moments clés de vos soirées vous arrivent aussi par email : la soirée gardée et ses réservations, le pli scellé, le Livre des Secrets.'
+          : 'Vous ne recevez plus nos emails, seulement les notifications.'}
+      </Notice>
+      <GhostButton onPress={toggle}>{on ? 'Ne plus recevoir les emails' : 'Recevoir les emails'}</GhostButton>
+      {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
+    </View>
+  );
+}
+
+// From an email's link (/compte?stop=…&t=…): no more emails to that address, said at once.
+function StopEmails({ address, token }: { address: string; token: string }) {
+  const [state, setState] = useState<'stopping' | 'stopped' | { error: string }>('stopping');
+  useEffect(() => {
+    stopEmails(address, token).then(() => setState('stopped'), (e: Error) => setState({ error: e.message }));
+  }, [address, token]);
+  return (
+    <>
+      <PageCard
+        badge="Emails"
+        title={state === 'stopped' ? 'C’est noté.' : state === 'stopping' ? 'Un instant…' : 'Lien invalide'}
+        text={state === 'stopped'
+          ? `${address} ne recevra plus nos emails. Les notifications de l’app, elles, se règlent sur l’appareil.`
+          : state === 'stopping' ? 'On arrête nos emails.' : state.error}
+      />
+      <TextLink href="/">Retour à l’accueil →</TextLink>
+    </>
   );
 }
 

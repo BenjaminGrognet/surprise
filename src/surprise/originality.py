@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from surprise.keywords import extract, texts
+from surprise.patterns import matcher
 from surprise.tags import describe
 
 # How far from an ordinary evening each kind of outing is, by its tags (a restaurant, a film, a concert: 0).
@@ -41,18 +42,21 @@ _NATURE = {
 _WORKSHOP = {"cuisine", "mixologie", "vin", "peinture_dessin", "floral"}
 # What an evening there holds, said in its texts only (a bar's name rarely tells): label, points, pattern. A label
 # that is a tag's ("karaoke") is not counted twice when the title already says it.
-_NATURE_TEXTS = [
-    ("karaoke", 24, re.compile(r"karaok", re.IGNORECASE)),
-    ("quiz", 18, re.compile(r"blind[- ]tests?|\bquiz", re.IGNORECASE)),
-    ("performeurs, show", 20, re.compile(r"performeu|cracheurs? de feu|effeuill|burlesque|drag queens?|acrobat|show (?:de|live)", re.IGNORECASE)),
-    ("immersif", 20, re.compile(r"décors? immersif|univers immersif|immersion totale|décors? de cinéma", re.IGNORECASE)),
+# Every pattern here reads lowercased text, its own words in lowercase: re.IGNORECASE costs three times as much on the
+# long texts of thirty thousand activities, each time the server loads them.
+_NATURE_PATTERNS = [
+    ("karaoke", 24, re.compile(r"karaok")),
+    ("quiz", 18, re.compile(r"blind[- ]tests?|\bquiz")),
+    ("performeurs, show", 20, re.compile(r"performeu|cracheurs? de feu|effeuill|burlesque|drag queens?|acrobat|show (?:de|live)")),
+    ("immersif", 20, re.compile(r"décors? immersif|univers immersif|immersion totale|décors? de cinéma")),
     ("soirée à thème", 20, re.compile(
         r"halloween|bal masqué|soirée (?:costumée|déguisée|à thème)|déguis|entièrement décoré|décor(?:é|ations?) (?:d'halloween|pour l'occasion)",
-        re.IGNORECASE,
     )),
 ]
+# Told by their leading words first (surprise.patterns).
+_NATURE_TEXTS = [(label, points, matcher(pattern)) for label, points, pattern in _NATURE_PATTERNS]
 # A setting out of the ordinary, said in the title or the venue's name (a text's "near Château-Rouge" is not one).
-_SETTING = re.compile(r"ch[âa]teaux?(?![- ](?:rouge|d'eau|landon)| de cartes)|manoir|abbaye|hôtel particulier", re.IGNORECASE)
+_SETTING = re.compile(r"ch[âa]teaux?(?![- ](?:rouge|d'eau|landon)| de cartes)|manoir|abbaye|hôtel particulier")
 _OFFBEAT_WORDS = {
     "insolite": 8, "secret": 8, "mystérieux": 5, "immersif": 5, "interactif": 4, "éphémère": 5,
     "cave voûtée": 5, "dans le noir": 6, "aux chandelles": 4, "rétro / vintage": 3, "atelier d'artisan": 4,
@@ -64,11 +68,10 @@ _COMMON = re.compile(
     r"tour eiffel|bateaux?[- ]mouches?|bateaux parisiens|croisière (?:commentée|d'une heure)|louvre|arc de triomphe|"
     r"moulin rouge|lido|musée d'orsay|sacré[- ]c(?:œ|oe)ur|big bus|tootbus|city ?tour|bus panoramique|coupe[- ]file|"
     r"billet d'entrée|visite guidée classique|hop[- ]on",
-    re.IGNORECASE,
 )
-_BIG_VENUE = re.compile(r"accor arena|z[ée]nith|stade|la défense arena|palais des congrès|olympia\b|bercy", re.IGNORECASE)
-_CHAIN = re.compile(r"\b(?:hippopotamus|buffalo grill|big mamma|pny|five guys|léon de bruxelles|pizza hut|bistro r[ée]gent|au bureau|o'sullivans)\b", re.IGNORECASE)
-_GENERIC_CUISINE = re.compile(r"\b(?:pizza|burger|sushi|kebab|fast food|coffee shop|sandwich)\b", re.IGNORECASE)
+_BIG_VENUE = re.compile(r"accor arena|z[ée]nith|stade|la défense arena|palais des congrès|olympia\b|bercy")
+_CHAIN = re.compile(r"\b(?:hippopotamus|buffalo grill|big mamma|pny|five guys|léon de bruxelles|pizza hut|bistro r[ée]gent|au bureau|o'sullivans)\b")
+_GENERIC_CUISINE = re.compile(r"\b(?:pizza|burger|sushi|kebab|fast food|coffee shop|sandwich)\b")
 
 
 @dataclass
@@ -94,8 +97,8 @@ class Scorer:
         if keywords is None:  # not stored yet: read the texts
             keywords = extract(texts(item))
         value, reasons = 30.0, []
-        venue = (activity.get("venue") or {}).get("name") or ""
-        title = f"{activity.get('title') or ''} {venue}"
+        venue = ((activity.get("venue") or {}).get("name") or "").lower()
+        title = f"{activity.get('title') or ''} {venue}".lower()
         # A classic's boat or view is what everyone does: no bonus for its setting nor its rarity here.
         common = bool(_COMMON.search(title))
 
@@ -104,8 +107,8 @@ class Scorer:
             t.replace("_", " "): _NATURE[t] for t in found["tags"]
             if t in _NATURE and not (common and t in ("vue", "sur_l_eau")) and not (t in _WORKSHOP and {"restaurant", "bar"} & categories)
         }
-        text = texts(item)
-        nature |= {label: points for label, points, pattern in _NATURE_TEXTS if label not in nature and pattern.search(text)}
+        text = texts(item).lower()
+        nature |= {label: points for label, points, matches in _NATURE_TEXTS if label not in nature and matches(text)}
         if _SETTING.search(title):
             nature["château, manoir"] = 16
         if nature:

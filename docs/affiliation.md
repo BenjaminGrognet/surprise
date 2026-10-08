@@ -55,8 +55,6 @@ l'identifiant d'un autre affilié. Une fois inscrit chez Fever, il faut les remp
 - **La transparence** : signaler dans l'app que certains liens sont des liens partenaires, par exemple une ligne
   sous « Réserver » ou dans le compte. Apple autorise ces liens, puisque la réservation est un service consommé hors
   de l'app (règle 3.1.3(e)).
-- **Les images et les textes des activités réglés** (CLAUDE.md) : une app qui gagne de l'argent n'est plus un
-  prototype personnel.
 
 ### 2. Les inscriptions, dans l'ordre
 
@@ -79,22 +77,20 @@ l'identifiant d'un autre affilié. Une fois inscrit chez Fever, il faut les remp
 Pour aller plus vite au début, [Travelpayouts](https://www.travelpayouts.com/) ouvre GetYourGuide, Tiqets et Viator
 avec un seul compte, contre une part de la commission.
 
-### 3. Dans le code
+### 3. Dans le code (fait le 8 octobre 2026)
 
-Le modèle prévoit déjà un lien affilié par offre (`affiliate_url`, `src/surprise/models.py`), vide partout
-aujourd'hui. Le plus simple :
-- **Un constructeur de liens par site, côté API** : il transforme `booking_url` en lien affilié au moment de
-  servir la soirée, à partir de règles par domaine :
-  - GetYourGuide : paramètre `partner_id` ;
-  - Civitatis : `aid` ;
-  - Awin : lien profond `https://www.awin1.com/cread.php?awinmid=<annonceur>&awinaffid=<vous>&ued=<lien encodé>` ;
-  - Impact : lien profond généré dans l'interface.
-- **Les identifiants d'affilié dans `.env`**, jamais dans le dépôt.
-- **Un sous-identifiant par soirée** (`clickref` chez Awin, `subId1` chez Impact), pour savoir quelles soirées
-  mènent à des réservations. Il ne doit contenir aucune donnée personnelle : seulement le nom de la page de la
-  soirée.
-- **Des tests** (pytest) pour chaque règle : le lien d'origine est gardé, le paramètre ajouté une fois, les
-  domaines inconnus restent tels quels.
+`src/surprise/affiliation.py` transforme les liens « Réserver » au moment de servir la soirée (`parcours.soiree_json`)
+et dans les emails (`surprise.courriers`), d'après des règles par domaine :
+- GetYourGuide : `partner_id` (`GETYOURGUIDE_PARTNER_ID`) ;
+- Civitatis : `aid` (`CIVITATIS_AID`) ;
+- Awin : son lien profond `https://www.awin1.com/cread.php?awinmid=<annonceur>&awinaffid=<vous>&clickref=<page>&ued=<lien encodé>`
+  (`AWIN_PUBLISHER_ID`, et `AWIN_MERCHANTS=fnacspectacles.com:1234,thefork.fr:5678` : l'identifiant de chaque annonceur) ;
+- Impact (Fever) : lien profond généré dans son interface, pas encore branché.
+
+Les identifiants sont dans `.env`, jamais dans le dépôt ; sans eux, les liens restent tels quels. Le sous-identifiant
+est le nom de la page de la soirée (`cmp`, `clickref`), sans donnée personnelle. L'étape servie dit `partner: true`, et
+Mon compte prévient que certains liens sont partenaires. Les tests (`tests/test_affiliation.py`) vérifient chaque règle :
+le lien d'origine gardé, le paramètre ajouté une fois, les domaines inconnus tels quels.
 
 ### 4. Ensuite
 

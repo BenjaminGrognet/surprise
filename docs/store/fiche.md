@@ -5,24 +5,20 @@ aux questionnaires, et ce qui bloque encore. Préparé le 6 octobre 2026.
 
 ## Ce qui bloque encore la publication
 
-1. **Les images et les textes des activités** : l'app montre les photos des sites et garde le texte des médias
-   (`lead_text`). Il faut régler les deux avant tout usage public (CLAUDE.md) : photos sous licence ou de la maison,
-   textes réécrits. Les captures de `captures/` ne montrent que les images de l'app (bannières) ; il faut vérifier
-   que leurs droits sont bien acquis.
-2. **Identifiants de l'app** (`app/app.json`) : `fr.secretdate.app` est posé pour iOS et Android (le widget en a
+1. **Identifiants de l'app** (`app/app.json`) : `fr.secretdate.app` est posé pour iOS et Android (le widget en a
    besoin), avec `fr.secretdate.app.widgets` et `group.fr.secretdate.app` pour le widget iPhone. À confirmer avant
    la première build : ils ne changent plus après la première publication. Le `slug` vaut encore `app`.
-3. **Un serveur public** : l'API Python en HTTPS (`EXPO_PUBLIC_API_URL`). Le Supabase du projet est à jour de
+2. **Un serveur public** : l'API Python en HTTPS (`EXPO_PUBLIC_API_URL`). Le Supabase du projet est à jour de
    ses 26 migrations, et son historique les connaît (réparé le 6 octobre) : les prochaines passent par
    `supabase db push` (voir le README, « Base »).
-4. **Trois pages web** :
+3. **Trois pages web** :
    - une politique de confidentialité ;
    - une page d'assistance (contact) ;
    - pour Google Play, une page qui permet de demander la suppression du compte sans l'app.
-5. **Les textes de permission en français** : localisation (« Je suis arrivé(e) ») et notifications. Les déclarer
+4. **Les textes de permission en français** : localisation (« Je suis arrivé(e) ») et notifications. Les déclarer
    dans `app.json` (plugin `expo-location`, `locationWhenInUsePermission`) plutôt que les messages anglais par
    défaut. Ajouter aussi l'icône Android des notifications, monochrome.
-6. **Des comptes de démonstration pour la vérification Apple** : un instigateur avec une soirée gardée à venir, et
+5. **Des comptes de démonstration pour la vérification Apple** : un instigateur avec une soirée gardée à venir, et
    son passager.
 
 ## App Store Connect
@@ -156,5 +152,5 @@ cd app && node scripts/store-captures.js
 ```
 
 Le script crée deux comptes de test, compose une soirée pour le lendemain, la garde, invite le passager et
-photographie chaque écran comme un téléphone de 440 x 956 points. Il bloque les photos des sites : seules les
-images de l'app apparaissent.
+photographie chaque écran comme un téléphone de 440 x 956 points, avec les photos des activités telles que l'app
+les montre.

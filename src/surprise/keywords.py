@@ -15,6 +15,8 @@ import re
 from collections import Counter
 from typing import Any
 
+from surprise.patterns import matcher
+
 FACETS = {
     "ambiance": "Ambiance",
     "cadre": "Cadre",
@@ -79,8 +81,8 @@ _RULES = [
 ]
 
 KEYWORDS = {key: {"facet": facet} for key, facet, _ in _RULES}
-# Lowercase patterns on lowercased text: three times faster than IGNORECASE.
-_PATTERNS = [(key, re.compile(pattern)) for key, _, pattern in _RULES]
+# Lowercase patterns on lowercased text: three times faster than IGNORECASE; told by their leading words first.
+_PATTERNS = [(key, matcher(re.compile(pattern))) for key, _, pattern in _RULES]
 
 
 def texts(item: dict[str, Any]) -> str:
@@ -96,7 +98,7 @@ def texts(item: dict[str, Any]) -> str:
 def extract(text: str) -> list[str]:
     """Keywords found in a text, in lexicon order."""
     text = text.lower()
-    return [key for key, pattern in _PATTERNS if pattern.search(text)]
+    return [key for key, matches in _PATTERNS if matches(text)]
 
 
 def main() -> None:

@@ -84,7 +84,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
         "per_couple": True,  # a room, for the two of them
     }
     closed = "fermé définitivement" if _CLOSED.search(name) else None
-    return with_reason(closed, normalize_facts(to_raw_record(payload), facts, "Time Out", now))
+    return with_reason(closed, normalize_facts(to_raw_record(payload), facts, now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

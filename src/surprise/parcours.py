@@ -29,6 +29,7 @@ The routes are saved (pipeline.soirees) and shown by the app (app/, /soiree?soir
 import argparse
 import contextlib
 import hashlib
+import heapq
 import json
 import math
 import os
@@ -52,7 +53,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from surprise import availability, genres, images
+from surprise import affiliation, availability, genres, images
 from surprise.collectors import come_to_paris, funbooker, wecandoo
 from surprise.collectors.facts import BROWSER_HEADERS
 from surprise.local_store import LocalStore, open_store
@@ -183,9 +184,24 @@ class Candidate:
     genres: list[str] = field(default_factory=list)  # what it plays (surprise.genres)
     score: float = 0.0
 
-    @property
+    @cached_property
     def key(self) -> tuple[str, str]:
         return self.item["source_id"], self.item["external_id"]
+
+    # Read for each candidate against each route of the search (compose): worked out once.
+    @cached_property
+    def kinds(self) -> frozenset[str]:
+        """What the outing is, its activity tags: an evening has each kind once."""
+        return frozenset(t for t in self.tags if TAGS[t]["facet"] == "activite")
+
+    @cached_property
+    def settings(self) -> frozenset[str]:
+        """On the water, with a view: one of each is enough for an evening."""
+        return frozenset({"sur_l_eau", "vue"} & set(self.tags))
+
+    @cached_property
+    def venue_key(self) -> str:
+        return self.venue.lower()
 
     def end_of(self, start: datetime) -> datetime:
         return self.ends.get(start) or start + timedelta(minutes=self.duration)
@@ -407,6 +423,17 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
     place = coordinates(item)
     if not place:
         return None
+    latest = request.end - timedelta(minutes=30)
+    # Dated sessions that evening; an activity dated on other evenings only is none of this one's steps (told first:
+    # most of the base, each evening composed).
+    sessions = []
+    for occurrence in activity.get("occurrences") or []:
+        begin = datetime.fromisoformat(occurrence["starts_at"]).astimezone(PARIS)
+        if request.start <= begin <= latest:
+            finish = datetime.fromisoformat(occurrence["ends_at"]).astimezone(PARIS) if occurrence.get("ends_at") else None
+            sessions.append((begin, finish if finish and finish - begin <= timedelta(hours=6) else None))
+    if not sessions and activity.get("occurrences"):
+        return None  # dated, but not this evening
     found = describe(activity)
     role_ = role(activity, found["tags"], ate=request.no_dinner)
     duration = default_duration(activity, role_)
@@ -420,16 +447,8 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
         price=price, price_estimated=estimated, booking_url=link,
         originality=originality, keywords=item["enrichment"].get("keywords") or [],
     )
-    latest = request.end - timedelta(minutes=30)
     categories = set(activity.get("categories") or [])
 
-    # Dated sessions that evening.
-    sessions = []
-    for occurrence in activity.get("occurrences") or []:
-        begin = datetime.fromisoformat(occurrence["starts_at"]).astimezone(PARIS)
-        if request.start <= begin <= latest:
-            finish = datetime.fromisoformat(occurrence["ends_at"]).astimezone(PARIS) if occurrence.get("ends_at") else None
-            sessions.append((begin, finish if finish and finish - begin <= timedelta(hours=6) else None))
     if sessions:
         if not (free or link):
             return None
@@ -437,8 +456,6 @@ def _build_candidate(item: dict[str, Any], request: Request, checked: dict[str, 
         dancing = "nuit" in categories or "fete" in found["vibes"]  # one leaves when the evening ends
         basis = "Gratuit" if free else f"billets sur {_platform(link)}"
         return Candidate(**base, starts=[b for b, _ in sessions], ends=ends, basis=basis, kind="gratuit" if free else "seance", flexible=dancing)
-    if activity.get("occurrences"):
-        return None  # dated, but not this evening
 
     # A slot confirmed by the booking engine.
     if checked and checked.get("engine"):
@@ -731,33 +748,40 @@ def compose(candidates: list[Candidate], request: Request, beam: int = 300, max_
         if candidate.flexible:
             starts = [s for s in starts if s.minute % 30 == 0]
         states += [[_step(candidate, start, request)] for start in starts[:4]]
+    # The way from an activity to each of the pool, worked out once for the whole search.
+    hops: dict[int, list[tuple[float, int] | None]] = {}
+    last_start, latest_end, shortest = request.end - timedelta(minutes=30), request.end + timedelta(minutes=20), timedelta(minutes=40)
     for _ in range(max_steps):
-        states = sorted(states, key=lambda steps: -_route_score(steps, request, partial=True))[:beam]
+        states = heapq.nsmallest(beam, states, key=lambda steps: -_route_score(steps, request, partial=True))
         finished += [Route(steps) for steps in states if _complete(steps, request)]
         grown = []
         for steps in states:
             last = steps[-1]
-            if last.end >= request.end - timedelta(minutes=30):
+            if last.end >= last_start:
                 continue
             used = {s.candidate.key for s in steps}
-            venues = {s.candidate.venue.lower() for s in steps}
-            roles = Counter(s.candidate.role for s in steps)
+            venues = {s.candidate.venue_key for s in steps}
+            fits = _fits_after(steps, bool(trame), request.overnight)
             slot = trame[len(steps)] if len(steps) < len(trame) else None
             if trame and slot is None:
                 continue
-            for candidate in pool:
-                if candidate.key in used or candidate.venue.lower() in venues or not _role_fits(candidate, roles, steps, bool(trame), request.overnight):
+            # Clubs open late: a longer walk or wait before them is part of the night.
+            wait = timedelta(minutes=90 if slot == "fete" else 60 if trame else 50)
+            ways = hops.setdefault(id(last.candidate), [None] * len(pool))
+            for index, candidate in enumerate(pool):
+                if candidate.key in used or candidate.venue_key in venues:
                     continue
-                km = distance_km((last.candidate.lat, last.candidate.lon), (candidate.lat, candidate.lon))
-                minutes = travel_minutes(km)
-                if minutes > request.max_travel:
+                if (way := ways[index]) is None:
+                    km = distance_km((last.candidate.lat, last.candidate.lon), (candidate.lat, candidate.lon))
+                    way = ways[index] = km, travel_minutes(km)
+                km, minutes = way
+                if minutes > request.max_travel or not fits(candidate):
                     continue
                 ready = last.end + timedelta(minutes=minutes + 5)
-                # Clubs open late: a longer walk or wait before them is part of the night.
-                wait = timedelta(minutes=90 if slot == "fete" else 60 if trame else 50)
                 # A bar can be left earlier to catch a session, after 45 minutes at least.
                 earliest = last.start + timedelta(minutes=45 + minutes + 5) if last.candidate.flexible else ready
-                fitting = [s for s in candidate.starts if earliest <= s <= ready + wait and (not slot or fits_slot(candidate, slot, s))]
+                latest = ready + wait
+                fitting = [s for s in candidate.starts if earliest <= s <= latest and (not slot or fits_slot(candidate, slot, s))]
                 if not fitting:
                     continue
                 start = next((s for s in fitting if s >= ready), fitting[-1])
@@ -767,7 +791,7 @@ def compose(candidates: list[Candidate], request: Request, beam: int = 300, max_
                     leave -= timedelta(minutes=leave.minute % 5)
                     previous = Step(last.candidate, last.start, leave, last.travel, last.distance)
                 step = _step(candidate, start, request, travel=minutes, distance=km)
-                if step.end > request.end + timedelta(minutes=20) or step.end - step.start < timedelta(minutes=40):
+                if step.end > latest_end or step.end - step.start < shortest:
                     continue
                 grown.append(steps[:-1] + [previous, step])
         if not grown:
@@ -795,25 +819,16 @@ def _step(candidate: Candidate, start: datetime, request: Request, travel: int =
     return Step(candidate, start, end, travel, distance)
 
 
-def _role_fits(candidate: Candidate, roles: Counter, steps: list[Step], trame: bool = False, overnight: bool = False) -> bool:
-    """Without a trame: three activities at most, four if the evening sleeps out; one dinner, one drink among
-    them. Always: no kind of outing twice."""
-    if not trame:
-        if len(steps) >= (4 if overnight else 3):
-            return False
-        if candidate.role in ("repas", "verre") and roles[candidate.role]:
-            return False
-    # Not twice the same kind of outing (two escape games, two stand-ups).
-    kinds = _activity_tags(candidate)
-    if any(kinds & _activity_tags(s.candidate) for s in steps):
-        return False
-    # One boat and one view are enough for an evening.
-    settings = {"sur_l_eau", "vue"} & set(candidate.tags)
-    return not any(settings & set(s.candidate.tags) for s in steps)
-
-
-def _activity_tags(candidate: Candidate) -> set[str]:
-    return {t for t in candidate.tags if TAGS[t]["facet"] == "activite"}
+def _fits_after(steps: list[Step], trame: bool = False, overnight: bool = False) -> Callable[[Candidate], bool]:
+    """Whether a candidate can join these steps. Without a trame: three activities at most, four if the evening sleeps
+    out; one dinner, one drink among them. Always: no kind of outing twice (two escape games, two stand-ups); one boat
+    and one view are enough."""
+    if not trame and len(steps) >= (4 if overnight else 3):
+        return lambda candidate: False
+    had = set() if trame else {s.candidate.role for s in steps} & {"repas", "verre"}
+    kinds = frozenset().union(*(s.candidate.kinds for s in steps))
+    settings = frozenset().union(*(s.candidate.settings for s in steps))
+    return lambda candidate: candidate.role not in had and not candidate.kinds & kinds and not candidate.settings & settings
 
 
 def _main_tag(candidate: Candidate) -> str | None:
@@ -828,6 +843,10 @@ def _complete(steps: list[Step], request: Request) -> bool:
     if len(steps) < 2 or not any(s.candidate.role == "sortie" for s in steps):
         return False
     return steps[-1].end >= request.end - timedelta(minutes=100)
+
+
+# A dinner at a dinner's hour makes a better evening.
+_DINNER_FROM, _DINNER_TO = time(19), time(21, 30)
 
 
 def _route_score(steps: list[Step], request: Request, partial: bool = False) -> float:
@@ -848,7 +867,7 @@ def _route_score(steps: list[Step], request: Request, partial: bool = False) -> 
         return -math.inf
     if price > request.budget:
         value -= 6 * (price - request.budget) / request.budget
-    if any(s.candidate.role == "repas" and time(19) <= s.start.time() <= time(21, 30) for s in steps):
+    if any(s.candidate.role == "repas" and _DINNER_FROM <= s.start.time() <= _DINNER_TO for s in steps):
         value += 1
     if not partial:
         last = steps[-1].candidate
@@ -875,8 +894,8 @@ def pick(routes: list[Route], count: int = 3, taken: list[Route] | None = None) 
         best, best_value = None, -math.inf
         for route in remaining:
             keys = {s.candidate.key for s in route.steps}
-            venues = {s.candidate.venue.lower() for s in route.steps}
-            if any(keys & {s.candidate.key for s in c.steps} or venues & {s.candidate.venue.lower() for s in c.steps} for c in chosen):
+            venues = {s.candidate.venue_key for s in route.steps}
+            if any(keys & {s.candidate.key for s in c.steps} or venues & {s.candidate.venue_key for s in c.steps} for c in chosen):
                 continue
             value = route.score - sum(_similarity(route, other) for other in chosen)
             if value > best_value:
@@ -1019,17 +1038,17 @@ def replace_step(route: Route, position: int, candidates: list[Candidate], reque
     previous = steps[position - 1] if position else None
     following = steps[position + 1] if position + 1 < len(steps) else None
     slot = request.trame[position] if position < len(request.trame) else None
-    roles = Counter(s.candidate.role for s in others)
+    fits = _fits_after(others, bool(request.trame), request.overnight)
     # Never the same activity again under another listing (a concert sold on two platforms): not its venue, not its title.
-    venues = {s.candidate.venue.lower() for s in steps} - {""}
+    venues = {s.candidate.venue_key for s in steps} - {""}
     titles = {_same(old.candidate.title)}
     budget = request.budget * 1.2 - sum(s.candidate.price for s in others)
     wait = timedelta(minutes=90 if slot == "fete" else 60 if request.trame else 50)
     best, best_value = None, -math.inf
     for candidate in candidates:
-        if candidate.key in excluded or candidate.venue.lower() in venues or _same(candidate.title) in titles or candidate.price > budget:
+        if candidate.key in excluded or candidate.venue_key in venues or _same(candidate.title) in titles or candidate.price > budget:
             continue
-        if (slot is None and candidate.role != old.candidate.role) or not _role_fits(candidate, roles, others, bool(request.trame), request.overnight):
+        if (slot is None and candidate.role != old.candidate.role) or not fits(candidate):
             continue
         km_in = distance_km((previous.candidate.lat, previous.candidate.lon), (candidate.lat, candidate.lon)) if previous else 0.0
         travel_in = travel_minutes(km_in) if previous else 0
@@ -1460,10 +1479,12 @@ def _booking(c: Candidate, item: dict[str, Any]) -> tuple[str | None, str]:
     return c.booking_url or item.get("source_url") or None, "reserver"
 
 
-def step_json(step: Step, redo: str | None) -> dict[str, Any]:
-    """One step of a route, its data reshaped for a client to display however it likes."""
+def step_json(step: Step, redo: str | None, page: str | None = None) -> dict[str, Any]:
+    """One step of a route, its data reshaped for a client to display however it likes. With the evening's `page`, its
+    booking link is a partner's where the site has a programme (surprise.affiliation), `partner` saying so."""
     c, item = step.candidate, step.candidate.item
     link, action = _booking(c, item)
+    link, partnered = affiliation.partner(link, page) if page else (link, False)
     return {
         "start": step.start.isoformat(), "end": step.end.isoformat(),
         "travel_minutes": step.travel, "distance_km": step.distance,
@@ -1472,7 +1493,7 @@ def step_json(step: Step, redo: str | None) -> dict[str, Any]:
         "lat": c.lat, "lon": c.lon,
         "role": c.role, "kind": c.kind,
         "price": c.price, "price_estimated": c.price_estimated,
-        "booking_url": link, "booking_action": action,
+        "booking_url": link, "booking_action": action, "partner": partnered,
         "image_url": _image_url(item),
         "text": item["enrichment"].get("description") or (item.get("lead_text") or "").strip() or None,
         "vibes": c.vibes, "keywords": c.keywords, "originality": c.originality,
@@ -1483,10 +1504,11 @@ def step_json(step: Step, redo: str | None) -> dict[str, Any]:
     }
 
 
-def route_json(index: int, route: Route, request: Request | None = None) -> dict[str, Any]:
+def route_json(index: int, route: Route, request: Request | None = None, page: str | None = None) -> dict[str, Any]:
     """One route (an evening's timeline), its data reshaped for a client to display however it likes; with the
-    formula and the party of the evening asked (a couple's when not given), which its clues and words follow."""
-    steps = [step_json(step, f"routes/{index}/steps/{position}") for position, step in enumerate(route.steps)]
+    formula and the party of the evening asked (a couple's when not given), which its clues and words follow; with
+    its evening's `page`, partner links."""
+    steps = [step_json(step, f"routes/{index}/steps/{position}", page) for position, step in enumerate(route.steps)]
     request = request or route.request
     squad = bool(request and request.squad)
     return {
@@ -1497,7 +1519,7 @@ def route_json(index: int, route: Route, request: Request | None = None) -> dict
         "start": route.steps[0].start.isoformat(), "end": route.steps[-1].end.isoformat(),
         "price": route.price, "price_estimated": any(s.candidate.price_estimated for s in route.steps),
         "steps": steps,
-        "night": step_json(route.night, None) if route.night else None,
+        "night": step_json(route.night, None, page) if route.night else None,
         "redo": f"routes/{index}",
     }
 
@@ -1519,7 +1541,7 @@ def soiree_json(name: str, state: dict[str, Any]) -> dict[str, Any]:
         "vibes": request.vibes, "trame": request.trame,
         # Secret Date ("duo") or Secret Squad ("squad"), and how many go out: every price counts them all.
         "formule": request.formule, "personnes": request.party,
-        "routes": [route_json(index, route, request) for index, route in enumerate(routes)],
+        "routes": [route_json(index, route, request, name) for index, route in enumerate(routes)],
     }
 
 
@@ -1767,6 +1789,11 @@ _TYPES = {cls.__name__: cls for cls in (Request, Candidate, Step)}
 
 def _encode(value: Any) -> Any:
     """JSON for the store, the types JSON lacks tagged: dataclasses, dates, sets, non-string keys, infinities."""
+    # Most values are text and numbers: told first, an evening's candidates hold a few hundred thousand of them.
+    if value is None or isinstance(value, (str, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else {"_float": repr(value)}
     if is_dataclass(value):
         return {"_type": type(value).__name__, **{f.name: _encode(getattr(value, f.name)) for f in fields(value)}}
     if isinstance(value, datetime):
@@ -1782,10 +1809,26 @@ def _encode(value: Any) -> Any:
             return {k: _encode(v) for k, v in value.items()}
         return {"_pairs": [[_encode(k), _encode(v)] for k, v in value.items()]}
     if isinstance(value, list):
-        return [_encode(v) for v in value]
-    if isinstance(value, float) and not math.isfinite(value):
-        return {"_float": repr(value)}
+        if grid := _grid_of(value):
+            return grid
+        return [v if type(v) is str else _encode(v) for v in value]
     return value
+
+
+def _grid_of(values: list) -> dict[str, list] | None:
+    """Times evenly spaced in Paris (a bar's possible starts, every quarter of an hour) as their first one, their
+    step and their count: an evening's candidates hold tens of thousands of them, written at each composition."""
+    if len(values) < 3 or type(values[0]) is not datetime or type(values[1]) is not datetime:
+        return None
+    step = values[1] - values[0]  # same zone: a step of the clock on the wall
+    if step <= timedelta(0) or step % timedelta(seconds=1):
+        return None
+    for previous, current in zip(values, values[1:]):
+        if type(current) is not datetime or current.tzinfo is not PARIS or current.fold or current - previous != step:
+            return None
+    if values[0].tzinfo is not PARIS or values[0].fold:
+        return None
+    return {"_grid": [values[0].isoformat(), step // timedelta(seconds=1), len(values)]}
 
 
 def _decode(value: Any) -> Any:
@@ -1796,6 +1839,11 @@ def _decode(value: Any) -> Any:
     if "_datetime" in value:
         moment = datetime.fromisoformat(value["_datetime"])
         return moment.astimezone(PARIS) if moment.tzinfo else moment
+    if "_grid" in value:
+        first, seconds, count = value["_grid"]
+        start = datetime.fromisoformat(first).replace(tzinfo=PARIS)
+        # Each time as if told alone ("_datetime"): its wall time and offset, read back in Paris.
+        return [datetime.fromisoformat((start + timedelta(seconds=seconds * k)).isoformat()).astimezone(PARIS) for k in range(count)]
     if "_date" in value:
         return date.fromisoformat(value["_date"])
     if "_set" in value:
@@ -1976,13 +2024,13 @@ def _regenerate(store: LocalStore, base: Base, name: str, index: int, position: 
     if position is None:
         # None of the route's activities again, under the same listing or another one.
         keys, titles = {s.candidate.key for s in route.steps}, {_same(s.candidate.title) for s in route.steps}
-        venues = {s.candidate.venue.lower() for s in route.steps} - {""}
+        venues = {s.candidate.venue_key for s in route.steps} - {""}
         # As many steps as the route had when composed, the ones the couple took out included, if such routes exist.
         size = max(len(route.steps), state["sizes"].get(index, 0))
         others = [r for r in routes if r is not route]
 
         def drawn(candidates: list[Candidate]) -> list[Route]:
-            found = compose([c for c in candidates if c.key not in keys and _same(c.title) not in titles and c.venue.lower() not in venues], request)
+            found = compose([c for c in candidates if c.key not in keys and _same(c.title) not in titles and c.venue_key not in venues], request)
             return [r for r in found if len(r.steps) >= size] or found
 
         def shown_before(drawn_route: Route) -> int:

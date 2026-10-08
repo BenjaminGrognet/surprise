@@ -121,7 +121,7 @@ function Tabs({ tab, onTab, pending }: { tab: Tab; onTab: (tab: Tab) => void; pe
         key={key}
         onPress={() => onTab(key)}
         accessibilityRole="tab"
-        accessibilityState={{ selected: active }}
+        aria-selected={active}
         style={[styles.tab, { borderBottomColor: active ? theme.accent : 'transparent' }]}>
         <View style={styles.tabTitle}>
           <ThemedText style={[styles.tabLabel, { color: active ? theme.accentInk : theme.textSecondary }]}>{title}</ThemedText>
@@ -278,7 +278,7 @@ function Coulisses({
                 <Pressable
                   onPress={() => onToggle(s.id)}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: isBooked }}
+                  aria-checked={isBooked}
                   accessibilityLabel={`${s.title} réservé`}
                   hitSlop={8}
                   style={[styles.box, { borderColor: isBooked ? theme.accent : theme.textSecondary, backgroundColor: isBooked ? theme.accent : 'transparent' }]}>

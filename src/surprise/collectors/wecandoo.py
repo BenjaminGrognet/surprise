@@ -73,7 +73,7 @@ def to_raw_record(payload: dict[str, Any]) -> RawRecord:
 def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
     raw = to_raw_record(payload)
     youth = "jeune public" if "duo-parent-enfant" in (payload.get("tags") or []) else None
-    result = normalize_facts(raw, payload | {"tags": None}, "Wecandoo", now)
+    result = normalize_facts(raw, payload | {"tags": None}, now)
     if result.activity and payload.get("workshop_id"):
         # Its sessions are asked by the workshop's id (surprise.availability): no page to read for it.
         booking = Booking(mode=BookingMode.SLOT, engine="Wecandoo", check=f"wecandoo:{payload['workshop_id']}")

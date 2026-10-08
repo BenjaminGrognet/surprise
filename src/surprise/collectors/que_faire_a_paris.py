@@ -1,4 +1,4 @@
-"""Collector for Que Faire à Paris (Ville de Paris open data, ODbL).
+"""Collector for Que Faire à Paris (Ville de Paris open data).
 
 API: Opendatasoft Explore v2.1, dataset ``que-faire-a-paris-``.
 The export endpoint returns every matching record in one call (the records
@@ -156,12 +156,7 @@ def parse_offer(payload: dict[str, Any]) -> Offer:
 def parse_image(payload: dict[str, Any]) -> Image | None:
     if not (url := safe_url(payload.get("cover_url"))):
         return None
-    credit = (payload.get("cover_credit") or "").strip()
-    return Image(
-        url=url,
-        license=f"Que Faire à Paris — crédit : {credit}" if credit else "Que Faire à Paris — crédit non précisé",
-        source_url=safe_url(payload.get("url")),
-    )
+    return Image(url=url, source_url=safe_url(payload.get("url")))
 
 
 def _youth_audience(payload: dict[str, Any]) -> str | None:

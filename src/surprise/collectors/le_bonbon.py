@@ -12,8 +12,8 @@ place or event with a practical block, one fact per line:
     <strong>Gratuit sur invitation</strong><br />
     <a href="https://official.example">Plus d'infos</a>
 
-read with the Paris ZigZag parser. The article text and cover photo are kept
-for Claude to rewrite a description: to remove before any public use.
+read with the Paris ZigZag parser. The article text and cover photo are kept:
+the description is drawn from the text (or written by Claude).
 """
 
 import itertools
@@ -97,7 +97,7 @@ def to_raw_record(block: dict[str, Any]) -> RawRecord:
 
 
 def normalize(block: dict[str, Any], now: datetime) -> Normalized:
-    return normalize_facts(to_raw_record(block), facts(block, now), "Le Bonbon", now)
+    return normalize_facts(to_raw_record(block), facts(block, now), now)
 
 
 def collect(client: httpx.Client, now: datetime | None = None, delay: float = DELAY_SECONDS) -> Iterator[Normalized]:

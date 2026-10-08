@@ -18,12 +18,21 @@ const imageShown = (page: Page, url: string) =>
     return [...document.images].some((i) => i.src === wanted && i.complete && i.naturalWidth > 0);
   }, url);
 
+// A step's picture on the page (StepImage), shown: its photo, or the app's own of its kind in its place.
+const pictured = (page: Page, id: string) =>
+  page.evaluate(
+    (id) => [...document.querySelectorAll(`[data-testid="photo:${id}"] img, [data-testid="image-de-secours:${id}"] img`)]
+      .some((i) => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0),
+    id,
+  );
+
+// Each step with its own text and a picture: the site's photo, or, when the site does not give it (an activity without
+// one, a photo gone or refused: asked again, reported), the app's own picture of its kind; never a blank.
 async function expectImagesAndTexts(page: Page, steps: SoireeStep[]) {
   for (const s of steps) {
-    expect(s.image_url).toBeTruthy();
     expect(s.text).toBeTruthy();
-    await expect.poll(() => imageShown(page, s.image_url!), { message: `image de « ${s.title} » (${s.image_url})`, timeout: IMAGE_TIMEOUT }).toBe(true);
     await expect(page.getByText(s.text!, { exact: true })).toBeVisible();
+    await expect.poll(() => pictured(page, s.id), { message: `image de « ${s.title} » (${s.image_url})`, timeout: IMAGE_TIMEOUT }).toBe(true);
   }
 }
 
@@ -126,14 +135,23 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   await page.getByText('Garder cette intrigue').first().click();
   const kept: ComposedSoiree = await (await choosing).json();
   const route = kept.routes[0];
-  // Its images copied on the server when kept: the evening keeps them, whatever the sites do until then.
-  for (const s of route.steps) expect(s.image_url).toMatch(/^\/images\/\w+\.(jpg|png|webp|gif)$/);
+  // Its images copied on the server when kept, as far as the sites give them: the evening keeps them, whatever the
+  // sites do until then (one that cannot be had stays the site's; the page then shows another, or its own picture).
+  expect(route.steps.filter((s) => /^\/images\/\w+\.(jpg|png|webp|gif)$/.test(s.image_url ?? '')).length).toBeGreaterThan(0);
   await expect(page).toHaveURL(/\/revelation\?soiree=/);
   await expect(page.getByText(route.secret_title, { exact: true }).first()).toBeVisible();
   for (const s of route.steps) await expect(page.getByText(s.title, { exact: true })).toBeVisible();
   await expectImagesAndTexts(page, route.steps);
   const link = await page.getByText(/\/invitation\?code=[0-9a-f]{12}$/).textContent();
   const invitation = new URL(link!).pathname + new URL(link!).search;
+  // Or by email: the server writes to the address in the evening's name (surprise.courriers); here, on its way.
+  const friend = email('ami');
+  await page.getByLabel("Email de l'invité").fill(friend);
+  await page.getByText('Envoyer', { exact: true }).click();
+  await expect(page.getByText(`Invitation en route vers ${friend}…`)).toBeVisible();
+  await page.getByLabel("Email de l'invité").fill('pas-un-email');
+  await page.getByText('Envoyer', { exact: true }).click();
+  await expect(page.getByText("Cet email n'est pas valide.")).toBeVisible();
 
   // Behind the scenes, the passager's week as their phone will tell it: the sealed letter a week before, each step's
   // mystery word turned into its name as its veil lifts.
@@ -182,9 +200,9 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   await expect(passager).toHaveURL(/\/$/);
   await expect(passager.getByText('Votre soirée secrète')).toBeVisible();
   await expect(passager.getByText(route.secret_title, { exact: true })).toBeVisible();
-  // The step to come in its photo, veiled: the image is there (blurred), its title and description are not.
+  // The step to come in its picture, veiled: the image is there (blurred), its title and description are not.
   await expect(passager.getByText('Une étape encore voilée').first()).toBeVisible();
-  await expect.poll(async () => (await Promise.all(route.steps.map((s) => imageShown(passager, s.image_url!)))).some(Boolean), { timeout: IMAGE_TIMEOUT }).toBe(true);
+  await expect.poll(async () => (await Promise.all(route.steps.map((s) => pictured(passager, s.id)))).some(Boolean), { timeout: IMAGE_TIMEOUT }).toBe(true);
   const hidden = async () => {
     for (const s of route.steps) {
       await expect(passager.getByText(s.title)).toHaveCount(0);
@@ -203,7 +221,7 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   // The instigateur's home now says the passager has joined, under the photo of the step to come.
   await page.goto('/');
   await expect(page.getByText(/Complices connectés/)).toBeVisible();
-  await expect.poll(async () => (await Promise.all(route.steps.map((s) => imageShown(page, s.image_url!)))).some(Boolean), { timeout: IMAGE_TIMEOUT }).toBe(true);
+  await expect.poll(async () => (await Promise.all(route.steps.map((s) => pictured(page, s.id)))).some(Boolean), { timeout: IMAGE_TIMEOUT }).toBe(true);
 });
 
 test('a wrong password is refused in French, on the account page', async ({ page }) => {
@@ -222,7 +240,7 @@ test('a wrong invitation code is refused once the passager has an account', asyn
   await expect(page).toHaveURL(/\/invitation/);
 });
 
-test("a photo the sites do not give is asked again, reported, and the step shows the app's own picture", async ({ page, baseURL }) => {
+test("a photo the sites do not give is asked again, reported, and the step shows another or the app's own picture", async ({ page, baseURL }) => {
   // Every image from elsewhere refused, as a site down or a link gone would.
   const asked = new Map<string, number>();
   await page.route('**/*', (r) => {
@@ -246,18 +264,22 @@ test("a photo the sites do not give is asked again, reported, and the step shows
   const composed: ComposedSoiree = await (await composing).json();
   const steps = composed.routes.flatMap((r) => r.steps);
   // An activity of an evening kept before (the test above) comes with its copy on the server: that one shows.
-  const sites = steps.filter((s) => !s.image_url!.startsWith('/'));
-  for (const s of steps.filter((s) => s.image_url!.startsWith('/')))
+  const sites = steps.filter((s) => s.image_url && !s.image_url.startsWith('/'));
+  for (const s of steps.filter((s) => s.image_url?.startsWith('/')))
     await expect.poll(() => imageShown(page, s.image_url!), { message: `copie de « ${s.title} »` }).toBe(true);
-  // The others: their picture of the app's own, shown, after their photo was asked twice and reported to the server.
+  // The others: their photo asked twice, then reported to the server, which answers with another it copied here (the
+  // official site's) or none, the step then in the app's own picture of its kind; at once for an activity without one.
   expect(sites.length).toBeGreaterThan(0);
-  await expect(page.getByTestId('image-de-secours')).toHaveCount(sites.length, { timeout: IMAGE_TIMEOUT });
-  await expect.poll(() => new Set(reported).size).toBe(new Set(sites.map((s) => s.id)).size);
+  await expect.poll(() => new Set(reported).size, { timeout: IMAGE_TIMEOUT }).toBe(new Set(sites.map((s) => s.id)).size);
   for (const s of sites) expect(asked.get(s.image_url!) ?? 0).toBeGreaterThanOrEqual(2);
-  for (const s of steps) await expect(page.getByText(s.title, { exact: true })).toBeVisible();
+  for (const s of steps) {
+    await expect(page.getByText(s.title, { exact: true })).toBeVisible();
+    await expect.poll(() => pictured(page, s.id), { message: `image de « ${s.title} »`, timeout: IMAGE_TIMEOUT }).toBe(true);
+  }
+  await expect(page.getByTestId(/^image-de-secours:/).first()).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => [...document.images].filter((i) => i.complete && i.naturalWidth > 0 && i.src.includes('/bannieres/')).length))
-    .toBeGreaterThanOrEqual(sites.length);
+    .toBeGreaterThan(0);
 });
 
 test('the tab bar: every icon in emerald, only the tab one is on lit like the jewel', async ({ page }) => {
@@ -349,10 +371,11 @@ test('a band’s evening: its own look, no profile, eight of them, its guests by
   expect(look).toMatchObject({ font: expect.stringContaining('Anton'), transform: 'uppercase', color: NEON });
   expect(look.glow).not.toBe('none');
   // The dinner asked right after the mood, before the secret options (the couple's form is the same).
-  const top = async (text: string) => (await page.getByText(text).boundingBox())!.y;
+  const top = async (text: string, exact = false) => (await page.getByText(text, { exact }).boundingBox())!.y;
   const diner = await top('Le dîner fait-il partie du complot');
   expect(diner).toBeGreaterThan(await top("L'humeur du soir"));
-  expect(diner).toBeLessThan(await top('Les options secrètes'));
+  // Exact: the mood's hint names the secret options too.
+  expect(diner).toBeLessThan(await top('Les options secrètes', true));
   // Its secret options outlined in a second neon, fuchsia.
   const borders = await page.getByRole('checkbox').evaluateAll((boxes) => boxes.map((box) => getComputedStyle(box).borderColor));
   expect(borders.filter((border) => border.includes(SECRET)).length).toBeGreaterThan(0);

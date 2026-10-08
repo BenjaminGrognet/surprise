@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -326,6 +326,24 @@ def test_the_candidates_are_kept_without_their_luck():
     assert all(0 <= d.score - c.score <= parcours.VARIETY for c, d in zip(candidates, drawn))
     base = parcours.Base([c.item for c in candidates], {c.key: 35 for c in candidates})
     assert parcours._candidates_from(parcours._candidates_json(candidates), base) == candidates
+
+
+def _told_alone(moments):
+    """Each time as the store told it before grids: one by one, read back in Paris."""
+    return [datetime.fromisoformat(m.isoformat()).astimezone(PARIS) for m in moments]
+
+
+@pytest.mark.parametrize("day", [date(2026, 10, 9), date(2026, 10, 24), date(2026, 3, 28)], ids=["un vendredi", "l'heure d'hiver", "l'heure d'été"])
+def test_a_bars_starts_are_kept_as_a_grid_and_read_back_as_before(day):
+    # A bar's starts, every quarter of an hour from 19:00 to 04:00, across the night the clocks change, if they do.
+    starts = parcours._grid(datetime.combine(day, datetime.min.time(), PARIS).replace(hour=19), datetime.combine(day + timedelta(days=1), datetime.min.time(), PARIS).replace(hour=4))
+    encoded = parcours._encode(starts)
+    assert list(encoded) == ["_grid"] and len(json.dumps(encoded)) < 60
+    assert parcours._decode(json.loads(json.dumps(encoded))) == _told_alone(starts)
+    # Sessions not a quarter of an hour apart, or too few, stay told one by one.
+    for moments in ([starts[0], starts[3], starts[4]], starts[:2], [starts[0], starts[0].astimezone(timezone.utc), starts[2]]):
+        assert parcours._decode(json.loads(json.dumps(parcours._encode(moments)))) == _told_alone(moments)
+        assert "_grid" not in json.dumps(parcours._encode(moments))
 
 
 def test_a_chosen_route_is_the_evenings_only_one(tmp_path, monkeypatch):

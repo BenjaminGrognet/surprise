@@ -9,8 +9,7 @@ postcode, coordinates, opening hours, photos) and lists its booking options with
 their capacity ("Réserver quelques tables 1-440 personnes", "Privatiser Salon
 1-30 personnes"): the smallest and the largest party it takes. Its kinds
 ("Bar dansant", "Brasserie moderne") say what it is, its description is kept as
-lead_text for Claude to rewrite (to remove before any public use). Booking a
-few tables costs nothing; the booking itself (/booking/) is closed to robots, so
+lead_text. Booking a few tables costs nothing; the booking itself (/booking/) is closed to robots, so
 it is not checked. The site blocks a robot reading fast: ten seconds between two
 pages, and the run stops when pages no longer answer.
 """
@@ -126,7 +125,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
         "website": payload["url"],
         "booking_url": payload["url"],
     }
-    result = normalize_facts(to_raw_record(payload), facts, "Privateaser", now)
+    result = normalize_facts(to_raw_record(payload), facts, now)
     if result.activity:
         # Booking a few tables is free: the drinks are paid there.
         result.activity.offers[0].paid_booking = False

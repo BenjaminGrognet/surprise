@@ -1,4 +1,4 @@
-"""Collector for Paris restaurants bookable online, from OpenStreetMap (tier 1: open data, ODbL).
+"""Collector for Paris restaurants bookable online, from OpenStreetMap (tier 1: open data).
 
 The restaurants of Paris with a website are listed by the Overpass API (name,
 cuisine, address, coordinates, opening hours). Each website is read once: a
@@ -184,7 +184,7 @@ def normalize(payload: dict[str, Any], now: datetime) -> Normalized:
         reason = f"site {payload['site_error']}"
     elif not payload.get("engine"):
         reason = "sans réservation en ligne"
-    return with_reason(reason, normalize_facts(raw, complete_place(payload), "OpenStreetMap (ODbL)", now))
+    return with_reason(reason, normalize_facts(raw, complete_place(payload), now))
 
 
 def collect(client: httpx.Client, now: datetime | None = None) -> Iterator[Normalized]:
