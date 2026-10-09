@@ -13,7 +13,7 @@ import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
 import { useNow } from '@/hooks/use-now';
 import { PaletteProvider, useTheme } from '@/hooks/use-theme';
-import { accountProfile, eveningsHistory, upcomingEvening, type EveningHistoryRow } from '@/lib/account';
+import { accountProfile, eveningsHistory, upcomingEvenings, type EveningHistoryRow } from '@/lib/account';
 import { getSoireeState, place, type Profile, type SoireeRoute } from '@/lib/api';
 import { cluesFor, dayHint, inTime, nextClue, revealAt, revealMode, stepRevealed, stepWords } from '@/lib/clues';
 import { complicity, type Complicity } from '@/lib/complicity';
@@ -23,10 +23,14 @@ import { forgetProfile, rememberedProfile } from '@/lib/local-store';
 import { curtainFalls } from '@/lib/souvenirs';
 import { supabaseConfigured } from '@/lib/supabase';
 
+// An evening to come on the home, from the account's side of it.
+type Upcoming = { row: EveningHistoryRow; route: SoireeRoute | null; side: AccountRole };
+
 const capitalised = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 // "Le Tableau des Complots", cut like a membership: no bar above, the page opens on the next mystery evening as the
 // couple's card — its countdown in gold —, then a status line, the evening's first step, and the complicity gauge.
+// An account on both sides — surprised by one evening, composing another — sees the next of each, the nearest first.
 // The passager's page opens on their own card, what being the passager means; then the evening's card, the status,
 // the step veiled (its mystery word) and the gauge, and a way to compose an evening of their own in turn. Each
 // evening is shown from the account's side of it (eveningRole), and in its own look: a band's (Secret Squad) in its neon.
@@ -34,7 +38,7 @@ export default function AccueilScreen() {
   const { role, userId } = useCouple();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [upcoming, setUpcoming] = useState<{ row: EveningHistoryRow; route: SoireeRoute | null } | null>(null);
+  const [upcoming, setUpcoming] = useState<Upcoming[]>([]);
   const [gauge, setGauge] = useState<Complicity | null>(null);
   const [toSeal, setToSeal] = useState<EveningHistoryRow | null>(null);
 
@@ -49,8 +53,8 @@ export default function AccueilScreen() {
       setProfile(known);
       if (supabaseConfigured) {
         const today = isoDay(new Date());
-        const [row, history] = await Promise.all([
-          upcomingEvening(today).catch(() => null),
+        const [rows, history] = await Promise.all([
+          upcomingEvenings(today).catch((): EveningHistoryRow[] => []),
           eveningsHistory().catch(() => []),
         ]);
         setGauge(complicity(history, today));
@@ -58,33 +62,45 @@ export default function AccueilScreen() {
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
         setToSeal(history.find((r) => !!r.day && r.day < today && r.day >= isoDay(weekAgo) && !r.souvenirs?.length) ?? null);
-        const state = row ? await getSoireeState(row.page_name).catch(() => null) : null;
-        setUpcoming(row ? { row, route: state?.routes[0] ?? null } : null);
+        // The next evening on each side: the one the account is surprised by, and the one it composes (or is in on).
+        const next = (['passager', 'instigateur'] as const)
+          .map((side) => rows.find((r) => eveningRole(r, userId) === side))
+          .filter((r): r is EveningHistoryRow => !!r)
+          .sort((a, b) => rows.indexOf(a) - rows.indexOf(b));
+        setUpcoming(await Promise.all(next.map(async (row) => {
+          const state = await getSoireeState(row.page_name).catch(() => null);
+          return { row, route: state?.routes[0] ?? null, side: eveningRole(row, userId) };
+        })));
       }
       setLoaded(true);
     })();
-  }, []));
+  }, [userId]));
 
-  const side = upcoming ? eveningRole(upcoming.row, userId) : role;
-  const palette = isSquad(upcoming?.row) ? 'squad' : 'date';
   return (
     <Screen gap={Spacing.four}>
-      {role === 'passager' ? <PassagerWelcome awaiting={loaded && !upcoming} /> : null}
+      {role === 'passager' ? <PassagerWelcome awaiting={loaded && !upcoming.some((u) => u.side === 'passager')} /> : null}
       {toSeal ? <BookCall row={toSeal} /> : null}
 
-      <PaletteProvider name={palette}>
+      {!loaded ? (
         <View style={styles.cardBlock}>
-          {loaded ? (
-            upcoming ? <NextIntrigue {...upcoming} role={side} plain={role === 'passager'} /> : role === 'passager' ? null : <NoIntrigue />
-          ) : (
-            <IntrigueCard><View style={styles.placeholder} /></IntrigueCard>
-          )}
-          {upcoming ? <Status row={upcoming.row} route={upcoming.route} role={side} /> : null}
-          {loaded && !upcoming && role === 'instigateur' ? <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink> : null}
+          <IntrigueCard><View style={styles.placeholder} /></IntrigueCard>
         </View>
-
-        {upcoming?.route ? <FirstStep row={upcoming.row} route={upcoming.route} role={side} /> : null}
-      </PaletteProvider>
+      ) : upcoming.length ? (
+        upcoming.map(({ row, route, side }) => (
+          <PaletteProvider key={row.page_name} name={isSquad(row) ? 'squad' : 'date'}>
+            <View style={styles.cardBlock}>
+              <NextIntrigue row={row} route={route} role={side} plain={role === 'passager'} />
+              <Status row={row} route={route} role={side} />
+            </View>
+            {route ? <FirstStep row={row} route={route} role={side} /> : null}
+          </PaletteProvider>
+        ))
+      ) : role === 'instigateur' ? (
+        <View style={styles.cardBlock}>
+          <NoIntrigue />
+          <PrimaryLink wide href="/soiree">Lancer une nouvelle intrigue</PrimaryLink>
+        </View>
+      ) : null}
 
       {role === 'instigateur' && loaded && !profile ? <ProfileCall /> : null}
       {role === 'passager' && loaded ? <YourTurn /> : null}

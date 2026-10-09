@@ -53,8 +53,8 @@ const posted = (page: Page, path: RegExp) =>
 const forTwo = (page: Page) => page.getByText('Une soirée à deux', { exact: true }).click();
 
 // An evening composed from the form: to laugh, having eaten. What the server answered, and what the page sent it.
-async function compose(page: Page) {
-  await forTwo(page);
+async function compose(page: Page, pick = true) {
+  if (pick) await forTwo(page);
   await page.getByText('Rire aux éclats').click();
   await page.getByText('Non, déjà mangé').click();
   const composing = posted(page, /^\/api\/soirees$/);
@@ -81,6 +81,10 @@ const SQUAD_WAIT = 'Sous la boule à facettes, la nuit trame votre virée…';
 const voted = (page: Page, method: 'POST' | 'DELETE') =>
   page.waitForResponse((r) => r.request().method() === method && new URL(r.url()).pathname === '/rest/v1/gouts');
 
+// How far the page is scrolled, whichever element scrolls it (react-native-web's ScrollView is a div of its own).
+const scrolled = (page: Page) =>
+  page.evaluate(() => Math.max(window.scrollY, ...[...document.querySelectorAll('*')].map((e) => e.scrollTop)));
+
 const EMERALD = 'rgb(61, 183, 135)';
 const NIGHT_INK = 'rgb(3, 20, 13)';
 
@@ -105,11 +109,20 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   await expect(eaten.locator('svg circle')).toHaveCount(2);
   await expect(eaten.locator('svg path')).toHaveCount(1);
   await eaten.click();
+  // No question on the start; the end said with its hour and the evening's length, no "Sans choix".
+  await expect(page.getByText("L'heure du rendez-vous")).toHaveCount(0);
+  await expect(page.getByText("Jusqu'à quelle heure ?")).toBeVisible();
+  await expect(page.getByText('Fin vers 0 h 30 · 5 h 30', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Sans choix : (l'heure|ce que vos envies)/)).toHaveCount(0);
   await waitingSaid(page, DATE_WAIT, SQUAD_WAIT);
   const composing = posted(page, /^\/api\/soirees$/);
   await page.getByText('Tramer nos intrigues').click();
+  expect(await scrolled(page)).toBeGreaterThan(0);
   const composed: ComposedSoiree = await (await composing).json();
   await expect(page.getByText('Trois intrigues se murmurent au salon')).toBeVisible();
+  // The three routes open at the top of the page, not where the form was left.
+  expect(await scrolled(page)).toBe(0);
+  await expect(page.getByText(/votre passager n'en verra que les indices/)).toBeVisible();
   expect(composed).toMatchObject({ formule: 'duo', personnes: 2 });
   expect(composed.routes.length).toBeGreaterThan(1);
   for (const route of composed.routes) {
@@ -235,6 +248,25 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   // Each clue under its chapter of the week; the meeting time theirs from the start.
   await expect(passager.getByText('Le rendez-vous', { exact: true })).toBeVisible();
   await hidden();
+  // Surprised by one evening, composing one of their own: their home shows the next of each, the surprise still veiled.
+  await passager.goto('/');
+  await passager.getByText('À votre tour de surprendre').click();
+  // Composing, they are this evening's instigateur: the page says so, not the roles of the evening they are surprised by.
+  await forTwo(passager);
+  await expect(passager.getByText('Quelle intrigue vous tente ?')).toBeVisible();
+  await expect(passager.getByText(/Vous êtes l'instigateur de cette soirée/)).toBeVisible();
+  const { composed: theirs } = await compose(passager, false);
+  await expect(passager.getByText(/votre passager n'en verra que les indices/)).toBeVisible();
+  await expect(passager.getByText(/votre instigateur qui n'en verra/)).toHaveCount(0);
+  const keeping = posted(passager, /\/routes\/0\/choose$/);
+  await passager.getByText('Garder cette intrigue').first().click();
+  const own: ComposedSoiree = await (await keeping).json();
+  await expect(passager).toHaveURL(/\/revelation\?soiree=/);
+  expect(theirs.name).not.toBe(kept.name);
+  await passager.getByRole('tab', { name: 'Accueil' }).click();
+  await expect(passager.getByText(route.secret_title, { exact: true })).toBeVisible();
+  await expect(passager.getByText(own.routes[0].secret_title, { exact: true }).first()).toBeVisible();
+  for (const s of route.steps) await expect(passager.getByText(s.title)).toHaveCount(0);
   await other.close();
 
   // The instigateur's home now says the passager has joined, under the photo of the step to come.
@@ -432,12 +464,19 @@ test('a band’s evening: its own look, no profile, eight of them, its guests by
   await mood('Rire aux larmes').click();
   await expect(mood('Se défier entre potes')).toBeChecked();
   await expect(mood('Rire aux larmes')).toBeChecked();
-  await expect(page.getByText("Jusqu'à 1, glissées dans le programme.")).toBeVisible();
+  // Two moods and still two secret options, as a couple slips two beside its mood: four wishes for a band.
+  await expect(page.getByText("Jusqu'à 2, glissées dans le programme.")).toBeVisible();
   await mood('Trinquer').click();
-  await expect(page.getByText('Vos humeurs prennent les 3 envies : retirez-en une pour en glisser.')).toBeVisible();
+  await expect(page.getByText("Jusqu'à 1, glissées dans le programme.")).toBeVisible();
+  await mood('Chanter à tue-tête').click();
+  await expect(page.getByText('Vos humeurs prennent les 4 envies : retirez-en une pour en glisser.')).toBeVisible();
   await expect(mood('Faire la fête')).toBeDisabled();
   await mood('Trinquer').click();
+  await mood('Chanter à tue-tête').click();
   await expect(mood('Faire la fête')).toBeEnabled();
+  await mood('Frissonner').click();
+  await mood('Se régaler').click();
+  await expect(mood('Vibrer en musique')).toBeDisabled();
   await page.getByText('Un EVJF ou un EVG', { exact: true }).click();
   await page.getByText('Non, déjà mangé').click();
   // What the band never wants, asked with the order in place of a profile's refusals.
@@ -451,7 +490,7 @@ test('a band’s evening: its own look, no profile, eight of them, its guests by
   const response = await composing;
   const composed: ComposedSoiree = await response.json();
   expect(response.request().postDataJSON()).toMatchObject({
-    formule: 'squad', personnes: 8, occasion: 'evjf', envies: ['jouer', 'rire'], decoucher: false, profile: null, eviter: ['alcool'], votes: {},
+    formule: 'squad', personnes: 8, occasion: 'evjf', envies: ['jouer', 'rire', 'frissons', 'gourmand'], decoucher: false, profile: null, eviter: ['alcool'], votes: {},
   });
   expect(composed).toMatchObject({ formule: 'squad', personnes: 8 });
   expect(composed.routes.length).toBeGreaterThan(0);

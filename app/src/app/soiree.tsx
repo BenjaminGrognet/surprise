@@ -11,7 +11,6 @@ import { Screen } from '@/components/screen';
 import { Waiting } from '@/components/spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Brands, Fonts, Radius, Spacing } from '@/constants/theme';
-import { useCouple } from '@/hooks/use-couple';
 import { useTastes } from '@/hooks/use-tastes';
 import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { chooseEvening, currentUser, eveningsHistory, keptEvening, myTastes, votesOf } from '@/lib/account';
@@ -24,9 +23,10 @@ import { rememberedProfile } from '@/lib/local-store';
 
 // The mood cards, from "Tamisé & Intime" to "Aventureux & Insolite": each one is one of
 // the server's wishes (surprise.quiz.ENVIES, its MOODS; a band's, SQUAD_MOODS), the middle one chosen until the couple
-// picks; several of them if they like. The other wishes are the "secret options": data.max wishes in all.
+// picks; several of them if they like. The other wishes are the "secret options", two at most: data.max wishes in all.
 const MOODS = ['cocooning', 'romantique', 'nous', 'curieux', 'surprise'];
 const MIDDLE_MOOD = 2;
+const MAX_SECRETS = 2;
 // A band's evening (Secret Squad): how many they are, the instigateur counted (surprise.quiz.SQUAD_PERSONNES); from
 // two, an evening with a friend being no date.
 const PERSONNES = { min: 2, max: 10, default: 6 };
@@ -49,8 +49,6 @@ export default function SoireeScreen() {
   // ?soiree=<name>: the evening composed before, so a reload or a shared link shows it again; once a route
   // is kept, the page has that route alone. ?formule=: the formula chosen first, Secret Date (duo) or Secret Squad.
   const { soiree: saved, formule: asked } = useLocalSearchParams<{ soiree?: string; formule?: string }>();
-  // A passager composing in turn: the page speaks of the roles reversed.
-  const turn = useCouple().role === 'passager';
   const [formule, setFormule] = useState<Formule | null>(asked === 'squad' || asked === 'duo' ? asked : null);
   const [personnes, setPersonnes] = useState(PERSONNES.default);
   const [data, setData] = useState<SoireeData | null>(null);
@@ -129,7 +127,7 @@ export default function SoireeScreen() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [composed?.naming, composed?.name]);
 
-  if (!composed && !formule) return <FormulePicker turn={turn} onPick={pickFormule} />;
+  if (!composed && !formule) return <FormulePicker onPick={pickFormule} />;
   const squad = (composed?.formule ?? formule) === 'squad';
   if (!composed && !data) {
     return (
@@ -148,7 +146,7 @@ export default function SoireeScreen() {
   const others = data.envies.filter((e) => !moodKeys.includes(e.value));
   const middle = moods[Math.min(MIDDLE_MOOD, moods.length - 1)]?.value;
   const chosenMoods = picked ?? (middle ? [middle] : []);
-  const room = data.max - chosenMoods.length; // the secret options left
+  const room = Math.min(MAX_SECRETS, data.max - chosenMoods.length); // the secret options left
   const envies = [...chosenMoods, ...secrets].slice(0, data.max);
 
   async function compose() {
@@ -221,9 +219,11 @@ export default function SoireeScreen() {
     const shown = composed.routes;
     const chosen = composed.chosen && shown.length > 0;
     const band = composed.formule === 'squad';
-    const surprised = turn ? "c'est votre instigateur qui n'en verra que les indices" : band ? "la bande n'en verra que les indices" : "votre passager n'en verra que les indices";
+    // Whoever composes is this evening's instigateur, even one surprised by another: the other side sees only clues.
+    const surprised = band ? "la bande n'en verra que les indices" : "votre passager n'en verra que les indices";
+    // Its own key: a new screen, opening at the top, not where the form was left.
     return (
-      <Screen>
+      <Screen key={composed.name}>
         <PageCard
           badge={chosen ? shortDay(shown[0].day) : `${composed.routes.length} intrigue${composed.routes.length > 1 ? 's' : ''}`}
           title={chosen ? 'Votre feuille de route' : composed.routes.length > 0 ? (band ? 'Trois virées pour la bande' : 'Trois intrigues se murmurent au salon') : 'Le hasard a fait chou blanc'}
@@ -270,7 +270,6 @@ export default function SoireeScreen() {
     setSecrets((s) => (s.includes(value) ? s.filter((v) => v !== value) : s.length < room ? [...s, value] : s));
   const toggleEviter = (value: string) => setEviter((e) => (e.includes(value) ? e.filter((v) => v !== value) : [...e, value]));
   const toggleOccasion = (value: string) => setNight((n) => ({ ...n, occasion: n.occasion === value ? null : value }));
-  const toggleStart = (value: string) => setNight((n) => ({ ...n, start: n.start === value ? null : value }));
   const toggleEnd = (value: string) => setNight((n) => ({ ...n, end: n.end === value ? null : value }));
   const ready = envies.length > 0 && night.diner !== null && !!night.day;
   const profileLine = profile
@@ -280,7 +279,7 @@ export default function SoireeScreen() {
   const range = data.personnes ?? PERSONNES;
   return (
     <PaletteProvider name={squad ? 'squad' : 'date'}>
-      <Screen gap={Spacing.two}>
+      <Screen key="envies" gap={Spacing.two}>
         {squad ? (
           <PageCard
             badge="Squad"
@@ -290,11 +289,9 @@ export default function SoireeScreen() {
           </PageCard>
         ) : (
           <PageCard
-            badge={turn ? 'À votre tour' : profile ? 'Votre profil' : 'Sans profil'}
-            title={turn ? 'À votre tour de surprendre' : 'Quelle intrigue vous tente ?'}
-            text={turn
-              ? `Vous avez suivi les indices, à vous de les semer : concoctez une soirée dont votre complice ne saura presque rien. ${profileLine}`
-              : profileLine}>
+            badge={profile ? 'Votre profil' : 'Sans profil'}
+            title="Quelle intrigue vous tente ?"
+            text={`Vous êtes l'instigateur de cette soirée : votre passager n'en saura presque rien. ${profileLine}`}>
             <TextLink href="/profil">{profile ? 'Voir le profil →' : 'Faire le quiz →'}</TextLink>
             <TextButton onPress={() => pickFormule('squad')}>Plutôt une soirée entre potes →</TextButton>
           </PageCard>
@@ -352,18 +349,11 @@ export default function SoireeScreen() {
           </Section>
         )}
 
-        <Section title="L'heure du rendez-vous" hint="Sans choix : l'heure habituelle, ou plus tôt si une envie le demande.">
-          <OptionGrid>
-            {data.starts.map((o) => (
-              <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={night.start === o.value} onPress={() => toggleStart(o.value)} />
-            ))}
-          </OptionGrid>
-        </Section>
-
-        <Section title="Le rideau tombe…" hint="Sans choix : ce que vos envies demandent, ou minuit et demi.">
+        {/* No question on the start: the usual hour, or earlier when a wish asks for it (surprise.quiz.evening). */}
+        <Section title="Jusqu'à quelle heure ?" hint="La soirée commence vers 19 h. Choisissez quand elle se termine, ou laissez vos envies décider.">
           <OptionGrid>
             {data.ends.map((o) => (
-              <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={night.end === o.value} onPress={() => toggleEnd(o.value)} />
+              <OptionCard key={o.value} label={o.label} desc={o.desc} icon={o.icon} emoji={o.emoji} selected={night.end === o.value} onPress={() => toggleEnd(o.value)} />
             ))}
           </OptionGrid>
         </Section>
@@ -413,11 +403,11 @@ export default function SoireeScreen() {
 }
 
 // The first choice: Secret Date, for two, or Secret Squad, for a band of friends — each in its own look.
-function FormulePicker({ turn, onPick }: { turn: boolean; onPick: (formule: Formule) => void }) {
+function FormulePicker({ onPick }: { onPick: (formule: Formule) => void }) {
   return (
     <Screen gap={Spacing.three}>
       <PageCard
-        badge={turn ? 'À votre tour' : 'Nouvelle intrigue'}
+        badge="Nouvelle intrigue"
         title="Quelle soirée tramer ?"
         text="À deux, ou toute la bande : la même mécanique, des indices jusqu'au jour J, et une soirée à part." />
       <FormuleCard

@@ -73,15 +73,16 @@ BUDGET_OPTIONS: list[dict[str, Any]] = [
     {"value": "genereux", "label": "120 à 200 €", "desc": "Se faire plaisir", "icon": "carte", "emoji": "💳", "budget": 200},
     {"value": "folie", "label": "On ne compte pas", "desc": "Les grandes occasions", "icon": "diamant", "emoji": "💎", "budget": 350},
 ]
-# Asked each time an evening is composed (/soiree), not in the profile: when it starts and ends.
+# Asked each time an evening is composed (/soiree), not in the profile: when it ends, said with its length from the
+# usual start (the start no longer asked by the app: the usual hour, or a wish's).
 START_OPTIONS: list[dict[str, Any]] = [
     {"value": "normal", "label": "À l'heure habituelle", "icon": "horloge", "emoji": "🕖", "start": "19:00"},
     {"value": "tot", "label": "On commence plus tôt", "icon": "couchant", "emoji": "🌇", "start": "17:00"},
 ]
 END_OPTIONS: list[dict[str, Any]] = [
-    {"value": "tot", "label": "Avant minuit", "icon": "lune", "emoji": "🌙", "end": "23:30"},
-    {"value": "verre", "label": "Sur un dernier verre", "icon": "verre", "emoji": "🍸", "end": "00:30"},
-    {"value": "danser", "label": "Au bout de la nuit", "icon": "disco", "emoji": "🌃", "end": "03:30"},
+    {"value": "tot", "label": "Avant minuit", "desc": "Fin vers 23 h 30 · 4 h 30", "icon": "lune", "emoji": "🌙", "end": "23:30"},
+    {"value": "verre", "label": "Sur un dernier verre", "desc": "Fin vers 0 h 30 · 5 h 30", "icon": "verre", "emoji": "🍸", "end": "00:30"},
+    {"value": "danser", "label": "Au bout de la nuit", "desc": "Fin vers 3 h 30 · 8 h 30", "icon": "disco", "emoji": "🌃", "end": "03:30"},
 ]
 
 # The profile's questions: what lasts from one evening to the next — no hour or meal, asked
@@ -216,6 +217,8 @@ QUESTIONS: list[dict[str, Any]] = [
 # the profile the rest. value, label, emoji, vibes (none: the profile's), and optionally start, end, dinner,
 # audace, avoid (dropped when another wish of the evening asks for it: party and cocooning go together).
 MAX_ENVIES = 3
+# A band's (Secret Squad) one more: two moods and still two secret options, as a couple slips two beside its mood.
+SQUAD_MAX_ENVIES = 4
 ENVIES: list[dict[str, Any]] = [
     {"value": "nous", "label": "Fidèles à nous-mêmes", "icon": "ancre", "emoji": "💫", "vibes": []},
     {"value": "fete", "label": "Faire la fête", "icon": "disco", "emoji": "🪩", "vibes": ["fete", "musique"], "start": "20:00", "end": "03:30"},
@@ -430,7 +433,7 @@ def evening(
     """
     envie_keys, occasion_keys = (SQUAD_ENVIE_KEYS, SQUAD_OCCASION_KEYS) if squad else (ENVIE_KEYS, OCCASION_KEYS)
     first = SQUAD_ENVIES[0] if squad else ENVIES[0]
-    wishes = [envie_keys[e] for e in dict.fromkeys(envies or []) if e in envie_keys][:MAX_ENVIES] or [first]
+    wishes = [envie_keys[e] for e in dict.fromkeys(envies or []) if e in envie_keys][:SQUAD_MAX_ENVIES if squad else MAX_ENVIES] or [first]
     event = occasion_keys.get(occasion or "rien", occasion_keys["rien"])
     # Each wish's vibes, the profile's for "nous" and "surprise"; taken in turn so that every wish has its share.
     lists = [(["insolite"] if w["value"] == "surprise" else []) + (w["vibes"] or list(profile["vibes"])) for w in wishes]
@@ -547,7 +550,7 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
                 if parse_qs(urlsplit(self.path).query).get("formule") == ["squad"]:
                     return self._send_json(HTTPStatus.OK, {
                         "formule": "squad", "envies": SQUAD_ENVIES, "moods": SQUAD_MOODS, "occasions": SQUAD_OCCASIONS,
-                        "max": MAX_ENVIES, "starts": START_OPTIONS, "ends": END_OPTIONS, "budgets": SQUAD_BUDGET_OPTIONS,
+                        "max": SQUAD_MAX_ENVIES, "starts": START_OPTIONS, "ends": END_OPTIONS, "budgets": SQUAD_BUDGET_OPTIONS,
                         "personnes": SQUAD_PERSONNES, "eviter": SQUAD_EVITER,
                         "vibes": {key: SQUAD_VIBE_LABELS.get(key, v["label"]) for key, v in VIBES.items()},
                     })
@@ -649,7 +652,7 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "nombre de personnes invalide"})
             envie_keys, occasion_keys = (SQUAD_ENVIE_KEYS, SQUAD_OCCASION_KEYS) if squad else (ENVIE_KEYS, OCCASION_KEYS)
             asked = body.get("envies") if isinstance(body.get("envies"), list) else []
-            envies = [e for e in dict.fromkeys(e for e in asked if isinstance(e, str)) if e in envie_keys][:MAX_ENVIES]
+            envies = [e for e in dict.fromkeys(e for e in asked if isinstance(e, str)) if e in envie_keys][:SQUAD_MAX_ENVIES if squad else MAX_ENVIES]
             if not envies:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "au moins une envie"})
             if not isinstance(body.get("diner"), bool):

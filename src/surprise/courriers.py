@@ -357,15 +357,17 @@ def evenings(conn: psycopg.Connection, today: date) -> list[Evening]:
     return found
 
 
-def invitations(conn: psycopg.Connection) -> list[dict[str, Any]]:
-    """The invitations asked by email and not sent yet, with their evening's link (passagers' or complices')."""
+def invitations(conn: psycopg.Connection, now: datetime) -> list[dict[str, Any]]:
+    """The invitations asked by email and not sent yet, at most two days before `now`, with their evening's link
+    (passagers' or complices')."""
     rows = conn.execute(
         """select i.id::text, i.soiree_id, i.email, i.role, i.created_at,
                   case when i.role = 'complice' then c.complice_code else s.invite_code end
            from public.email_invitations i
            join public.soirees_choisies s on s.id = i.soiree_id
            left join public.soiree_codes c on c.soiree_id = s.id
-           where i.sent_at is null and i.created_at > now() - interval '2 days'""",
+           where i.sent_at is null and i.created_at > %s - interval '2 days'""",
+        (now,),
     ).fetchall()
     return [dict(zip(("id", "soiree_id", "email", "role", "created_at", "code"), row)) for row in rows]
 
@@ -415,7 +417,7 @@ def run(db: str, now: datetime | None = None, *, via: mail.Relay | None = None, 
                 if person.user_id and (evening.id, moment.key, f"push:{person.user_id}") not in sent:
                     pushes.append((evening, moment))
         by_id = {e.id: e for e in kept}
-        for row in invitations(conn):
+        for row in invitations(conn, now):
             evening = by_id.get(row["soiree_id"])
             if evening and (route := route_of(evening)) and row["code"] and row["email"].lower() not in stopped:
                 moment = invitation_moment(evening, route, row)

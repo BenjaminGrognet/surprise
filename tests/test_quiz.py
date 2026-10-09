@@ -150,7 +150,10 @@ def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
             assert json.loads(store._run("select profile from profiles").fetchone()[0]) == created["profile"]
         evening = json.load(urlopen(f"{url}/api/soiree"))
         assert evening["max"] == 3 and evening["envies"] and evening["occasions"]
+        assert json.load(urlopen(f"{url}/api/soiree?formule=squad"))["max"] == 4  # a band: two moods, two secret options
         assert evening["starts"] and evening["ends"] and evening["budgets"]
+        # The evening's end said with its hour and its length, from the usual start.
+        assert [e["desc"] for e in evening["ends"]] == ["Fin vers 23 h 30 · 4 h 30", "Fin vers 0 h 30 · 5 h 30", "Fin vers 3 h 30 · 8 h 30"]
         # One site: the app's pages and scripts, and the moderation page with its API.
         assert urlopen(f"{url}/").read() == "accueil de l'app".encode() and urlopen(f"{url}/soiree").read() == "soirée de l'app".encode()
         script = urlopen(f"{url}/_expo/entry.js")
@@ -231,6 +234,13 @@ def test_a_bands_evening_is_its_own():
     [birthday] = quiz.requests_for(band, [date(2026, 10, 10)], ["fete"], "anniversaire", party=8, formule="squad")
     [theirs] = quiz.requests_for(band, [date(2026, 10, 10)], ["fete"], "anniversaire")
     assert "romantique" not in birthday.vibes and "romantique" in theirs.vibes and not theirs.squad
+
+
+def test_a_band_slips_two_secret_options_beside_two_moods():
+    # Four wishes for a band (two moods, two secret options), three for a couple (one mood, two secret options).
+    wishes = ["rire", "jouer", "frissons", "gourmand", "musique"]
+    assert quiz.evening(quiz.squad_profile(), wishes, squad=True)["envies"] == wishes[:4]
+    assert quiz.evening(quiz.squad_profile(), ["nous", "fete", "gourmand", "musique"])["envies"] == ["nous", "fete", "gourmand"]
 
 
 def test_what_a_band_never_wants_comes_with_its_order():

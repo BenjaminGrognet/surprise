@@ -29,3 +29,11 @@ def nominatim_asked_afresh(monkeypatch):
 def funbooker_unpaced(monkeypatch):
     """Funbooker's listings are read one per second at collection (surprise.availability): not in the tests."""
     monkeypatch.setattr(availability, "FUNBOOKER_LISTING_DELAY", 0)
+
+
+@pytest.fixture(autouse=True)
+def no_real_relay(monkeypatch):
+    """The project's .env (read by `import surprise`) may hold a real SMTP relay and Firebase account: no test sends
+    through them; those that send give their own, fake."""
+    for key in ("SMTP_URL", "MAIL_FROM", "FIREBASE_SERVICE_ACCOUNT"):
+        monkeypatch.delenv(key, raising=False)
