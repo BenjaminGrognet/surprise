@@ -61,6 +61,11 @@ def web_file(path: str) -> Path | None:
             return file
     return None
 
+def web_cache(path: str) -> str:
+    """The build's scripts carry their content's hash in their name: kept by the browser, never asked again. The
+    pages and the rest are read anew, so a new build shows at once."""
+    return "public, max-age=31536000, immutable" if path.startswith("/_expo/static/") else "no-store"
+
 # A soirée-type budget (profile) that the couple can also adjust for one particular evening (/soiree).
 BUDGET_OPTIONS: list[dict[str, Any]] = [
     {"value": "doux", "label": "Moins de 60 €", "desc": "Les bons plans", "icon": "pieces", "emoji": "🪙", "budget": 60},
@@ -560,7 +565,7 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
                 self._send(HTTPStatus.OK, image.read_bytes(), images.MEDIA_TYPES.get(image.suffix, "application/octet-stream"))
             elif page := web_file(path):
                 kind = TYPES.guess_type(page.name)[0] or "application/octet-stream"
-                self._send(HTTPStatus.OK, page.read_bytes(), kind + ("; charset=utf-8" if kind.startswith("text/") else ""))
+                self._send(HTTPStatus.OK, page.read_bytes(), kind + ("; charset=utf-8" if kind.startswith("text/") else ""), web_cache(path))
             elif path == "/" and not WEB.exists():
                 self._send(HTTPStatus.SERVICE_UNAVAILABLE, "Site pas encore construit : npm run build:web dans app/".encode(), "text/plain; charset=utf-8")
             else:

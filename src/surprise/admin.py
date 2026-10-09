@@ -142,7 +142,7 @@ def make_handler(db: Path | str | None) -> type[BaseHTTPRequestHandler]:
             if origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:"):
                 self.send_header("Access-Control-Allow-Origin", origin)
 
-        def _send(self, code: HTTPStatus, body: bytes, content_type: str) -> None:
+        def _send(self, code: HTTPStatus, body: bytes, content_type: str, cache: str = "no-store") -> None:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self._cors_headers()
@@ -151,7 +151,7 @@ def make_handler(db: Path | str | None) -> type[BaseHTTPRequestHandler]:
                 body = gzip.compress(body, compresslevel=5)
                 self.send_header("Content-Encoding", "gzip")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache)
             self.end_headers()
             self.wfile.write(body)
 

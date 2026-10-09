@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
@@ -38,7 +38,9 @@ export default function AccueilScreen() {
   const [gauge, setGauge] = useState<Complicity | null>(null);
   const [toSeal, setToSeal] = useState<EveningHistoryRow | null>(null);
 
-  useEffect(() => {
+  // Read again each time the page comes back into view, not only the first: the stack keeps it mounted under the
+  // form, so an evening kept there (then the tab bar's way home) would not show without it.
+  useFocusEffect(useCallback(() => {
     (async () => {
       // Signed in, only the account's own profile counts: never one left on this device by someone else.
       const known = supabaseConfigured
@@ -56,14 +58,12 @@ export default function AccueilScreen() {
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
         setToSeal(history.find((r) => !!r.day && r.day < today && r.day >= isoDay(weekAgo) && !r.souvenirs?.length) ?? null);
-        if (row) {
-          const state = await getSoireeState(row.page_name).catch(() => null);
-          setUpcoming({ row, route: state?.routes[0] ?? null });
-        }
+        const state = row ? await getSoireeState(row.page_name).catch(() => null) : null;
+        setUpcoming(row ? { row, route: state?.routes[0] ?? null } : null);
       }
       setLoaded(true);
     })();
-  }, []);
+  }, []));
 
   const side = upcoming ? eveningRole(upcoming.row, userId) : role;
   const palette = isSquad(upcoming?.row) ? 'squad' : 'date';

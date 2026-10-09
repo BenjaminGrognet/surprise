@@ -8,7 +8,8 @@ import { Fonts, Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 // A small tile of the night: emerald line icon on the left, title and a word of description beside it;
-// an emerald border, a soft halo and an emerald dot once chosen. Two side by side, so a question fits on a screen.
+// an emerald border, a soft halo and an emerald dot once chosen. Two side by side, so a question fits on a screen;
+// on a narrow phone the description goes on a second line rather than losing its end.
 // `tint`: another colour of the palette in place of the accent, outlining it at rest too (Secret Squad's secret options).
 export function OptionCard({
   label, desc, icon, emoji, selected, disabled, onPress, tint,
@@ -51,7 +52,7 @@ export function OptionCard({
       </View>
       <View style={styles.text}>
         <ThemedText style={[styles.title, { color: theme.cream }]}>{label}</ThemedText>
-        {desc ? <ThemedText style={[styles.desc, { color: theme.cream }]} numberOfLines={1}>{desc}</ThemedText> : null}
+        {desc ? <ThemedText style={[styles.desc, { color: theme.cream }]}>{desc}</ThemedText> : null}
       </View>
       {selected ? <View style={[styles.dot, { backgroundColor: accent }]} /> : null}
     </Pressable>

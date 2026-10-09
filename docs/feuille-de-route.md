@@ -13,7 +13,7 @@ Idées pour Secret Date et Secret Squad, classées par objectif, avec ce qui exi
 | Composition deux fois plus rapide, base chargée trois fois plus vite, deux fois moins de données écrites par soirée | Tenir la charge, répondre vite | `parcours`, `patterns`, `originality` |
 
 À activer : `SMTP_URL`, `MAIL_FROM`, `MAIL_SECRET`, `APP_URL` dans `.env`, le serveur lancé avec `--courriers` ; les
-identifiants d'affiliation dans `.env` ; les deux nouvelles migrations poussées sur le Supabase du projet.
+identifiants d'affiliation dans `.env`. Les deux migrations sont passées sur le Supabase du projet le 8 octobre 2026.
 
 ## 1. Ergonomie : moins de friction à l'entrée
 

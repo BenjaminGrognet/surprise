@@ -75,8 +75,7 @@ migrations d'avant avaient été passées à la main. Depuis `app/`, avec l'URL 
 uv run --env-file ../.env sh -c 'npx supabase db push --workdir .. --db-url "$SUPABASE_DB_URL" --dry-run'
 ```
 
-Puis sans `--dry-run` si la liste est la bonne. À passer depuis le 8 octobre 2026 : `20261011000000_no_licenses.sql`
-(plus de licence sur les sources ni les images) et `20261012000000_courriers.sql` (les emails).
+Puis sans `--dry-run` si la liste est la bonne.
 
 ### Collecte complète
 
@@ -397,7 +396,8 @@ uv run python -m surprise.quiz --host 0.0.0.0    # + accessible depuis un télé
 ```
 
 Un seul site, qui est l'app : le serveur sert le build web de l'app Expo (`app/dist`, `npm run build:web` dans
-`app/`, refait par `lancer.cmd` à chaque lancement), l'API qu'elle appelle (`/api/…`) et la modération (`/admin`).
+`app/`, refait par `lancer.cmd` quand l'app ou `app/.env` ont changé : quelques secondes, Metro gardant un cache par
+jeu de variables `EXPO_PUBLIC_`, `metro.config.js`), l'API qu'elle appelle (`/api/…`) et la modération (`/admin`).
 Il n'y a pas d'autre page client : toute évolution se fait dans `app/` et vaut pour le téléphone comme pour le site.
 Le build web appelle l'API sur sa propre adresse ; en développement (`npm run web`, port 8081), sur
 `EXPO_PUBLIC_API_URL`.

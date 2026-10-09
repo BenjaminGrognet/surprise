@@ -4,10 +4,11 @@
 
 Trois fichiers à la racine du projet (double-clic, ou depuis un terminal) :
 
-- **`lancer.cmd`** : le serveur (http://127.0.0.1:8001, modération sur `/admin`) et l'app Expo dans le navigateur,
-  chacun dans sa fenêtre ; fermer la fenêtre l'arrête. Il reconstruit aussi le site (le build web de l'app, servi
-  sur 8001) dans une fenêtre réduite qui se ferme seule : le site est toujours l'app du moment. Répondre `o` à « Aussi sur le téléphone ? » pour l'ouvrir
-  aussi dans Expo Go (même Wi-Fi) : l'IP du PC est trouvée toute seule, scanner le QR code.
+- **`lancer.cmd`** : le site (http://127.0.0.1:8001, modération sur `/admin`), ouvert dans le navigateur dès qu'il est
+  prêt ; fermer la fenêtre « surprise - serveur » l'arrête. Le build web de l'app est refait d'abord, seulement si
+  l'app ou `app\.env` ont changé (quelques secondes, son cache Metro gardé ; sinon repris tel quel) : le site est
+  toujours l'app du moment. Répondre `o` à « Aussi sur le téléphone ? » pour l'ouvrir aussi dans Expo Go (même
+  Wi-Fi) : le serveur Expo est lancé en plus, l'IP du PC trouvée toute seule, scanner le QR code.
 - **`collecte.cmd`** : collecte de toutes les sources, 200 fiches au plus chacune (ou d'une seule : taper son nom,
   ex. `fever`), puis enrichissement et mots-clés.
 - **`admin.cmd`** : la modération seule, ouverte dans le navigateur (http://127.0.0.1:8000/admin) ; fermer la
@@ -81,7 +82,7 @@ uv run --env-file .env python -m surprise.quiz
 ```
 
 - Site : http://127.0.0.1:8001, le build web de l'app (`cd app` puis `npm run build:web` pour le refaire à la
-  main) ; `/admin` pour la modération.
+  main : repris tel quel si rien n'a changé, `WEB_REBUILD=1` pour le forcer) ; `/admin` pour la modération.
 - `--no-open` pour ne pas ouvrir le navigateur, `--host 0.0.0.0` pour y accéder depuis un téléphone sur le même Wi-Fi.
 - C'est ce serveur que l'app Expo interroge : il doit tourner avant de lancer l'app.
 

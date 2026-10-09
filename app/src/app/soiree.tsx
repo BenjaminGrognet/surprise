@@ -400,7 +400,7 @@ export default function SoireeScreen() {
 
         <DayField label="Le jour J" value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />
 
-        {status === 'composing' ? <Waiting title="La nuit ourdit ses secrets…" lines={COMPOSING_LINES} /> : null}
+        {status === 'composing' ? <Waiting {...(squad ? COMPOSING_SQUAD : COMPOSING_DATE)} /> : null}
         {status === 'error' && <ThemedText themeColor="danger">L&apos;intrigue n&apos;a pas pu être tramée. Réessayez dans un instant.</ThemedText>}
         <PrimaryButton wide disabled={!ready || status === 'composing'} onPress={compose}>
           {status === 'composing'
@@ -511,10 +511,24 @@ const styles = StyleSheet.create({
   notice: { padding: Spacing.three, borderRadius: 14 },
 });
 
-const COMPOSING_LINES = [
-  'Les portes de la ville s’entrouvrent pour vous…',
-  'Quelques adresses chuchotent encore à cette heure…',
-  'Un détour secret se dessine entre deux ruelles…',
-  'Les rendez-vous se scellent à la cire, un à un…',
-  'La nuit garde le meilleur pour la fin.',
-];
+// The wait while the evening is composed, said each formula's way: the emerald night for two, the neon one for a band.
+const COMPOSING_DATE = {
+  title: 'La nuit tisse des secrets aux reflets d’émeraude…',
+  lines: [
+    'Les portes de la ville s’entrouvrent pour vous…',
+    'Quelques adresses chuchotent encore à cette heure…',
+    'Un détour secret se dessine entre deux ruelles…',
+    'Les rendez-vous se scellent à la cire, un à un…',
+    'La nuit garde le meilleur pour la fin.',
+  ],
+};
+const COMPOSING_SQUAD = {
+  title: 'Sous la boule à facettes, la nuit trame votre virée…',
+  lines: [
+    'Les néons s’allument un à un sur la ville…',
+    'Quelques adresses gardent encore de la place pour toute la bande…',
+    'Un QG secret se dessine entre deux rues…',
+    'Les réservations se calent, une à une, pour tout le monde…',
+    'La nuit garde le meilleur pour la fin de la virée.',
+  ],
+};

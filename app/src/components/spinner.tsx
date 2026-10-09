@@ -29,7 +29,8 @@ export function Spinner({ size = 14 }: { size?: number }) {
 // A step or route being redrawn: its card dims while the new one is sought.
 export const busyStyle = (busy: boolean) => (busy ? { opacity: 0.45 } : null);
 
-// The long wait of a composition: the screen dims, a card turns and tells, one line after the other, what is happening.
+// The long wait of a composition: the screen dims in the palette's night, a card turns and tells, one line after the
+// other, what is happening.
 export function Waiting({ title, lines }: { title: string; lines: string[] }) {
   const theme = useTheme();
   const [i, setI] = useState(0);
@@ -39,7 +40,7 @@ export function Waiting({ title, lines }: { title: string; lines: string[] }) {
   }, [lines.length]);
   return (
     <Modal transparent animationType="fade" visible statusBarTranslucent>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { backgroundColor: `${theme.background}D1` }]}>
         <View style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.accentSoft }]}>
           <Spinner size={34} />
           <ThemedText type="subtitle" style={styles.center}>{title}</ThemedText>
@@ -51,7 +52,7 @@ export function Waiting({ title, lines }: { title: string; lines: string[] }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four, backgroundColor: 'rgba(4, 15, 10, 0.82)' },
+  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
   card: { width: '100%', maxWidth: 360, alignItems: 'center', gap: Spacing.three, padding: Spacing.five, borderRadius: Radius.card, borderWidth: 1 },
   center: { textAlign: 'center' },
 });

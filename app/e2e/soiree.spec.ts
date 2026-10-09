@@ -65,6 +65,18 @@ async function compose(page: Page) {
   return { composed: (await response.json()) as ComposedSoiree, sent: response.request().postDataJSON() as Night };
 }
 
+// The wait while the evening is composed, said the formula's way: the composition is held until its title shows, and
+// its lines are not the other formula's.
+async function waitingSaid(page: Page, title: string, notTitle: string) {
+  await page.route('**/api/soirees', async (route) => {
+    await expect(page.getByText(title, { exact: true })).toBeVisible();
+    await expect(page.getByText(notTitle, { exact: true })).toHaveCount(0);
+    await route.continue();
+  }, { times: 1 });
+}
+const DATE_WAIT = 'La nuit tisse des secrets aux reflets d’émeraude…';
+const SQUAD_WAIT = 'Sous la boule à facettes, la nuit trame votre virée…';
+
 // A vote written to Supabase (table gouts): cast, changed or withdrawn.
 const voted = (page: Page, method: 'POST' | 'DELETE') =>
   page.waitForResponse((r) => r.request().method() === method && new URL(r.url()).pathname === '/rest/v1/gouts');
@@ -93,6 +105,7 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   await expect(eaten.locator('svg circle')).toHaveCount(2);
   await expect(eaten.locator('svg path')).toHaveCount(1);
   await eaten.click();
+  await waitingSaid(page, DATE_WAIT, SQUAD_WAIT);
   const composing = posted(page, /^\/api\/soirees$/);
   await page.getByText('Tramer nos intrigues').click();
   const composed: ComposedSoiree = await (await composing).json();
@@ -191,6 +204,12 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   expect(image.subarray(1, 4).toString()).toBe('PNG');
   expect([image.readUInt32BE(16), image.readUInt32BE(20)]).toEqual([1080, 1920]);
 
+  // Home by the tab bar: the page left under the form, read again, opens on the evening just kept.
+  await page.getByRole('tab', { name: 'Accueil' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByText(route.secret_title, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Le prochain secret reste encore à écrire…')).toHaveCount(0);
+
   // The passager, in a browser of their own.
   const other = await browser.newContext();
   const passager = await other.newPage();
@@ -222,6 +241,20 @@ test('the instigateur composes, changes a step and keeps the evening; the passag
   await page.goto('/');
   await expect(page.getByText(/Complices connectés/)).toBeVisible();
   await expect.poll(async () => (await Promise.all(route.steps.map((s) => pictured(page, s.id)))).some(Boolean), { timeout: IMAGE_TIMEOUT }).toBe(true);
+});
+
+test("the profile's answers are read whole on a phone: a description goes on a second line, never cut", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 760 });
+  await page.goto('/');
+  await createAccount(page, 'profil');
+  await page.getByText('Faire notre profil de couple').click();
+  await page.getByText('Complices', { exact: true }).click();
+  await expect(page.getByText('Votre soirée idéale commence par…')).toBeVisible();
+  for (const desc of ['Un moment hors du temps', 'Musées, monuments, secrets', 'Créer, cuisiner, façonner']) {
+    const text = page.getByText(desc, { exact: true });
+    await expect(text).toBeVisible();
+    expect(await text.evaluate((e) => getComputedStyle(e).textOverflow !== 'ellipsis' && e.scrollWidth <= e.clientWidth)).toBe(true);
+  }
 });
 
 test('a wrong password is refused in French, on the account page', async ({ page }) => {
@@ -412,6 +445,7 @@ test('a band’s evening: its own look, no profile, eight of them, its guests by
   await page.getByText("L'alcool", { exact: true }).click();
   const button = page.getByText('Tramer la virée à 8', { exact: true });
   expect(await button.evaluate((label) => getComputedStyle(label.parentElement!).backgroundColor)).toBe(NEON);
+  await waitingSaid(page, SQUAD_WAIT, DATE_WAIT);
   const composing = posted(page, /^\/api\/soirees$/);
   await button.click();
   const response = await composing;

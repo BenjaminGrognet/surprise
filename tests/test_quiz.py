@@ -135,7 +135,8 @@ def test_valid_votes_keeps_an_activity_and_a_plus_or_minus_one():
 def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
     # The site is the app's web build: a stand-in for app/dist.
     web = tmp_path / "dist"
-    (web / "_expo").mkdir(parents=True)
+    (web / "_expo" / "static" / "js").mkdir(parents=True)
+    (web / "_expo" / "static" / "js" / "index-4f2a.js").write_text("bundle()", encoding="utf-8")
     (web / "index.html").write_text("accueil de l'app", encoding="utf-8")
     (web / "soiree.html").write_text("soirée de l'app", encoding="utf-8")
     (web / "_expo" / "entry.js").write_text("app()", encoding="utf-8")
@@ -154,6 +155,9 @@ def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
         assert urlopen(f"{url}/").read() == "accueil de l'app".encode() and urlopen(f"{url}/soiree").read() == "soirée de l'app".encode()
         script = urlopen(f"{url}/_expo/entry.js")
         assert script.headers["Content-Type"] == "text/javascript; charset=utf-8"
+        # The hashed scripts stay in the browser's cache; a page is always read anew, so a new build shows at once.
+        assert "immutable" in urlopen(f"{url}/_expo/static/js/index-4f2a.js").headers["Cache-Control"]
+        assert urlopen(f"{url}/soiree").headers["Cache-Control"] == "no-store"
         with pytest.raises(HTTPError):
             urlopen(f"{url}/..%2Fsecret.txt")
         assert b"<title>Surprise" in urlopen(f"{url}/admin").read() and json.load(urlopen(f"{url}/api/meta"))["vibes"]
