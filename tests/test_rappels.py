@@ -4,6 +4,7 @@ its email goes, its button opening them; and a whole pass on the local Supabase 
 project's. The relay, the composition and Open-Meteo are stand-ins: nothing leaves the machine."""
 
 import uuid
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 
 import psycopg
@@ -219,3 +220,27 @@ def test_a_dates_intrigues_are_composed_with_the_couples_profile_its_evenings_an
     assert asked["found"] == "la base" and asked["profile"]["audace"] == profile["audace"]  # the partner's profile
     assert (asked["envies"], asked["occasion"], asked["days"], asked["dinner"]) == (["romantique"], "anniversaire", [date(2026, 11, 20)], True)
     assert asked["chosen"] == ["soiree-passee"] and asked["votes"] == {("fever", "42"): -1} and asked["checks"] == 0
+
+
+def test_a_duo_without_its_profile_told_the_day_after_it_formed_then_four_days_later_never_once_made():
+    duo = Duo("duo1", [LEA, SAM], formed=date(2027, 3, 1), profiled=False)
+    reminders = rappels.profile_reminders(duo, date(2027, 3, 1))
+    assert due_keys(reminders, at(date(2027, 3, 1), 12)) == []
+    assert due_keys(reminders, at(date(2027, 3, 2), 10)) == [("profil:duo1:1", LEA.address), ("profil:duo1:1", SAM.address)]
+    assert due_keys(reminders, at(date(2027, 3, 5), 12)) == []  # three days, then quiet
+    assert due_keys(reminders, at(date(2027, 3, 6), 10)) == [("profil:duo1:2", LEA.address), ("profil:duo1:2", SAM.address)]
+    first = reminders[0].moment
+    assert first.subject == "Votre profil de couple, en deux minutes" and first.button == ("Faire notre profil", "/profil")
+    assert "questions du jour" in first.lines[1]
+    assert rappels.profile_reminders(replace(duo, profiled=True), date(2027, 3, 2)) == []
+
+
+def test_a_pass_tells_a_duo_without_profile_and_no_more_once_one_of_them_made_it(duo, local_db):
+    ours = set(duo["addresses"].values())
+    tomorrow = datetime.now(PARIS).date() + timedelta(days=1)
+    told = lambda: sorted(m.to.address for m, channel in rappels.run(local_db, at(tomorrow, 10, 30), via=mail.relay("smtp://relay.example.com"), dry_run=True).sent  # noqa: E731
+                          if channel.startswith("email") and m.key == f"profil:{duo['duo']}:1" and m.to.address in ours)
+    assert told() == sorted(ours)
+    with psycopg.connect(local_db, autocommit=True) as conn:
+        conn.execute("insert into public.couple_profiles (id, user_id, answers, profile) values (%s, %s, '{}', '{}')", (duo["ids"]["sam"], duo["ids"]["sam"]))
+    assert told() == []

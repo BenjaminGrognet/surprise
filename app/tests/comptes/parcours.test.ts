@@ -6,7 +6,7 @@ import { expect, test } from '@jest/globals';
 import { allCards, cardDepth, cardFor } from '@/lib/cartes';
 import { answerToday, joinDuo, weeksQuiz, myDuo, openDuo, todaysQuestion, verdict, weeksDefi } from '@/lib/duo';
 
-import { admin, as, newAccount } from './helpers';
+import { admin, as, firstEvening, newAccount } from './helpers';
 
 const parisDay = (offset: number) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
 
@@ -15,6 +15,7 @@ async function pair(label: string) {
   const code = await openDuo();
   const other = await newAccount(`${label}-deux`);
   await joinDuo(code);
+  await firstEvening(one.id);
   return { one, other, duo: (await myDuo())! };
 }
 
@@ -23,14 +24,14 @@ test("the day's question: the journey's first for a new duo, the next once one o
   const first = (await todaysQuestion()).question;
   expect(first).toMatchObject({ id: 1, profondeur: 1 });
   await as(one);
-  expect((await todaysQuestion()).question.id).toBe(1);
+  expect((await todaysQuestion()).question!.id).toBe(1);
 
   // Days without an answer: the question waits. Yesterday answered by one only: today's is the second.
   expect((await admin.from('reponses_du_jour').insert({ duo_id: duo.id, day: parisDay(-1), author: other.id, question_id: 1, texte: 'Le pilote.' })).error).toBeNull();
   expect((await todaysQuestion()).question).toMatchObject({ id: 2, profondeur: 1 });
   await answerToday('Le fromage, sans hésiter.');
   await as(other);
-  expect((await todaysQuestion()).question.id).toBe(2);
+  expect((await todaysQuestion()).question!.id).toBe(2);
 
   // Far along the journey: deeper.
   const days = Array.from({ length: 95 }, (_, i) => ({ duo_id: duo.id, day: parisDay(-100 + i), author: other.id, question_id: 1, texte: '…' }));

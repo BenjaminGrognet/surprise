@@ -57,3 +57,13 @@ export async function keep(day: string | null = FUTURE, page = pageName()) {
   if (!row) throw new Error(`${page} : pas gardée`);
   return row;
 }
+
+// The duo's first evening for two, lived on `day` (past the row-level security, as the app's server would have kept
+// it for the account): its questions du jour begin the day after.
+export async function firstEvening(userId: string, day = PAST) {
+  const { error } = await admin.from('soirees_choisies').insert({
+    user_id: userId, page_name: pageName(), title: 'Premier rendez-vous',
+    secret_title: 'Le premier soir', pitch: 'À deux.', vibes: ['rire'], day, formule: 'duo', personnes: 2,
+  });
+  if (error) throw new Error(error.message);
+}

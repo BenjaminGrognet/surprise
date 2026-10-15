@@ -8,7 +8,7 @@ import { answerToday, joinDuo, leaveDuo, myDuo, openDuo, pairedAnswers, partnerN
 import { sealPage } from '@/lib/souvenirs';
 import { supabase } from '@/lib/supabase';
 
-import { admin, as, keep, newAccount, pageName, PAST } from './helpers';
+import { admin, as, firstEvening, keep, newAccount, pageName, PAST } from './helpers';
 
 // Two accounts made, then paired by a code: the first opens its duo, the second enters its code.
 async function pair(label: string) {
@@ -16,6 +16,7 @@ async function pair(label: string) {
   const code = await openDuo();
   const other = await newAccount(`${label}-deux`);
   await joinDuo(code);
+  await firstEvening(one.id);
   return { one, other, code };
 }
 
@@ -68,7 +69,7 @@ test('a duo by a code: two at most, one duo per account, its own code refused, t
 test("the day's question: the same for both, each reads the other's answer once their own is sealed", async () => {
   const { one, other } = await pair('question');
   const today = await todaysQuestion();
-  expect(today.question.texte.length).toBeGreaterThan(10);
+  expect(today.question!.texte.length).toBeGreaterThan(10);
   expect(today).toMatchObject({ mienne: null, sienne: null, sienne_donnee: false });
   await expect(answerToday('   ')).rejects.toThrow('Écrivez votre réponse avant de la sceller.');
   await answerToday('  Le café en terrasse ce matin.  ');
@@ -77,7 +78,7 @@ test("the day's question: the same for both, each reads the other's answer once 
 
   await as(one);
   const before = await todaysQuestion();
-  expect(before.question.id).toBe(today.question.id);
+  expect(before.question!.id).toBe(today.question!.id);
   expect(before).toMatchObject({ mienne: null, sienne_donnee: true, sienne: null });
   // Not even straight from the table, before its own answer.
   const peek = await supabase.from('reponses_du_jour').select('texte').eq('author', other.id);

@@ -2,6 +2,7 @@
 // account, formed by itself when a passager joins an evening for two, or by a code from « Mon couple ». The day's
 // question, the quizzes, the défis and the gauge are the duo's. Leaving it dissolves it: its answers go with it.
 import { currentUser } from '@/lib/account';
+import type { Profile } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 export type DuoMember = { user_id: string; email: string | null; joined_at: string };
@@ -49,13 +50,26 @@ export const partnerName = (member: Pick<DuoMember, 'email'> | null) => {
 
 export type Question = { id: number; texte: string; theme: string; profondeur: 1 | 2 | 3 | 4 }; // the palier of the journey (couple.tsx PALIERS)
 // The day's question for the duo: the account's answer, and the other's once its own is given (before, only whether
-// it was given: `sienne_donnee`).
-export type Jour = { day: string; question: Question; mienne: string | null; sienne_donnee: boolean; sienne: string | null };
+// it was given: `sienne_donnee`). The questions begin the day after the duo's first evening lived (`commence`; before,
+// no question, and `premiere`: that evening, lived or the next one chosen); they follow its profile when it has one
+// (`adaptee`).
+export type FirstEvening = { vecue: string | null; prevue: string | null };
+export type Jour = {
+  day: string; commence: boolean; premiere: FirstEvening | null; adaptee: boolean;
+  question: Question | null; mienne: string | null; sienne_donnee: boolean; sienne: string | null;
+};
 
 export async function todaysQuestion(): Promise<Jour> {
   const { data, error } = await supabase.rpc('mon_jour');
   if (error) throw new Error(error.message);
   return data as Jour;
+}
+
+// The duo's profile (surprise.quiz): the account's own, else its partner's; null when neither made it.
+export async function duoProfile(): Promise<{ answers: Record<string, unknown>; profile: Profile } | null> {
+  const { data, error } = await supabase.rpc('profil_du_duo');
+  if (error) throw new Error(error.message);
+  return (data as { answers: Record<string, unknown>; profile: Profile } | null) ?? null;
 }
 
 // Sealed: final, the other's answer then read.

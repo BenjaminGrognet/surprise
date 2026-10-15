@@ -37,6 +37,20 @@ pages du Livre du compte.
 
 ## A1. La question du jour
 
+L'ordre d'un couple (`…_premier_soir_profil.sql`) :
+
+1. **Le profil d'abord** : tant qu'aucun des deux ne l'a fait (`profil_du_duo()` : le sien, sinon celui de l'autre ; un
+   seul suffit pour deux), « Mon couple » s'ouvre sur « Tout commence ici », l'accueil y appelle aussi l'autre membre du
+   duo, et un email (et sa notification) le rappelle aux deux le lendemain de la formation du duo puis quatre jours
+   plus tard (`surprise.rappels`).
+2. **Les questions du jour après le premier rendez-vous** : elles commencent le lendemain de la première soirée à deux
+   vécue par l'app (`questions_commencees()`). Avant, la carte dit quand (« au lendemain de votre soirée du… ») ou
+   propose d'organiser cette première soirée ; le serveur refuse toute réponse.
+3. **Un peu à leur image** : le parcours reste le même, mais l'ordre de chaque duo bouge selon ses réponses au profil
+   (`rang_question()`). Un couple qui se découvre rencontre plus tard les questions intimes, une longue histoire plus
+   tôt ; ceux qui aiment rire trouvent plus tôt l'absurde et les « tu préfères », les curieux les valeurs ; les audacieux
+   le désir plus tôt, les classiques plus tard, et ceux qui ne veulent jamais « le coquin » jamais.
+
 - Une question par jour, la même pour les deux, tirée de `public.questions_du_jour` (texte, thème, palier 1 à 4) :
   **un parcours, du plus léger au plus intime**. Palier 1 « Pour rire » (scénarios absurdes, « tu préfères… », pièges du
   quotidien), 2 « Se raconter » (souvenirs, enfance), 3 « Nous deux », 4 « À cœur ouvert ». Le duo les rencontre dans

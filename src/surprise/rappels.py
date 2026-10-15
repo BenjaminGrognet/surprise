@@ -6,7 +6,9 @@ evenings' own (surprise.courriers), from the accounts in Supabase (SUPABASE_DB_U
   ready in the app (public.intrigues_pretes); a birthday reminds only the other one;
 - the seasons of Paris (public.saisons_a_venir): ten days before, to the accounts that compose evenings for two and
   have none that day;
-- a year since an evening for two: its day, to its instigateur and its passager.
+- a year since an evening for two: its day, to its instigateur and its passager;
+- a duo without its profile (surprise.quiz), neither of its two having made it: the day after it formed, then four days
+  later, to both, the profile being where a couple starts (its evenings and its questions du jour follow it).
 
 Each goes once per account and channel (pipeline.rappels), between 9:00 and 21:00, while it still makes sense; never to
 an account that stopped them, nor to an address stopped from an email's link.
@@ -30,6 +32,9 @@ from surprise.courriers import Moment, Person, long_day
 PARIS = parcours.PARIS
 # Three weeks before a date, until two weeks before: time to book.
 DATE_AHEAD, DATE_UNTIL = 21, 14
+# A duo without its profile told the day after it formed, then four days later, each time for three days.
+PROFILE_AFTER = (1, 5)
+PROFILE_FOR = 3
 # Ten days before a season, until three days before.
 SEASON_AHEAD, SEASON_UNTIL = 10, 3
 VALENTINE = (2, 14)
@@ -59,6 +64,8 @@ class Duo:
     id: str
     members: list[Person]
     dates: list[KeyDate] = field(default_factory=list)
+    formed: date | None = None  # its day, in Paris
+    profiled: bool = True  # one of its two made the couple's profile
 
 
 @dataclass(frozen=True)
@@ -105,6 +112,27 @@ def date_reminders(duo: Duo, today: date) -> list[Reminder]:
                 ("Voir les trois intrigues", "/soiree"),
                 f"{long_day(day).capitalize()}, c'est {words} : trois intrigues vous attendent.",
             ), compose=(key_date.genre, day)))
+    return found
+
+
+def profile_reminders(duo: Duo, today: date) -> list[Reminder]:
+    """A duo neither of whose two made the couple's profile: to both, twice, the way to it."""
+    if duo.profiled or not duo.formed:
+        return []
+    found = []
+    for n, after in enumerate(PROFILE_AFTER, 1):
+        at, until = _local(duo.formed, after, time(10)), _local(duo.formed, after + PROFILE_FOR - 1, time(21))
+        first = n == 1
+        for person in duo.members:
+            found.append(Reminder(Moment(
+                f"profil:{duo.id}:{n}", person, at, until,
+                "Votre profil de couple, en deux minutes" if first else "Il manque votre profil de couple",
+                ("Dix questions, une seule fois pour vous deux : où en est votre histoire, jusqu'où vous osez, ce que vous "
+                 "ne voulez jamais." if first else "Vos premières intrigues n'attendent plus que lui : sans profil, nous composons à l'aveugle.",
+                 "Vos soirées seront composées à votre image, et vos questions du jour suivront ce que vous aimez."),
+                ("Faire notre profil", "/profil"),
+                "Deux minutes pour votre profil de couple : vos soirées et vos questions du jour à votre image.",
+            )))
     return found
 
 
@@ -158,7 +186,8 @@ def _person(row: dict[str, Any]) -> Person:
 
 def duos(conn: psycopg.Connection) -> list[Duo]:
     rows = conn.execute(
-        """select d.id::text,
+        """select d.id::text, (d.created_at at time zone 'Europe/Paris')::date,
+                  exists (select 1 from public.couple_profiles c join public.duo_members x on x.user_id = c.user_id where x.duo_id = d.id),
                   json_agg(json_build_object('user_id', m.user_id::text, 'email', u.email, 'emails', coalesce(p.emails, true))),
                   coalesce((select json_agg(json_build_object('id', k.id::text, 'label', k.label, 'genre', k.genre, 'mois', k.mois,
                                                              'jour', k.jour, 'pour', k.pour::text))
@@ -167,11 +196,11 @@ def duos(conn: psycopg.Connection) -> list[Duo]:
            join public.duo_members m on m.duo_id = d.id
            join auth.users u on u.id = m.user_id
            left join public.email_prefs p on p.user_id = m.user_id
-           group by d.id"""
+           group by d.id, d.created_at"""
     ).fetchall()
     return [Duo(id_, [_person(m) for m in members if m["email"]],
-                [KeyDate(k["id"], k["label"], k["genre"], k["mois"], k["jour"], k["pour"]) for k in dates])
-            for id_, members, dates in rows]
+                [KeyDate(k["id"], k["label"], k["genre"], k["mois"], k["jour"], k["pour"]) for k in dates], formed, profiled)
+            for id_, formed, profiled, members, dates in rows]
 
 
 def composers(conn: psycopg.Connection) -> list[Person]:
@@ -278,6 +307,7 @@ def plan(conn: psycopg.Connection, today: date) -> list[Reminder]:
     found: list[Reminder] = []
     for duo in duos(conn):
         found += date_reminders(duo, today)
+        found += profile_reminders(duo, today)
     found += season_reminders(composers(conn), seasons(conn, today), busy_days(conn, today), today)
     found += anniversary_reminders(year_ago(conn, today), today)
     return found

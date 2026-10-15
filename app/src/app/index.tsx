@@ -20,7 +20,7 @@ import { cluesFor, dayHint, inTime, nextClue, revealAt, revealMode, stepRevealed
 import { myComplicity, type Complicity } from '@/lib/complicity';
 import { eveningRole, guests, isSquad, placesLeft, type AccountRole } from '@/lib/couple';
 import { formatTime, isoDay, longDay, shortDay } from '@/lib/dates';
-import { myDuo, partnerName, todaysQuestion, type Jour } from '@/lib/duo';
+import { duoProfile, myDuo, partnerName, todaysQuestion, type Jour } from '@/lib/duo';
 import { readyIntrigues, seasonsAhead, yearAgo, type Ready, type Season, type YearAgo } from '@/lib/occasions';
 import { forgetProfile, rememberedProfile } from '@/lib/local-store';
 import { curtainFalls } from '@/lib/souvenirs';
@@ -40,6 +40,9 @@ const capitalised = (text: string) => text.charAt(0).toUpperCase() + text.slice(
 export default function AccueilScreen() {
   const { role, userId } = useCouple();
   const [profile, setProfile] = useState<Profile | null>(null);
+  // The duo's: the account's own or its partner's (one is enough for two).
+  const [duoProfiled, setDuoProfiled] = useState(false);
+  const [inDuo, setInDuo] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [upcoming, setUpcoming] = useState<Upcoming[]>([]);
   const [gauge, setGauge] = useState<Complicity | null>(null);
@@ -60,7 +63,7 @@ export default function AccueilScreen() {
       const today = isoDay(new Date());
       // All read at once, not one after the other: the page shows in one round trip. Signed in, only the account's
       // own profile counts: never one left on this device by someone else.
-      const [known, rows, history, gaugeRead, duo] = await Promise.all([
+      const [known, rows, history, gaugeRead, duo, shared] = await Promise.all([
         supabaseConfigured
           ? accountProfile().then((p) => p?.profile ?? null, () => null)
           : rememberedProfile().then((p) => p?.profile ?? null),
@@ -68,12 +71,16 @@ export default function AccueilScreen() {
         supabaseConfigured ? eveningsHistory().catch((): EveningHistoryRow[] => []) : ([] as EveningHistoryRow[]),
         supabaseConfigured ? myComplicity().catch(() => null) : null,
         supabaseConfigured ? myDuo().catch(() => null) : null,
+        supabaseConfigured ? duoProfile().catch(() => null) : null,
       ]);
       setProfile(known);
+      setDuoProfiled(!!shared);
+      setInDuo(!!duo);
       if (supabaseConfigured) {
         setGauge(gaugeRead);
         const jour = duo?.complete ? await todaysQuestion().catch(() => null) : null;
-        setQuestion(jour && !jour.mienne ? { jour, partner: partnerName(duo!.partner) } : null);
+        // Before the day after their first evening, no question to call to.
+        setQuestion(jour?.commence && jour.question && !jour.mienne ? { jour, partner: partnerName(duo!.partner) } : null);
         const [prepared, coming, back] = await Promise.all([
           readyIntrigues(today, rows).catch((): Ready[] => []),
           seasonsAhead(today).catch((): Season[] => []),
@@ -127,7 +134,7 @@ export default function AccueilScreen() {
         </View>
       ) : null}
 
-      {role === 'instigateur' && loaded && !profile ? <ProfileCall /> : null}
+      {loaded && !profile && !duoProfiled && (role === 'instigateur' || inDuo) ? <ProfileCall /> : null}
       {role === 'passager' && loaded ? <YourTurn /> : null}
       {loaded ? <TonightCall /> : null}
       {ready.map((r) => <ReadyCall key={r.cle} ready={r} />)}
@@ -321,7 +328,7 @@ function Call({ icon, title, text, onPress }: { icon: string; title: string; tex
 
 // No profile yet: the quiz, two minutes, so a couple's evenings fit them (a band's needs none).
 const ProfileCall = () => (
-  <Call icon="coeur" title="Faire notre profil de couple" text="Deux minutes, pour des soirées à deux à votre image" onPress={() => router.push('/profil')} />
+  <Call icon="coeur" title="Faire notre profil de couple" text="Deux minutes, pour des soirées et des questions du jour à votre image" onPress={() => router.push('/profil')} />
 );
 
 // The passager's turn: an evening of their own, whose secret they keep this time.
@@ -442,7 +449,7 @@ const QuestionCall = ({ jour, partner }: { jour: Jour; partner: string }) => (
   <Call
     icon="coeur"
     title={jour.sienne_donnee ? `${partner} a répondu à la question du jour` : 'La question du jour'}
-    text={jour.question.texte}
+    text={jour.question?.texte ?? ''}
     onPress={() => router.push('/couple')}
   />
 );

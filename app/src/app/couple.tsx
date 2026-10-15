@@ -1,9 +1,9 @@
 import * as Linking from 'expo-linking';
-import { type Href, useLocalSearchParams } from 'expo-router';
+import { type Href, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, Share, StyleSheet, View } from 'react-native';
 
-import { PrimaryButton, TextButton, TextLink } from '@/components/buttons';
+import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { Gauge } from '@/components/gauge';
 import { KeyDates } from '@/components/key-dates';
 import { ProgrammeCard } from '@/components/programme';
@@ -17,13 +17,13 @@ import { useLook, useTheme } from '@/hooks/use-theme';
 import { EARNED, LEVELS, myComplicity, type Complicity } from '@/lib/complicity';
 import { isoDay, longDay } from '@/lib/dates';
 import {
-  answerQuiz, answerToday, badgesFor, defiDone, joinDuo, leaveDuo, weeksQuiz, myDuo, openDuo, pairedAnswers, partnerName,
-  myProgramme, todaysQuestion, verdict, weeksDefi, type Duo, type Programme, type Jour, type Paired, type Quiz, type QuizQuestion, type Semaine,
+  answerQuiz, answerToday, badgesFor, defiDone, duoProfile, joinDuo, leaveDuo, weeksQuiz, myDuo, openDuo, pairedAnswers, partnerName,
+  myProgramme, todaysQuestion, verdict, weeksDefi, type Duo, type Programme, type Jour, type Paired, type Question as QuestionOfDay, type Quiz, type QuizQuestion, type Semaine,
 } from '@/lib/duo';
 import { keyDates, type KeyDate } from '@/lib/occasions';
 import { useCouple } from '@/hooks/use-couple';
 
-type State = { duo: Duo | null; gauge: Complicity | null; jour: Jour | null; paired: Paired[]; quiz: Quiz | null; semaine: Semaine | null; dates: KeyDate[]; programme: Programme | null };
+type State = { duo: Duo | null; profiled: boolean; gauge: Complicity | null; jour: Jour | null; paired: Paired[]; quiz: Quiz | null; semaine: Semaine | null; dates: KeyDate[]; programme: Programme | null };
 
 // The paliers of the day's questions, from the lightest: a duo climbs them answer after answer.
 const PALIERS = { 1: 'Pour rire', 2: 'Se raconter', 3: 'Nous deux', 4: 'À cœur ouvert' } as const;
@@ -38,12 +38,12 @@ export default function CoupleScreen() {
   const { userId } = useCouple();
 
   const load = useCallback(
-    () => Promise.all([myDuo(), myComplicity().catch(() => null)])
-      .then(async ([duo, gauge]) => {
+    () => Promise.all([myDuo(), myComplicity().catch(() => null), duoProfile().catch(() => null)])
+      .then(async ([duo, gauge, profile]) => {
         const [jour, paired, quiz, semaine, dates, programme] = duo?.complete
           ? await Promise.all([todaysQuestion(), pairedAnswers(isoDay(new Date())), weeksQuiz(), weeksDefi(), keyDates(), myProgramme()])
           : [null, [], null, null, [], null];
-        return { duo, gauge, jour, paired, quiz, semaine, dates, programme };
+        return { duo, profiled: !!profile, gauge, jour, paired, quiz, semaine, dates, programme };
       })
       .then(setState, () => setState('error')),
     [],
@@ -60,7 +60,7 @@ export default function CoupleScreen() {
       </Screen>
     );
   }
-  const { duo, gauge, jour, paired, quiz, semaine, dates, programme } = state;
+  const { duo, profiled, gauge, jour, paired, quiz, semaine, dates, programme } = state;
   const partner = partnerName(duo?.partner ?? null);
   return (
     <Screen gap={Spacing.four}>
@@ -72,6 +72,7 @@ export default function CoupleScreen() {
           ? `Vous et ${partner}. Chaque soirée, chaque page du Livre, chaque question partagée fait grandir votre complicité.`
           : 'Ici, vous jouez à deux : une question chaque jour, des défis, des quiz. Formez d’abord votre duo.'}
       />
+      {profiled ? null : <ProfileInvite partner={duo?.complete ? partner : null} />}
       {gauge ? (
         <View style={styles.block}>
           <Gauge gauge={gauge} />
@@ -275,8 +276,47 @@ function Choices({ label, choices, chosen, onChoose }: { label: string; choices:
   );
 }
 
+// Where a couple starts: their profile, which their evenings and their questions du jour follow. One is enough for
+// two: the partner's counts.
+function ProfileInvite({ partner }: { partner: string | null }) {
+  const theme = useTheme();
+  return (
+    <View testID="profil-a-faire" style={[styles.card, { backgroundColor: theme.velvet, borderColor: theme.gold }]}>
+      <ThemedText type="eyebrow">Tout commence ici</ThemedText>
+      <ThemedText style={[styles.question, { color: theme.cream }]}>Votre profil de couple</ThemedText>
+      <ThemedText type="small" style={{ color: theme.creamSoft }}>
+        {`Deux minutes, dix questions : vos soirées seront à votre image, et vos questions du jour suivront ce que vous aimez.${partner ? ` Un seul profil suffit, le vôtre ou celui de ${partner}.` : ''}`}
+      </ThemedText>
+      <PrimaryButton wide onPress={() => router.push('/profil')}>Faire notre profil</PrimaryButton>
+    </View>
+  );
+}
+
+// Before the day after their first evening lived, no question: when they begin, and the way to that first evening.
+function BeforeFirstEvening({ jour }: { jour: Jour }) {
+  const theme = useTheme();
+  const planned = jour.premiere?.prevue ?? null;
+  return (
+    <View testID="question-du-jour" style={[styles.card, { backgroundColor: theme.velvet, borderColor: theme.accentSoft }]}>
+      <ThemedText type="eyebrow">La question du jour</ThemedText>
+      <ThemedText style={[styles.question, { color: theme.cream }]}>Après votre premier rendez-vous</ThemedText>
+      <ThemedText type="small" style={{ color: theme.creamSoft }}>
+        {planned
+          ? `Elles commencent au lendemain de votre soirée du ${longDay(planned)} : chaque jour une question, la même pour vous deux, de la plus légère à la plus intime.`
+          : 'Chaque jour une question, la même pour vous deux, de la plus légère à la plus intime. Elles commencent au lendemain de votre première soirée à deux.'}
+      </ThemedText>
+      {planned ? null : <PrimaryLink wide href={{ pathname: '/soiree', params: { formule: 'duo' } }}>Organiser notre première soirée</PrimaryLink>}
+    </View>
+  );
+}
+
 // The day's question: answered and sealed, then the other's answer — or, until they give theirs, a veiled leaf.
 function TodaysQuestion({ jour, partner, onAnswered }: { jour: Jour; partner: string; onAnswered: () => void }) {
+  if (!jour.commence || !jour.question) return <BeforeFirstEvening jour={jour} />;
+  return <Question jour={jour} question={jour.question} partner={partner} onAnswered={onAnswered} />;
+}
+
+function Question({ jour, question, partner, onAnswered }: { jour: Jour; question: QuestionOfDay; partner: string; onAnswered: () => void }) {
   const theme = useTheme();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -298,9 +338,9 @@ function TodaysQuestion({ jour, partner, onAnswered }: { jour: Jour; partner: st
     <View testID="question-du-jour" style={[styles.card, { backgroundColor: theme.velvet, borderColor: theme.accentSoft }]}>
       <View style={styles.head}>
         <ThemedText type="eyebrow">La question du jour</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">{PALIERS[jour.question.profondeur]}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">{PALIERS[question.profondeur]}</ThemedText>
       </View>
-      <ThemedText testID="question-texte" style={[styles.question, { color: theme.cream }]}>{jour.question.texte}</ThemedText>
+      <ThemedText testID="question-texte" style={[styles.question, { color: theme.cream }]}>{question.texte}</ThemedText>
       {jour.mienne ? (
         <>
           <Answer label="Votre réponse" text={jour.mienne} />
@@ -337,6 +377,9 @@ function TodaysQuestion({ jour, partner, onAnswered }: { jour: Jour; partner: st
           {error ? <ThemedText type="small" themeColor="danger">{error}</ThemedText> : null}
         </>
       )}
+      {jour.adaptee
+        ? <ThemedText type="small" themeColor="textSecondary">Le fil de vos questions suit votre profil de couple.</ThemedText>
+        : <TextLink href="/profil">Faites votre profil : vos questions s’y accorderont →</TextLink>}
     </View>
   );
 }
