@@ -3,7 +3,8 @@
 // from a kept evening is in soiree.spec.ts.
 import { createHmac } from 'node:crypto';
 
-import { expect, type Page, test } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 import { MAIL_SECRET } from './mail-secret';
 

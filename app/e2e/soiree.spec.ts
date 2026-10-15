@@ -3,7 +3,8 @@
 // sees only its clues. And a band's (Secret Squad): its own look, its number, its guests and complices by two links.
 import { readFileSync } from 'node:fs';
 
-import { expect, type Page, test } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 import type { ComposedSoiree, Night, SoireeStep } from '@/lib/api';
 

@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
 import { DayField } from '@/components/day-field';
+import { ShiftDay } from '@/components/shift-day';
 import { CardEmblem, IntrigueCard, PageCard } from '@/components/intrigue-card';
 import { OptionCard, OptionGrid } from '@/components/option-card';
 import { RouteResult } from '@/components/route-result';
@@ -19,11 +20,16 @@ import {
   type ComposedSoiree, type Formule, type Night, type Profile, type SoireeData,
 } from '@/lib/api';
 import { isoDay, longDay, nextFriday, shortDay } from '@/lib/dates';
+import { here } from '@/lib/arrival';
+import { myComplicity, type Unlock } from '@/lib/complicity';
 import { rememberedProfile } from '@/lib/local-store';
+import { supabaseConfigured } from '@/lib/supabase';
 
 // The mood cards, from "Tamisé & Intime" to "Aventureux & Insolite": each one is one of
 // the server's wishes (surprise.quiz.ENVIES, its MOODS; a band's, SQUAD_MOODS), the middle one chosen until the couple
 // picks; several of them if they like. The other wishes are the "secret options", two at most: data.max wishes in all.
+// The complicity gauge (lib/complicity.ts) adds one more of each to a couple's evening, and the special intrigue among
+// its secret options.
 const MOODS = ['cocooning', 'romantique', 'nous', 'curieux', 'surprise'];
 const MIDDLE_MOOD = 2;
 const MAX_SECRETS = 2;
@@ -51,7 +57,18 @@ const NAMING_POLL_MS = 2000;
 export default function SoireeScreen() {
   // ?soiree=<name>: the evening composed before, so a reload or a shared link shows it again; once a route
   // is kept, the page has that route alone. ?formule=: the formula chosen first, Secret Date (duo) or Secret Squad.
-  const { soiree: saved, formule: asked } = useLocalSearchParams<{ soiree?: string; formule?: string }>();
+  // ?envies=a,b and ?jour=<day>: the form set on them (a défi, a season, an evening to live again — docs/complicite.md).
+  // ?maintenant=1: « Ce soir », an evening from half an hour on, for three hours, around where the phone is.
+  const { soiree: saved, formule: asked, envies: preset, jour, maintenant } = useLocalSearchParams<{
+    soiree?: string; formule?: string; envies?: string; jour?: string; maintenant?: string;
+  }>();
+  const tonight = maintenant === '1';
+  // Where the phone is, for « Ce soir »: asked once; 'none' if it may not say (the evening is then anywhere in Paris).
+  const [origin, setOrigin] = useState<{ lat: number; lon: number } | 'asking' | 'none'>(tonight ? 'asking' : 'none');
+  useEffect(() => {
+    if (tonight) here().then((found) => setOrigin(found ?? 'none'));
+  }, [tonight]);
+  const presetEnvies = preset ? preset.split(',').filter(Boolean) : [];
   const [formule, setFormule] = useState<Formule | null>(asked === 'squad' || asked === 'duo' ? asked : null);
   const [personnes, setPersonnes] = useState(PERSONNES.default);
   // The form's options, there at once when they were asked before (lib/api.ts once, prefetchSoiree).
@@ -61,18 +78,30 @@ export default function SoireeScreen() {
   const [unreachable, setUnreachable] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [picked, setPicked] = useState<string[] | null>(null); // the moods chosen, null: the middle one
-  const [secrets, setSecrets] = useState<string[]>([]);
+  // the moods chosen, null: the middle one
+  const [picked, setPicked] = useState<string[] | null>(() => {
+    const moods = presetEnvies.filter((e) => MOODS.includes(e));
+    return moods.length ? moods : presetEnvies.length ? [] : null;
+  });
+  const [secrets, setSecrets] = useState<string[]>(() => presetEnvies.filter((e) => !MOODS.includes(e)).slice(0, MAX_SECRETS + 1));
+  // What the couple's complicity unlocked: a secret option more, the special intrigue (a band's evening has none).
+  const [unlocked, setUnlocked] = useState<Unlock[]>([]);
+  useEffect(() => {
+    if (supabaseConfigured) myComplicity().then((c) => setUnlocked(c.unlocked), () => {});
+  }, []);
   // What the band never wants (Secret Squad): asked with the order, a band having no profile.
   const [eviter, setEviter] = useState<string[]>([]);
   const [night, setNight] = useState<Night>({
-    envies: [], diner: null, decoucher: false, occasion: null, start: null, end: null, budget: null, day: nextFriday(), profile: null,
+    envies: [], diner: null, decoucher: false, occasion: null, start: null, end: null, budget: null, profile: null,
+    day: jour && /^\d{4}-\d{2}-\d{2}$/.test(jour) && jour >= isoDay(new Date()) ? jour : nextFriday(),
   });
   const [status, setStatus] = useState<'idle' | 'composing' | 'error'>('idle');
   const [composed, setComposed] = useState<ComposedSoiree | null>(null);
   const [busyRedo, setBusyRedo] = useState<string | null>(null);
   // The route being kept (its index), while the server keeps it.
   const [keeping, setKeeping] = useState<number | null>(null);
+  // What moving the evening to another day changed (ShiftDay), said on the new page.
+  const [shifted, setShifted] = useState('');
   // The form's button, pressed with an answer missing, brings its question into view and lights it (`asking`).
   const scroller = useBringIntoView();
   const moodQuestion = useRef<View>(null);
@@ -101,11 +130,12 @@ export default function SoireeScreen() {
         setNight((n) => ({
           ...n,
           profile: remembered.profile,
-          day: remembered.profile.first_day && remembered.profile.first_day >= isoDay(new Date()) ? remembered.profile.first_day : n.day,
+          // A day asked by the link (?jour=) stays; else the profile's first outing, if still ahead.
+          day: !jour && remembered.profile.first_day && remembered.profile.first_day >= isoDay(new Date()) ? remembered.profile.first_day : n.day,
         }));
       }
     })();
-  }, [formule, attempt]);
+  }, [formule, attempt, jour]);
 
   // Another formula, other wishes: those chosen for the other one go.
   function pickFormule(chosen: Formule) {
@@ -173,11 +203,13 @@ export default function SoireeScreen() {
   if (!data) return null;
   const moodKeys = data.moods ?? MOODS;
   const moods = moodKeys.map((value) => data.envies.find((e) => e.value === value)).filter((e): e is NonNullable<typeof e> => !!e);
-  const others = data.envies.filter((e) => !moodKeys.includes(e.value));
+  const bonus = !squad && unlocked.includes('option-secrete') ? 1 : 0;
+  const max = data.max + bonus;
+  const others = data.envies.filter((e) => !moodKeys.includes(e.value) && (!e.palier || (!squad && unlocked.includes(e.palier as Unlock))));
   const middle = moods[Math.min(MIDDLE_MOOD, moods.length - 1)]?.value;
   const chosenMoods = picked ?? (middle ? [middle] : []);
-  const room = Math.min(MAX_SECRETS, data.max - chosenMoods.length); // the secret options left
-  const envies = [...chosenMoods, ...secrets].slice(0, data.max);
+  const room = Math.min(MAX_SECRETS + bonus, max - chosenMoods.length); // the secret options left
+  const envies = [...chosenMoods, ...secrets].slice(0, max);
 
   async function compose() {
     setStatus('composing');
@@ -188,7 +220,8 @@ export default function SoireeScreen() {
         ? await Promise.all([eveningsHistory().catch(() => []), squad ? [] : myTastes().catch(() => [])])
         : [[], []];
       const band = squad ? { formule: 'squad' as const, personnes, profile: null, decoucher: false, eviter } : { formule: 'duo' as const };
-      const fresh = await composeSoiree({ ...night, ...band, envies, done: history.map((h) => h.page_name), votes: votesOf(votes) });
+      const now = tonight ? { maintenant: true, day: isoDay(new Date()), origin: typeof origin === 'object' ? origin : null, decoucher: false, end: null } : {};
+      const fresh = await composeSoiree({ ...night, ...band, ...now, envies, done: history.map((h) => h.page_name), votes: votesOf(votes) });
       setComposed(fresh);
       router.setParams({ soiree: fresh.name });
       setStatus('idle');
@@ -273,6 +306,13 @@ export default function SoireeScreen() {
           ) : null}
           <TextButton onPress={() => (chosen ? router.back() : back(composed))}>{chosen ? '← Retour' : '← Changer nos envies'}</TextButton>
         </PageCard>
+        {!chosen && shown.length ? (
+          <ShiftDay day={shown[0].day} name={composed.name} told={shifted} onShifted={(moved, told) => {
+            setShifted(told);
+            setComposed(moved);
+            router.setParams({ soiree: moved.name });
+          }} />
+        ) : null}
         {notice === 'signin' ? (
           <View style={styles.notice}>
             <ThemedText type="small" themeColor="textSecondary">Connectez-vous pour garder cette intrigue. </ThemedText>
@@ -329,6 +369,17 @@ export default function SoireeScreen() {
             text="Une soirée secrète entre potes : un EVJF, un anniversaire, des retrouvailles ou juste l'envie. Tout se décide ici, pour la bande ; les invités ne verront que les indices.">
             <TextButton onPress={() => pickFormule('duo')}>← Plutôt une soirée à deux</TextButton>
           </PageCard>
+        ) : tonight ? (
+          <PageCard
+            badge="Ce soir"
+            title="Une soirée, maintenant"
+            text={origin === 'asking'
+              ? 'On regarde où vous êtes…'
+              : typeof origin === 'object'
+                ? 'Autour de vous, de dans une demi-heure à trois heures plus tard. Une humeur, dîner ou pas : c’est tout.'
+                : 'Sans votre position, la soirée se trame dans tout Paris, de dans une demi-heure à trois heures plus tard.'}>
+            <TextButton onPress={() => router.setParams({ maintenant: undefined })}>Plutôt un autre jour →</TextButton>
+          </PageCard>
         ) : (
           <PageCard
             badge={profile ? 'Votre profil' : 'Sans profil'}
@@ -349,13 +400,13 @@ export default function SoireeScreen() {
 
         <Section
           title="L'humeur du soir"
-          hint={`Une ou plusieurs : ${data.max} envies en tout avec les options secrètes.`}
+          hint={`Une ou plusieurs : ${max} envies en tout avec les options secrètes.`}
           ref={moodQuestion}
           lit={lit === 'humeur'}>
           <OptionGrid>
             {moods.map((m) => (
               <OptionCard key={m.value} label={m.label} icon={m.icon} emoji={m.emoji} selected={chosenMoods.includes(m.value)}
-                disabled={!chosenMoods.includes(m.value) && chosenMoods.length + secrets.length >= data.max}
+                disabled={!chosenMoods.includes(m.value) && chosenMoods.length + secrets.length >= max}
                 onPress={() => toggleMood(m.value)} />
             ))}
           </OptionGrid>
@@ -372,7 +423,7 @@ export default function SoireeScreen() {
 
         <Section
           title="Les options secrètes"
-          hint={room > 0 ? `Jusqu'à ${room}, glissées dans le programme.` : `Vos humeurs prennent les ${data.max} envies : retirez-en une pour en glisser.`}>
+          hint={room > 0 ? `Jusqu'à ${room}, glissées dans le programme.` : `Vos humeurs prennent les ${max} envies : retirez-en une pour en glisser.`}>
           <OptionGrid>
             {others.map((o) => (
               <OptionCard key={o.value} label={o.label} icon={o.icon} emoji={o.emoji} selected={secrets.includes(o.value)}
@@ -383,8 +434,8 @@ export default function SoireeScreen() {
           </OptionGrid>
         </Section>
 
-        {/* A band goes home: no hotel nor love room for it. */}
-        {squad ? null : (
+        {/* A band goes home: no hotel nor love room for it; « Ce soir » neither. */}
+        {squad || tonight ? null : (
           <Section title="Et quand la nuit tombe ?" hint="Découcher : une nuit à l'hôtel ou dans une love room.">
             <OptionGrid>
               {NIGHTS.map((o) => (
@@ -396,13 +447,13 @@ export default function SoireeScreen() {
         )}
 
         {/* No question on the start: the usual hour, or earlier when a wish asks for it (surprise.quiz.evening). */}
-        <Section title="Jusqu'à quelle heure ?" hint="La soirée commence vers 19 h. Choisissez quand elle se termine, ou laissez vos envies décider.">
+        {tonight ? null : <Section title="Jusqu'à quelle heure ?" hint="La soirée commence vers 19 h. Choisissez quand elle se termine, ou laissez vos envies décider.">
           <OptionGrid>
             {data.ends.map((o) => (
               <OptionCard key={o.value} label={o.label} desc={o.desc} icon={o.icon} emoji={o.emoji} selected={night.end === o.value} onPress={() => toggleEnd(o.value)} />
             ))}
           </OptionGrid>
-        </Section>
+        </Section>}
 
         <Section
           title={squad ? 'Le budget par personne' : 'Le budget du soir'}
@@ -434,13 +485,13 @@ export default function SoireeScreen() {
           </Section>
         ) : null}
 
-        <DayField label="Le jour J" value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />
+        {tonight ? null : <DayField label="Le jour J" value={night.day} onChange={(day) => setNight((n) => ({ ...n, day }))} />}
 
         {status === 'composing' ? <Waiting {...(squad ? COMPOSING_SQUAD : COMPOSING_DATE)} /> : null}
         {status === 'error' && <ThemedText themeColor="danger">L&apos;intrigue n&apos;a pas pu être tramée. Réessayez dans un instant.</ThemedText>}
-        <PrimaryButton wide disabled={!night.day} busy={status === 'composing'} onPress={missing ? () => guide(missing) : compose}>
+        <PrimaryButton wide disabled={!night.day || origin === 'asking'} busy={status === 'composing'} onPress={missing ? () => guide(missing) : compose}>
           {status === 'composing'
-            ? `Le ${longDay(night.day)} se trame en secret…`
+            ? tonight ? 'Ce soir se trame en secret…' : `Le ${longDay(night.day)} se trame en secret…`
             : missing === 'humeur' ? 'Une humeur ? Choisissez-la'
               : missing === 'diner' ? 'Dîner ou pas ? Dites-le-nous' : squad ? `Tramer la virée à ${personnes}` : 'Tramer nos intrigues'}
         </PrimaryButton>

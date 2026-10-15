@@ -1,7 +1,8 @@
 // The app at a phone's size, quick and easy to hold: the entry page's form above the fold and its files kept by the
 // browser, the evening form opened at once and showing what it still needs, the buttons that say when they are at
 // work, links one can hit with a finger. On real activities of the base and the local Supabase, as soiree.spec.ts.
-import { expect, type Page, test } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test.use({ viewport: { width: 375, height: 812 } });
 

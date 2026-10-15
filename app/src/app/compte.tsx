@@ -112,6 +112,7 @@ function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void 
           ? `${who}\nVous recevez les indices des soirées auxquelles on vous invite, le reste vous sera révélé le jour J. À votre tour, vous pouvez en tramer une : votre profil s'y appliquera.`
           : who}
       />
+      <TextLink href="/couple">Mon couple : la question du jour, notre complicité →</TextLink>
       <CoupleProfile />
       <CoupleTastes />
       <PushNotifications />

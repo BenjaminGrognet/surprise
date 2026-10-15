@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
+import type { DateLook } from '@/constants/theme';
 import type { Profile } from '@/lib/api';
 
 // The couple's last profile, kept only on this device (mirrors the old localStorage use).
@@ -62,4 +63,15 @@ export async function arrivedSteps(evening: string): Promise<string[]> {
 export async function markArrived(evening: string, stepId: string) {
   const done = await arrivedSteps(evening);
   if (!done.includes(stepId)) await setItem(arrivedKey(evening), JSON.stringify([...done, stepId]));
+}
+
+// Secret Date's look chosen on this device: the brand's, or « Minuit » once unlocked (lib/complicity.ts).
+const LOOK = 'surprise.look';
+
+export async function rememberedLook(): Promise<DateLook> {
+  return (await getItem(LOOK).catch(() => null)) === 'minuit' ? 'minuit' : 'date';
+}
+
+export async function rememberLook(look: DateLook) {
+  await setItem(LOOK, look);
 }

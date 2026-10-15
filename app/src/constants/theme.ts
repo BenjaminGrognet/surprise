@@ -78,11 +78,38 @@ const squad: Record<ThemeColor, string> = {
   secret: '#FF2BD6', // fuchsia neon: the secret options
 };
 
-// The two formulas' looks: Secret Date (a couple, the brand) and Secret Squad (a band of friends).
-export type PaletteName = 'date' | 'squad';
-export const Palettes: Record<PaletteName, Record<ThemeColor, string>> = { date: brand, squad };
+// « Minuit », Secret Date's second look, unlocked by the complicity gauge (docs/complicite.md, A4): the brand's night
+// turned sapphire, a moonlit periwinkle for what lives, the same champagne gold for what is precious.
+const minuit: Record<ThemeColor, string> = {
+  ...brand,
+  text: '#E6E8F2',
+  background: '#050915', // a sapphire night
+  backgroundElement: '#0B1226',
+  backgroundSelected: '#121B36',
+  textSecondary: '#959CB8', // moon grey
+  line: 'rgba(219, 193, 140, 0.16)',
+  accent: '#8EA6FF', // periwinkle under the moon
+  accentInk: '#A9BBFF',
+  accentFaint: 'rgba(142, 166, 255, 0.24)',
+  satin: '#8EA6FF',
+  onAccent: '#050A1C',
+  velvet: '#0B1226',
+  glow: 'rgba(142, 166, 255, 0.3)',
+  cream: '#EEF0F8',
+  creamSoft: 'rgba(238, 240, 248, 0.64)',
+  creamFaint: 'rgba(238, 240, 248, 0.38)',
+  ok: '#8FD9C0',
+  secret: '#8EA6FF',
+};
+
+// The formulas' looks: Secret Date (a couple, the brand, or its « Minuit » once unlocked) and Secret Squad (a band of
+// friends).
+export type PaletteName = 'date' | 'squad' | 'minuit';
+// The looks a couple may choose for Secret Date.
+export type DateLook = 'date' | 'minuit';
+export const Palettes: Record<PaletteName, Record<ThemeColor, string>> = { date: brand, squad, minuit };
 // Each one's name, on its cards like a card issuer's.
-export const Brands: Record<PaletteName, string> = { date: 'Secret Date', squad: 'Secret Squad' };
+export const Brands: Record<PaletteName, string> = { date: 'Secret Date', squad: 'Secret Squad', minuit: 'Secret Date' };
 
 // Cormorant Garamond for titles and names, Manrope for the text, Anton for Secret Squad's headings (loaded in _layout.tsx).
 export const Fonts = {

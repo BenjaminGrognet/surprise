@@ -11,20 +11,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 
 import { TabBar, TabBarContext } from '@/components/tab-bar';
-import { Colors } from '@/constants/theme';
+import { Palettes, type DateLook } from '@/constants/theme';
 import { CoupleContext } from '@/hooks/use-couple';
+import { LookContext } from '@/hooks/use-theme';
 import { myRole, type CoupleState } from '@/lib/couple';
-import { claimDevice } from '@/lib/local-store';
+import { claimDevice, rememberedLook, rememberLook } from '@/lib/local-store';
 import { onNotificationOpen } from '@/lib/notifications';
 import { clearPhone, syncPhone } from '@/lib/phone';
 import { onPushTokenChange, registerPush } from '@/lib/push';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 
-// The navigator's own surfaces (between screens, behind a transition) in the brand's night.
-const navTheme = {
+// The navigator's own surfaces (between screens, behind a transition) in the night of the couple's look.
+const navTheme = (look: DateLook) => ({
   ...DarkTheme,
-  colors: { ...DarkTheme.colors, background: Colors.dark.background, card: Colors.dark.background, primary: Colors.dark.accent },
-};
+  colors: { ...DarkTheme.colors, background: Palettes[look].background, card: Palettes[look].background, primary: Palettes[look].accent },
+});
 
 // Unreadable (offline…): an instigateur, the account's default.
 const readCouple = () => myRole().catch((): CoupleState => ({ role: 'instigateur', userId: null }));
@@ -50,6 +51,18 @@ export default function RootLayout() {
   // read holds the app back (`booted`); later ones don't, so the navigator isn't torn down on a new sign-in.
   const [couple, setCouple] = useState<CoupleState | null>(null);
   const [booted, setBooted] = useState(false);
+  // Secret Date's look on this device: the brand's, or « Minuit » once the gauge unlocks it (« Mon couple »).
+  const [look, setLook] = useState<DateLook>('date');
+  useEffect(() => {
+    rememberedLook().then(setLook);
+  }, [couple?.userId]);
+  const lookValue = useMemo(() => ({
+    look,
+    setLook: (chosen: DateLook) => {
+      setLook(chosen);
+      void rememberLook(chosen);
+    },
+  }), [look]);
 
   useEffect(() => {
     if (!supabaseConfigured) return;
@@ -117,32 +130,36 @@ export default function RootLayout() {
 
   return (
     <CoupleContext.Provider value={value}>
-      <TabBarContext.Provider value={tabBar}>
-        <ThemeProvider value={navTheme}>
-          <StatusBar style="light" />
-          <View style={styles.root}>
-            <Stack screenOptions={{ headerShown: false, title: 'Secret Date', contentStyle: { backgroundColor: Colors.dark.background } }}>
-              {/* The couple signs in or creates an account before anything else. */}
-              <Stack.Protected guard={signedIn}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="revelation" />
-                <Stack.Screen name="historique" />
-                <Stack.Screen name="livre" />
-                {/* The profile and the evenings: the instigateur's, and the passager's once it is their turn to surprise. */}
-                <Stack.Screen name="profil" />
-                <Stack.Screen name="soiree" />
-              </Stack.Protected>
-              <Stack.Screen name="compte" />
-              <Stack.Screen name="invitation" />
-            </Stack>
-            {tabBar ? <TabBar /> : null}
-          </View>
-        </ThemeProvider>
-      </TabBarContext.Provider>
+      <LookContext.Provider value={lookValue}>
+        <TabBarContext.Provider value={tabBar}>
+          <ThemeProvider value={navTheme(look)}>
+            <StatusBar style="light" />
+            <View style={[styles.root, { backgroundColor: Palettes[look].background }]}>
+              <Stack screenOptions={{ headerShown: false, title: 'Secret Date', contentStyle: { backgroundColor: Palettes[look].background } }}>
+                {/* The couple signs in or creates an account before anything else. */}
+                <Stack.Protected guard={signedIn}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="revelation" />
+                  <Stack.Screen name="historique" />
+                  <Stack.Screen name="livre" />
+                  {/* « Mon couple »: the duo, its gauge and the day's question. */}
+                  <Stack.Screen name="couple" />
+                  {/* The profile and the evenings: the instigateur's, and the passager's once it is their turn to surprise. */}
+                  <Stack.Screen name="profil" />
+                  <Stack.Screen name="soiree" />
+                </Stack.Protected>
+                <Stack.Screen name="compte" />
+                <Stack.Screen name="invitation" />
+              </Stack>
+              {tabBar ? <TabBar /> : null}
+            </View>
+          </ThemeProvider>
+        </TabBarContext.Provider>
+      </LookContext.Provider>
     </CoupleContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.dark.background },
+  root: { flex: 1 },
 });

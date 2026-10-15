@@ -46,4 +46,5 @@ example
 # Browser tests (npm run build:e2e, npm run e2e)
 dist-e2e/
 test-results/
+e2e-snapshots/
 playwright-report/

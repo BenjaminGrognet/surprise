@@ -35,14 +35,14 @@ import sys
 import threading
 import time as clock
 import webbrowser
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from surprise import admin, courriers, images, parcours
+from surprise import admin, courriers, images, parcours, rappels
 from surprise.local_store import LocalStore, open_store
 from surprise.genres import GENRES
 from surprise.tags import VIBES
@@ -224,6 +224,9 @@ QUESTIONS: list[dict[str, Any]] = [
 # the profile the rest. value, label, emoji, vibes (none: the profile's), and optionally start, end, dinner,
 # audace, avoid (dropped when another wish of the evening asks for it: party and cocooning go together).
 MAX_ENVIES = 3
+# One more for a couple whose complicity gauge unlocked it (app/src/lib/complicity.ts, docs/complicite.md): the app
+# shows the extra secret option, the server takes it.
+PALIER_ENVIES = 1
 # A band's (Secret Squad) one more: two moods and still two secret options, as a couple slips two beside its mood.
 SQUAD_MAX_ENVIES = 4
 ENVIES: list[dict[str, Any]] = [
@@ -242,6 +245,9 @@ ENVIES: list[dict[str, Any]] = [
     {"value": "pimenter", "label": "Pimenter la soirée", "icon": "flamme", "emoji": "🌶️", "vibes": ["coquin", "romantique"], "start": "20:00"},
     {"value": "frissons", "label": "Frissonner", "icon": "frissons", "emoji": "👻", "vibes": ["frisson", "insolite"]},
     {"value": "surprise", "label": "Surprenez-nous", "icon": "cadeau", "emoji": "🎁", "vibes": [], "audace": 0.3},
+    # The special intrigue, unlocked by the complicity gauge (`palier`): the app hides it until then. All boldness.
+    {"value": "speciale", "label": "L'intrigue spéciale", "icon": "etincelles", "emoji": "🌠", "vibes": ["insolite", "emerveiller"],
+     "audace": 1.0, "palier": "intrigue-speciale"},
 ]
 
 # What the evening celebrates, if anything: added to its wishes.
@@ -365,6 +371,26 @@ def profile_from(answers: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+TONIGHT_HOURS = 3
+
+
+def tonight(now: datetime | None = None) -> tuple[datetime, datetime]:
+    """« Ce soir »: from the next quarter of an hour half an hour from now, for three hours."""
+    now = (now or datetime.now(parcours.PARIS)).astimezone(parcours.PARIS) + timedelta(minutes=30)
+    start = now.replace(second=0, microsecond=0) + timedelta(minutes=-now.minute % 15)
+    return start, start + timedelta(hours=TONIGHT_HOURS)
+
+
+def valid_origin(value: Any) -> tuple[float, float] | None:
+    """Where the couple is, as the app sends it ({lat, lon}), if it is around Paris; else None."""
+    if not isinstance(value, dict):
+        return None
+    lat, lon = value.get("lat"), value.get("lon")
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (lat, lon)):
+        return None
+    return (float(lat), float(lon)) if 48.1 <= lat <= 49.3 and 1.4 <= lon <= 3.6 else None
+
+
 def valid_day(value: Any) -> str | None:
     """A day as the page sends it (2026-10-09), or None."""
     try:
@@ -440,7 +466,7 @@ def evening(
     """
     envie_keys, occasion_keys = (SQUAD_ENVIE_KEYS, SQUAD_OCCASION_KEYS) if squad else (ENVIE_KEYS, OCCASION_KEYS)
     first = SQUAD_ENVIES[0] if squad else ENVIES[0]
-    wishes = [envie_keys[e] for e in dict.fromkeys(envies or []) if e in envie_keys][:SQUAD_MAX_ENVIES if squad else MAX_ENVIES] or [first]
+    wishes = [envie_keys[e] for e in dict.fromkeys(envies or []) if e in envie_keys][:SQUAD_MAX_ENVIES if squad else MAX_ENVIES + PALIER_ENVIES] or [first]
     event = occasion_keys.get(occasion or "rien", occasion_keys["rien"])
     # Each wish's vibes, the profile's for "nous" and "surprise"; taken in turn so that every wish has its share.
     lists = [(["insolite"] if w["value"] == "surprise" else []) + (w["vibes"] or list(profile["vibes"])) for w in wishes]
@@ -496,6 +522,35 @@ def requests_for(
     return requests
 
 
+def compose(
+    store: LocalStore, found: parcours.Base, profile: dict[str, Any], envies: list[str], *, days: list[date] | None,
+    occasion: str | None = None, dinner: bool = False, overnight: bool = False, start: str | None = None, end: str | None = None,
+    budget: float | None = None, party: int = 2, formule: str = "duo", chosen: list[str] | None = None,
+    votes: dict[str, int] | None = None, checks: int = 0, name_later: bool = True,
+    hours: tuple[datetime, datetime] | None = None, origin: tuple[float, float] | None = None,
+) -> str:
+    """Three routes for an evening, saved as a page of the server's: its name. The activities of the evenings `chosen`
+    (their pages) and those voted down never come back; the kinds voted up come first. For the app's form (/api/soirees)
+    and for the intrigues the server composes for a date that counts (surprise.rappels). `hours`: the evening's bounds
+    in place of its wishes' (« Ce soir »: from now, for three hours), around `origin` (where the couple is)."""
+    votes = votes or {}
+    done = store.chosen_activities(chosen or []) | {key for key, vote in votes.items() if vote < 0}
+    tastes = parcours.tastes_from(found, votes)
+    squad = formule == "squad"
+    name = f"soiree-{new_id()}-{f'squad{party}-' if squad else ''}{'-'.join(envies)}-{'diner' if dinner else 'sans-diner'}"
+    name += "-nuit" if overnight else ""
+    requests = requests_for(profile, days, envies, occasion, dinner, overnight, start, end, budget, party=party, formule=formule)
+    for request in requests:
+        request.done = done
+        request.tastes = tastes
+        if hours:
+            request.start, request.end = hours
+            request.day = hours[0].date()
+        request.origin = origin
+    _, name = parcours.generate(store, requests, count=3, checks=checks, name=name, base=found, name_later=name_later)
+    return name
+
+
 def new_id() -> str:
     return secrets.token_urlsafe(6)
 
@@ -504,6 +559,8 @@ def new_id() -> str:
 _REDO = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)(?:/steps/(?P<step>\d+))?$")
 # /api/parcours/<page>/routes/<index>/steps/<position>/remove: the couple takes a step out.
 _REMOVE = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)/steps/(?P<step>\d+)/remove$")
+# /api/parcours/<page>/jour: the same evening moved to another day (a new page).
+_SHIFT = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/jour$")
 # /api/parcours/<page>/routes/<index>/choose: the couple keeps this route, the page's only one from then on.
 _CHOOSE = re.compile(r"^/api/parcours/(?P<name>[\w-]+)/routes/(?P<route>\d+)/choose$")
 BASE_MINUTES = 15
@@ -616,6 +673,16 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
                 with open_store(db) as store:
                     found = base(store)
                 return self._send_json(HTTPStatus.OK, {"image_url": parcours.broken_image(found, key, url)})
+            if shift := _SHIFT.match(path):
+                # The same evening another day: its steps kept where they can be, the others drawn again.
+                day = valid_day(body.get("day"))
+                if not day or date.fromisoformat(day) < datetime.now(parcours.PARIS).date():
+                    return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "jour invalide"})
+                with open_store(db) as store, composing:
+                    name, changed, error = parcours.shift(store, base(store), shift["name"], date.fromisoformat(day), checks=min(checks, 10))
+                    if error:
+                        return self._send_json(HTTPStatus.CONFLICT, {"error": error})
+                    return self._send_json(HTTPStatus.OK, {**parcours.soiree_json(name, parcours.load(name, store)), "changed": changed})
             if remove := _REMOVE.match(path):
                 if error := parcours.remove(remove["name"], int(remove["route"]), int(remove["step"])):
                     return self._send_json(HTTPStatus.CONFLICT, {"error": error})
@@ -659,7 +726,7 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "nombre de personnes invalide"})
             envie_keys, occasion_keys = (SQUAD_ENVIE_KEYS, SQUAD_OCCASION_KEYS) if squad else (ENVIE_KEYS, OCCASION_KEYS)
             asked = body.get("envies") if isinstance(body.get("envies"), list) else []
-            envies = [e for e in dict.fromkeys(e for e in asked if isinstance(e, str)) if e in envie_keys][:SQUAD_MAX_ENVIES if squad else MAX_ENVIES]
+            envies = [e for e in dict.fromkeys(e for e in asked if isinstance(e, str)) if e in envie_keys][:SQUAD_MAX_ENVIES if squad else MAX_ENVIES + PALIER_ENVIES]
             if not envies:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "au moins une envie"})
             if not isinstance(body.get("diner"), bool):
@@ -674,6 +741,11 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
                 budget = (budget or SQUAD_BUDGET) * party  # per person, for the band
             day = valid_day(body.get("day"))
             days = [date.fromisoformat(day)] if day else None
+            # « Ce soir »: an evening from half an hour on, for three hours, around where the couple is if it said.
+            hours = tonight() if body.get("maintenant") is True else None
+            if hours:
+                days = [hours[0].date()]
+            origin = valid_origin(body.get("origin"))
             if squad:
                 eviter = body.get("eviter") if isinstance(body.get("eviter"), list) else []
                 profile = squad_profile([e for e in eviter[:len(SQUAD_EVITER)] if isinstance(e, str)])
@@ -688,23 +760,12 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
             votes = {} if squad else valid_votes(body.get("votes"))
             with open_store(db) as store:
                 found = base(store)
-                # Never again: the activities of the evenings chosen, and those voted down.
-                done = store.chosen_activities(chosen) | {key for key, vote in votes.items() if vote < 0}
-                tastes = parcours.tastes_from(found, votes)
-                overnight = body.get("decoucher") is True and not squad  # a band goes home
-                name = f"soiree-{new_id()}-{f'squad{party}-' if squad else ''}{'-'.join(envies)}-{'diner' if body['diner'] else 'sans-diner'}"
-                name += "-nuit" if overnight else ""
                 with composing:
-                    requests = requests_for(
-                        profile, days, envies, occasion, body["diner"], overnight, start, end, budget,
-                        party=party, formule="squad" if squad else "duo",
-                    )
-                    for request in requests:
-                        request.done = done
-                        request.tastes = tastes
-                    _, name = parcours.generate(
-                        store, requests,
-                        count=3, checks=checks, name=name, base=found, name_later=True,
+                    name = compose(
+                        store, found, profile, envies, days=days, occasion=occasion, dinner=body["diner"],
+                        overnight=body.get("decoucher") is True and not squad,  # a band goes home
+                        start=start, end=end, budget=budget, party=party, formule="squad" if squad else "duo",
+                        chosen=chosen, votes=votes, checks=checks, hours=hours, origin=origin,
                     )
                     state = parcours.load(name, store)
             self._send_json(HTTPStatus.OK, parcours.soiree_json(name, state))
@@ -760,11 +821,12 @@ def _courriers(db: str | None, minutes: float) -> None:
         return
     while True:
         try:
-            report = courriers.run(db)
-            for moment, channel in report.sent:
-                print(f"Courrier {channel} · {moment.key} · {moment.to.address}")
-            for moment, why in report.failed:
-                print(f"Courrier en échec · {moment.key} · {moment.to.address} : {why}")
+            # The evenings' moments, then the reminders that belong to none (dates, seasons, a year ago).
+            for report in (courriers.run(db), rappels.run(db)):
+                for moment, channel in report.sent:
+                    print(f"Courrier {channel} · {moment.key} · {moment.to.address}")
+                for moment, why in report.failed:
+                    print(f"Courrier en échec · {moment.key} · {moment.to.address} : {why}")
         except Exception as error:  # the next pass tries again: a site down, Supabase out of reach
             print(f"Courriers : {type(error).__name__} {error}")
         clock.sleep(minutes * 60)

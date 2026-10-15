@@ -127,6 +127,11 @@ _ENGINE_NAMES = {"zenchef": "Zenchef", "sevenrooms": "SevenRooms", "4escape": "4
 _DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
 
 
+# « Ce soir »: the steps within this distance of where the couple is, twice as far when fewer than NEAR_ENOUGH fit.
+NEAR_KM = 3.0
+NEAR_ENOUGH = 25
+
+
 @dataclass
 class Request:
     day: date
@@ -149,6 +154,8 @@ class Request:
     night_budget: float | None = None  # euros for the room, added to the evening's budget (night_budget_for by default)
     done: set[tuple[str, str]] = field(default_factory=set)  # activities of evenings the couple chose: never again
     tastes: dict[str, float] = field(default_factory=dict)  # the couple's votes by kind of outing (tastes_from): + liked, − not for them
+    origin: tuple[float, float] | None = None  # « Ce soir » (lat, lon): the evening around where the couple is
+    radius_km: float = NEAR_KM  # how far from `origin` its steps may be, widened when too few fit
 
     @property
     def squad(self) -> bool:
@@ -1492,6 +1499,8 @@ def step_json(step: Step, redo: str | None, page: str | None = None) -> dict[str
         "town": (item["activity"].get("venue") or {}).get("town"),
         "lat": c.lat, "lon": c.lon,
         "role": c.role, "kind": c.kind,
+        # Out in the open (a park, a terrace, on the water): the weather may call for a plan B (surprise.meteo).
+        "outdoor": bool({"plein_air", "sur_l_eau"} & set(c.tags)),
         "price": c.price, "price_estimated": c.price_estimated,
         "booking_url": link, "booking_action": action, "partner": partnered,
         "image_url": _image_url(item),
@@ -1606,7 +1615,7 @@ def candidates_for(store: LocalStore, base: Base, request: Request, checks: int 
     checked = check_engines(store, items, request, checks, _prescore(items, request, base)) if checks else store.cached_availability(
         request.day.isoformat(), request.party, CACHE_HOURS
     )
-    candidates = _scored(items, request, checked, base)
+    candidates = around(_scored(items, request, checked, base), request)
     kinds = Counter(c.kind for c in candidates)
     print(
         f"{len(candidates)} étapes possibles ce soir-là : {kinds['seance']} séances, {kinds['verifie']} créneaux vérifiés, "
@@ -1627,7 +1636,19 @@ def more_candidates(
         and (role_ is None or role(item["activity"], describe(item["activity"])["tags"], request.no_dinner) == role_)
     ]
     checked = check_engines(store, items, request, checks, _prescore(items, request, base))
-    return _scored([item for item in items if (item["source_id"], item["external_id"]) in checked], request, checked, base)
+    return around(_scored([item for item in items if (item["source_id"], item["external_id"]) in checked], request, checked, base), request)
+
+
+def around(candidates: list[Candidate], request: Request) -> list[Candidate]:
+    """« Ce soir »: the candidates within `radius_km` of where the couple is, or twice as far if too few are; all of
+    them for an evening planned ahead (no `origin`)."""
+    if not request.origin:
+        return candidates
+    for radius in (request.radius_km, request.radius_km * 2):
+        near = [c for c in candidates if distance_km(request.origin, (c.lat, c.lon)) <= radius]
+        if len(near) >= NEAR_ENOUGH:
+            return near
+    return near
 
 
 def _prescore(items: list[dict[str, Any]], request: Request, base: Base) -> dict:
@@ -1988,6 +2009,71 @@ def _replace_shown(route: Route, position: int, candidates: list[Candidate], req
             return steps
         unshown_keys |= found
     return None
+
+
+def shift(store: LocalStore | None, base: Base, name: str, day: date, checks: int = 10) -> tuple[str | None, int, str | None]:
+    """The page's evening moved to another `day`, as a new page: its routes kept, each step at the same hour if it can
+    be that day (open, a session then), else drawn again as a plan B would be (`replace_step`); a route none of whose
+    missing steps can be drawn again is left out. Its new name, the steps changed, and the error, if any. A page whose
+    route was kept is not moved: its evening is in the couple's history."""
+    with _SAVING, _own(store) as store:
+        state = load(name, store)
+        if state is None or not state["routes"]:
+            return None, 0, "parcours introuvable : relancez la composition"
+        if state["chosen"]:
+            return None, 0, "soirée déjà gardée : composez-en une nouvelle pour un autre jour"
+        moved: dict[int, Request] = {}  # id of the old request: the same evening that day
+        pools: dict[int, list[Candidate]] = {}
+
+        def moved_request(old: Request) -> Request:
+            if id(old) not in moved:
+                delta = day - old.day
+                moved[id(old)] = replace(old, day=day, start=old.start + delta, end=old.end + delta)
+                pools[id(old)] = candidates_for(store, base, moved[id(old)], checks)
+            return moved[id(old)]
+
+        routes, changed = [], 0
+        taken = {s.candidate.key for r in state["routes"] for s in r.steps}
+        for route in state["routes"]:
+            old = route.request or state["requests"][0]
+            request = moved_request(old)
+            delta = day - old.day
+            pool = pools[id(old)]
+            by_key = {c.key: c for c in pool}
+            steps, missing = [], []
+            for position, step in enumerate(route.steps):
+                start, end = step.start + delta, step.end + delta
+                found = by_key.get(step.candidate.key)
+                if found and (start in found.starts or (found.flexible and any(abs((s - start).total_seconds()) < 900 for s in found.starts))):
+                    steps.append(Step(found, start, end, step.travel, step.distance))
+                else:
+                    steps.append(Step(step.candidate, start, end, step.travel, step.distance))  # held in place to chain around it
+                    missing.append(position)
+            new = Route(steps, route.score, route.title, route.pitch, None if route.request is None else request)
+            for position in missing:
+                others = {s.candidate.key for i, s in enumerate(new.steps) if i != position}
+                drawn = _replace_shown(new, position, lucky(pool), request, (taken - {new.steps[position].candidate.key}) | others)
+                if drawn is None:
+                    new = None
+                    break
+                new.steps = drawn
+                taken.add(drawn[position].candidate.key)
+                changed += 1
+            if new is None:
+                continue
+            if route.night:
+                new.night = night_for(new, hotels(base), request, set())
+            if missing:
+                new.score = _route_score(new.steps, request)
+                name_by_rules(new, request)
+            routes.append(new)
+        if not routes:
+            return None, 0, "aucune soirée possible ce jour-là : composez-en une nouvelle"
+        requests = [moved[id(r)] for r in state["requests"] if id(r) in moved] or [moved_request(state["requests"][0])]
+        new_name = f"{day.isoformat()}-{secrets.token_urlsafe(6)}"
+        save(new_name, {"routes": routes, "requests": requests, "seen": {s.candidate.key for r in routes for s in r.steps}, "naming": 0},
+             store, candidates=[pools[id(r)] for r in state["requests"] if id(r) in pools] or None)
+    return new_name, changed, None
 
 
 def remove(name: str, index: int, position: int) -> str | None:

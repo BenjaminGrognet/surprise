@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -86,16 +86,27 @@ def test_each_evening_has_its_own_wish():
     assert bold.audace == 1.0 and "insolite" in bold.vibes
 
 
-def test_up_to_three_wishes_mix_in_one_evening():
+def test_up_to_three_wishes_mix_in_one_evening_four_with_the_gauges_secret_option():
     profile = quiz.profile_from(ANSWERS)
-    night = quiz.evening(profile, ["cocooning", "fete", "rire", "jouer"])
-    assert night["envies"] == ["cocooning", "fete", "rire"]  # the fourth is dropped
+    # Three, and one more secret option for a couple whose complicity gauge unlocked it (the app shows it then).
+    night = quiz.evening(profile, ["cocooning", "fete", "rire", "creer", "jouer"])
+    assert night["envies"] == ["cocooning", "fete", "rire", "creer"]  # the fifth is dropped
     assert night["vibes"][:3] == ["detente", "fete", "rire"] and len(night["vibes"]) <= quiz.MAX_VIBES
     # The party keeps its clubs and its late end; cocooning still leaves out what nobody asked for.
     assert not {"nuit", "electro", "danse"} & set(night["avoid"]) and {"sport", "grande_salle", "spa"} <= set(night["avoid"])
     assert (night["start"], night["end"]) == ("20:00", "03:30")
     assert quiz.evening(profile, ["air", "cocooning"])["start"] == "18:30"
     assert quiz.evening(profile)["vibes"] == profile["vibes"]
+
+
+def test_the_special_intrigue_unlocked_by_the_gauge_is_all_boldness():
+    # Hidden by the app until the gauge reaches its level (`palier`); the server composes it as any wish.
+    special = quiz.ENVIE_KEYS["speciale"]
+    assert special["palier"] == "intrigue-speciale" and "speciale" not in quiz.MOODS
+    profile = quiz.profile_from({**ANSWERS, "audace": "classique"})
+    [classic] = quiz.requests_for(profile, envies=["nous"])
+    [bold] = quiz.requests_for(profile, envies=["nous", "speciale"])
+    assert classic.audace < 0.5 and bold.audace == 1.0 and {"insolite", "emerveiller"} <= set(bold.vibes)
 
 
 def test_start_end_and_budget_are_chosen_per_evening_not_in_the_profile():
@@ -252,10 +263,11 @@ def test_a_bands_evening_is_its_own():
 
 
 def test_a_band_slips_two_secret_options_beside_two_moods():
-    # Four wishes for a band (two moods, two secret options), three for a couple (one mood, two secret options).
+    # Four wishes for a band (two moods, two secret options), three for a couple (one mood, two secret options) and a
+    # fourth once its complicity gauge unlocked it.
     wishes = ["rire", "jouer", "frissons", "gourmand", "musique"]
     assert quiz.evening(quiz.squad_profile(), wishes, squad=True)["envies"] == wishes[:4]
-    assert quiz.evening(quiz.squad_profile(), ["nous", "fete", "gourmand", "musique"])["envies"] == ["nous", "fete", "gourmand"]
+    assert quiz.evening(quiz.squad_profile(), ["nous", "fete", "gourmand", "musique", "air"])["envies"] == ["nous", "fete", "gourmand", "musique"]
 
 
 def test_what_a_band_never_wants_comes_with_its_order():
@@ -269,3 +281,13 @@ def test_what_a_band_never_wants_comes_with_its_order():
 def test_a_band_says_its_vibes_its_own_way():
     assert set(quiz.SQUAD_VIBE_LABELS) <= VIBES.keys()
     assert quiz.SQUAD_VIBE_LABELS["rire"] != VIBES["rire"]["label"] and "Paillettes" == quiz.SQUAD_VIBE_LABELS["romantique"]
+
+
+def test_tonight_is_from_the_next_quarter_half_an_hour_on_for_three_hours_around_paris_only():
+    start, end = quiz.tonight(datetime(2026, 10, 16, 19, 52, tzinfo=parcours.PARIS))
+    assert (start.hour, start.minute, end - start) == (20, 30, timedelta(hours=3))
+    start, _ = quiz.tonight(datetime(2026, 10, 16, 20, 0, tzinfo=parcours.PARIS))
+    assert (start.hour, start.minute) == (20, 30)
+    assert quiz.valid_origin({"lat": 48.8566, "lon": 2.3522}) == (48.8566, 2.3522)
+    assert quiz.valid_origin({"lat": 45.76, "lon": 4.83}) is None  # Lyon: no base there
+    assert quiz.valid_origin({"lat": "48.8", "lon": 2.3}) is None and quiz.valid_origin(None) is None

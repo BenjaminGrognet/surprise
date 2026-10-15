@@ -87,7 +87,8 @@ export const getQuiz = () => once<QuizData>('/api/quiz');
 export const saveProfile = (answers: Record<string, unknown>) =>
   api<{ profile: Profile }>('/api/profiles', { method: 'POST', body: JSON.stringify({ answers }) }).then((r) => r.profile);
 
-export type ChipOption = { value: string; label: string; desc?: string; emoji?: string; icon?: string };
+// `palier`: a wish the complicity gauge unlocks (lib/complicity.ts Unlock), hidden until then.
+export type ChipOption = { value: string; label: string; desc?: string; emoji?: string; icon?: string; palier?: string };
 export type BudgetOption = { budget: number; label: string; desc?: string; emoji?: string; icon?: string };
 // Secret Date, a couple's evening, or Secret Squad, a band of friends' (surprise.quiz SQUAD_…).
 export type Formule = 'duo' | 'squad';
@@ -123,6 +124,9 @@ export type Night = {
   done?: string[];
   // Their votes on steps (lib/account.ts votesOf): the kinds of outing liked come first, those voted out never.
   votes?: Record<string, 1 | -1>;
+  // « Ce soir »: from half an hour on, for three hours (the server's clock), around `origin` if the phone said.
+  maintenant?: boolean;
+  origin?: { lat: number; lon: number } | null;
 };
 
 const soireePath = (formule: Formule) => (formule === 'squad' ? '/api/soiree?formule=squad' : '/api/soiree');
@@ -152,6 +156,7 @@ export type SoireeStep = {
   lat: number;
   lon: number;
   role: 'repas' | 'verre' | 'sortie' | 'nuit';
+  outdoor?: boolean; // out in the open: the weather may call for a plan B (surprise.meteo)
   kind: 'verifie' | 'seance' | 'gratuit' | 'sans_resa' | 'nuit';
   price: number;
   price_estimated: boolean;
@@ -216,6 +221,10 @@ export const reportBrokenImage = (id: string, url: string) =>
   api<{ image_url: string | null }>('/api/images/broken', { method: 'POST', body: JSON.stringify({ id, url }) });
 export const redoPart = (name: string, redo: string) =>
   api<ComposedSoiree>(`/api/parcours/${name}/${redo}`, { method: 'POST', body: '{}' });
+// The same evening another day, as a new page: each step kept at its hour where it can be that day, the others drawn
+// again (`changed` of them). An evening ready from an email (a date that counts) moved by the couple.
+export const shiftSoiree = (name: string, day: string) =>
+  api<ComposedSoiree & { changed: number }>(`/api/parcours/${encodeURIComponent(name)}/jour`, { method: 'POST', body: JSON.stringify({ day }) });
 // The route kept: the page keeps it alone from now on (the others go), as its route 0.
 export const chooseRoute = (name: string, index: number) =>
   api<ComposedSoiree>(`/api/parcours/${name}/routes/${index}/choose`, { method: 'POST', body: '{}' });

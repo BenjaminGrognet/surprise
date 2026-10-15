@@ -31,7 +31,9 @@ SURPRISE_PROD_REFRESH=1 uv run pytest tests/test_real_catalogue.py
 ```
 
 `npm test` reprend la réponse de `supabase status` (`node_modules/.cache`, revérifiée en une requête), et `npm run e2e`
-ne refait le build web que si l'app ou ses variables ont changé (`E2E_REBUILD=1` pour le forcer).
+ne refait le build web que si l'app ou ses variables ont changé (`E2E_REBUILD=1` pour le forcer). Chaque page
+montrée par les tests navigateur est photographiée dans `app/e2e-snapshots/` (vidé à chaque lancement, non versionné) :
+son haut, et son bas quand elle dépasse l'écran (`-1-haut`, `-2-bas`), réunies dans `app/e2e-snapshots/index.html`.
 
 ## Collecteurs
 

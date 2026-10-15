@@ -9,6 +9,7 @@ import { PageCard } from '@/components/intrigue-card';
 import { Screen } from '@/components/screen';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
+import { Review } from '@/components/bilan';
 import { Veil } from '@/components/veil';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useCouple } from '@/hooks/use-couple';
@@ -85,6 +86,9 @@ function Grimoire({ book: { evening, pages }, onSealed }: { book: Book; onSealed
       ) : (
         <SealForm soireeId={evening.id} onSealed={onSealed} />
       )}
+
+      {/* The morning after: three questions, the next evenings guided by them. */}
+      {open ? <Review soireeId={evening.id} pageName={evening.page_name} squad={squad} /> : null}
 
       {/* Until the page is sealed, the instigateur can still look back at the route. */}
       {role === 'instigateur' && !mine ? (

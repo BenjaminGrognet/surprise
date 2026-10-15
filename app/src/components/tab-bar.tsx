@@ -51,14 +51,14 @@ export function TabBar() {
       { icon: 'grimoire', label: 'Mes soirées', href: '/historique', active: path === '/historique' || path === '/livre' },
       { icon: 'cle', label: next ? 'Vos indices' : 'Pas encore de soirée', center: true, active: onEvening, href: evening },
       { icon: 'diamant', label: 'À votre tour : une nouvelle intrigue', href: '/soiree', active: path === '/soiree' },
-      { icon: 'profil', label: 'Mon compte', href: '/compte', active: path === '/compte' || path === '/profil' },
+      { icon: 'profil', label: 'Mon compte', href: '/compte', active: path === '/compte' || path === '/profil' || path === '/couple' },
     ]
     : [
       { icon: 'maison', label: 'Accueil', href: '/', active: path === '/' },
       { icon: 'grimoire', label: 'Mes soirées', href: '/historique', active: path === '/historique' || path === '/livre' },
       { icon: 'diamant', label: 'Nouvelle intrigue', href: '/soiree', center: true, active: path === '/soiree' },
       { icon: 'boussole', label: next ? 'La boussole : votre prochaine soirée' : 'Pas encore de soirée', href: evening, active: onEvening },
-      { icon: 'profil', label: 'Mon compte', href: '/compte', active: path === '/compte' || path === '/profil' },
+      { icon: 'profil', label: 'Mon compte', href: '/compte', active: path === '/compte' || path === '/profil' || path === '/couple' },
     ];
 
   const squad = (path === '/soiree' && params.formule === 'squad')

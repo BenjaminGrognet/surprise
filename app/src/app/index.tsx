@@ -1,9 +1,10 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { PrimaryLink, TextButton } from '@/components/buttons';
+import { Gauge } from '@/components/gauge';
 import { CardHead, countdownLabel, IntrigueCard, PageCard } from '@/components/intrigue-card';
 import { StepImage } from '@/components/step-image';
 import { Screen } from '@/components/screen';
@@ -16,9 +17,11 @@ import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { accountProfile, eveningsHistory, upcomingEvenings, type EveningHistoryRow } from '@/lib/account';
 import { getSoireeState, place, prefetchSoiree, type Profile, type SoireeRoute } from '@/lib/api';
 import { cluesFor, dayHint, inTime, nextClue, revealAt, revealMode, stepRevealed, stepWords } from '@/lib/clues';
-import { complicity, type Complicity } from '@/lib/complicity';
+import { myComplicity, type Complicity } from '@/lib/complicity';
 import { eveningRole, guests, isSquad, placesLeft, type AccountRole } from '@/lib/couple';
 import { formatTime, isoDay, longDay, shortDay } from '@/lib/dates';
+import { myDuo, partnerName, todaysQuestion, type Jour } from '@/lib/duo';
+import { readyIntrigues, seasonsAhead, yearAgo, type Ready, type Season, type YearAgo } from '@/lib/occasions';
 import { forgetProfile, rememberedProfile } from '@/lib/local-store';
 import { curtainFalls } from '@/lib/souvenirs';
 import { supabaseConfigured } from '@/lib/supabase';
@@ -41,6 +44,12 @@ export default function AccueilScreen() {
   const [upcoming, setUpcoming] = useState<Upcoming[]>([]);
   const [gauge, setGauge] = useState<Complicity | null>(null);
   const [toSeal, setToSeal] = useState<EveningHistoryRow | null>(null);
+  // The day's question, while the account has not answered it: who it plays with, and whether they did.
+  const [question, setQuestion] = useState<{ jour: Jour; partner: string } | null>(null);
+  // The occasions (lib/occasions.ts): intrigues ready for a date that counts, a season coming, an evening a year ago.
+  const [ready, setReady] = useState<Ready[]>([]);
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [anniversary, setAnniversary] = useState<YearAgo | null>(null);
 
   // Read again each time the page comes back into view, not only the first: the stack keeps it mounted under the
   // form, so an evening kept there (then the tab bar's way home) would not show without it.
@@ -51,16 +60,29 @@ export default function AccueilScreen() {
       const today = isoDay(new Date());
       // All read at once, not one after the other: the page shows in one round trip. Signed in, only the account's
       // own profile counts: never one left on this device by someone else.
-      const [known, rows, history] = await Promise.all([
+      const [known, rows, history, gaugeRead, duo] = await Promise.all([
         supabaseConfigured
           ? accountProfile().then((p) => p?.profile ?? null, () => null)
           : rememberedProfile().then((p) => p?.profile ?? null),
         supabaseConfigured ? upcomingEvenings(today).catch((): EveningHistoryRow[] => []) : ([] as EveningHistoryRow[]),
         supabaseConfigured ? eveningsHistory().catch((): EveningHistoryRow[] => []) : ([] as EveningHistoryRow[]),
+        supabaseConfigured ? myComplicity().catch(() => null) : null,
+        supabaseConfigured ? myDuo().catch(() => null) : null,
       ]);
       setProfile(known);
       if (supabaseConfigured) {
-        setGauge(complicity(history, today));
+        setGauge(gaugeRead);
+        const jour = duo?.complete ? await todaysQuestion().catch(() => null) : null;
+        setQuestion(jour && !jour.mienne ? { jour, partner: partnerName(duo!.partner) } : null);
+        const [prepared, coming, back] = await Promise.all([
+          readyIntrigues(today, rows).catch((): Ready[] => []),
+          seasonsAhead(today).catch((): Season[] => []),
+          yearAgo(history, today).catch(() => null),
+        ]);
+        setReady(prepared);
+        // A season the account already has an evening for is not called to.
+        setSeasons(coming.filter((s) => !rows.some((r) => !!r.day && r.day >= s.debut && r.day <= s.fin)));
+        setAnniversary(back);
         // An evening of the past week whose book the account hasn't sealed yet.
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
@@ -107,7 +129,12 @@ export default function AccueilScreen() {
 
       {role === 'instigateur' && loaded && !profile ? <ProfileCall /> : null}
       {role === 'passager' && loaded ? <YourTurn /> : null}
-      {gauge ? <Gauge gauge={gauge} /> : null}
+      {loaded ? <TonightCall /> : null}
+      {ready.map((r) => <ReadyCall key={r.cle} ready={r} />)}
+      {anniversary ? <YearAgoCard back={anniversary} /> : null}
+      {seasons.map((s) => <SeasonCall key={s.id} season={s} />)}
+      {question ? <QuestionCall jour={question.jour} partner={question.partner} /> : null}
+      {gauge ? <Gauge gauge={gauge} onPress={() => router.push('/couple')} /> : null}
 
       {role === 'instigateur' && profile ? (
         <View style={styles.links}>
@@ -363,26 +390,62 @@ function FirstStep({ row, route, role }: { row: EveningHistoryRow; route: Soiree
   );
 }
 
-function Gauge({ gauge }: { gauge: Complicity }) {
-  const theme = useTheme();
+// « Ce soir »: a spontaneous evening around the couple, for the hours to come.
+const TonightCall = () => (
+  <Call
+    icon="lune"
+    title="Ce soir, maintenant"
+    text="Une soirée autour de vous, pour les trois heures qui viennent : une humeur, et c’est parti."
+    onPress={() => router.push({ pathname: '/soiree', params: { formule: 'duo', maintenant: '1' } })}
+  />
+);
+
+// Three intrigues the server composed for a date that counts (surprise.rappels): the page opens them, to keep one.
+const ReadyCall = ({ ready }: { ready: Ready }) => (
+  <Call
+    icon="cadeau"
+    title={`Trois intrigues prêtes : ${ready.label}`}
+    text={`Pour le ${longDay(ready.day)}. Gardez celle qui vous ressemble, ou décalez-la.`}
+    onPress={() => router.push({ pathname: '/soiree', params: { soiree: ready.page_name } })}
+  />
+);
+
+// A season of Paris coming (or under way): the form set on its wishes and its day.
+function SeasonCall({ season }: { season: Season }) {
+  const today = isoDay(new Date());
+  const day = season.debut > today ? season.debut : today;
   return (
-    <View style={[styles.gauge, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
-      <View style={styles.sectionHead}>
-        <ThemedText type="eyebrow">Niveau de complicité</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {gauge.lived} soirée{gauge.lived > 1 ? 's' : ''} vécue{gauge.lived > 1 ? 's' : ''}
-        </ThemedText>
-      </View>
-      <ThemedText style={[styles.level, { color: theme.gold }]}>{gauge.name}</ThemedText>
-      <View style={[styles.track, { backgroundColor: theme.line }]}>
-        <View style={[styles.fill, { width: `${Math.max(gauge.progress, 0.03) * 100}%`, backgroundColor: theme.accent }]} />
-      </View>
-      <ThemedText type="small" themeColor="textSecondary">
-        {gauge.next ? `Encore ${gauge.next.left} soirée${gauge.next.left > 1 ? 's' : ''} à deux pour « ${gauge.next.name} »` : 'Vous avez atteint le sommet de la complicité.'}
-      </ThemedText>
-    </View>
+    <Call
+      icon="calendrier"
+      title={season.debut > today ? `${season.nom}, ${longDay(season.debut)}` : `${season.nom}, en ce moment`}
+      text={season.texte}
+      onPress={() => router.push({ pathname: '/soiree', params: { formule: 'duo', envies: season.envies.join(','), jour: day } })}
+    />
   );
 }
+
+// An evening lived a year ago: its photo from the Livre, « On remet ça ? » on the same wishes.
+function YearAgoCard({ back }: { back: YearAgo }) {
+  const theme = useTheme();
+  const { evening, photoUrl } = back;
+  return (
+    <PageCard badge="Il y a un an" title={evening.secret_title ?? evening.title}
+      text={`C'était le ${longDay(evening.day!)}. Votre Livre des Secrets s'en souvient.`}>
+      {photoUrl ? <Image source={{ uri: photoUrl }} style={[styles.memory, { borderColor: theme.accentSoft }]} /> : null}
+      <PrimaryLink href={{ pathname: '/soiree', params: { formule: 'duo', envies: (evening.vibes ?? []).join(',') } }}>On remet ça ?</PrimaryLink>
+    </PageCard>
+  );
+}
+
+// The day's question, not yet answered: a call to « Mon couple », where it is.
+const QuestionCall = ({ jour, partner }: { jour: Jour; partner: string }) => (
+  <Call
+    icon="coeur"
+    title={jour.sienne_donnee ? `${partner} a répondu à la question du jour` : 'La question du jour'}
+    text={jour.question.texte}
+    onPress={() => router.push('/couple')}
+  />
+);
 
 const styles = StyleSheet.create({
   placeholder: { height: 196 },
@@ -414,10 +477,7 @@ const styles = StyleSheet.create({
   photoTitle: { fontFamily: Fonts.heading, fontSize: 22, lineHeight: 27 },
   photoWord: { fontFamily: Fonts.headingItalic, fontSize: 28, lineHeight: 34 },
   photoAside: { fontFamily: Fonts.heading, fontSize: 17, lineHeight: 22 },
-  gauge: { gap: Spacing.two, padding: Spacing.three + 2, borderRadius: Radius.tile, borderWidth: 1 },
-  level: { fontFamily: Fonts.headingItalic, fontSize: 24, lineHeight: 30 },
-  track: { height: 3, borderRadius: 2, overflow: 'hidden', marginVertical: Spacing.one },
-  fill: { height: '100%', borderRadius: 2 },
   links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: Spacing.four },
   pressed: { opacity: 0.8 },
+  memory: { width: '100%', aspectRatio: 4 / 3, borderRadius: 16, borderWidth: 1 },
 });

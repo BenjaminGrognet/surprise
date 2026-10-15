@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
 import { PrimaryButton, PrimaryLink, TextButton, TextLink } from '@/components/buttons';
+import { EveningCard } from '@/components/evening-card';
 import { EveningsNav } from '@/components/evenings-nav';
 import { Countdown, PageCard } from '@/components/intrigue-card';
 import { NotifyAsk } from '@/components/notify-ask';
@@ -28,6 +29,7 @@ import { nearStep } from '@/lib/arrival';
 import { arrivedSteps, markArrived } from '@/lib/local-store';
 import { syncPhone } from '@/lib/phone';
 import { eveningWhen, formatTime, isoDay, longDay } from '@/lib/dates';
+import { onTheDay } from '@/lib/cartes';
 import { curtainFalls } from '@/lib/souvenirs';
 import { clueChapter } from '@/lib/story';
 
@@ -178,19 +180,18 @@ function Surprised({ route, secretTitle, mode, evening }: { route: SoireeRoute; 
               ? 'Chaque étape se dévoile quand vous y êtes.'
               : 'Chaque étape se dévoile un quart d’heure avant son heure.'}
         </ThemedText>
-        {steps.map((step, i) => (
-          <VeiledStep
-            key={i}
-            route={route}
-            step={step}
-            number={i + 1}
-            now={now}
-            mode={mode}
-            word={words[i]}
-            open={stepRevealed(route, step, now, mode, arrived)}
-            onArrive={() => arrive(step)}
-          />
-        ))}
+        {steps.map((step, i) => {
+          const open = stepRevealed(route, step, now, mode, arrived);
+          return (
+            <View key={i}>
+              <VeiledStep route={route} step={step} number={i + 1} now={now} mode={mode} word={words[i]} open={open} onArrive={() => arrive(step)} />
+              {/* On the day, each step lifted brings its card of the evening. */}
+              {open && step.role !== 'nuit' && onTheDay(route.day, now) ? (
+                <EveningCard evening={evening} formule={route.formule ?? 'duo'} role={step.role} position={i} />
+              ) : null}
+            </View>
+          );
+        })}
       </View>
     </>
   );

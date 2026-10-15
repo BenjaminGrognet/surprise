@@ -9,6 +9,9 @@ const PORT = 8011;
 
 export default defineConfig({
   testDir: 'e2e',
+  // A picture of every page shown (e2e/fixtures.ts), in e2e-snapshots/, emptied before each run.
+  globalSetup: './e2e/snapshots-setup.ts',
+  globalTeardown: './e2e/snapshots-teardown.ts',
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

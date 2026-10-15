@@ -22,3 +22,15 @@ export async function nearStep(step: { lat: number; lon: number }): Promise<bool
     return null;
   }
 }
+
+// Where the phone is (« Ce soir »: an evening around the couple), if it is allowed to say; null otherwise.
+export async function here(): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    const found = await Location.getCurrentPositionAsync({});
+    return { lat: found.coords.latitude, lon: found.coords.longitude };
+  } catch {
+    return null;
+  }
+}

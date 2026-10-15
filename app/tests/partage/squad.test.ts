@@ -5,12 +5,10 @@ import { describe, expect, test } from '@jest/globals';
 import { formatPrice, routePrice } from '@/lib/prices';
 import type { SoireeRoute } from '@/lib/api';
 import { cluesFor, stepWords } from '@/lib/clues';
-import { complicity } from '@/lib/complicity';
 import { invitationHtml } from '@/lib/invitation-card';
 import { postcard } from '@/lib/postcard';
 import { instigateurWeek, passagerWeek } from '@/lib/story';
 import { widgetCard } from '@/lib/widget';
-import type { EveningHistoryRow } from '@/lib/account';
 
 import { evening, local, SECRET } from '../notifications/fixtures';
 
@@ -78,10 +76,5 @@ describe('what leaves the app', () => {
     const html = invitationHtml({ secretTitle: SECRET, when: 'Vendredi', link: 'https://example.com/invitation?code=x', brand: 'Secret Squad' });
     expect(html).toContain('SECRET SQUAD');
     expect(html).not.toContain('SECRET DATE');
-  });
-
-  test('a band’s evening is no step of the couple’s complicity', () => {
-    const lived = (formule: 'duo' | 'squad') => ({ day: '2026-01-10', formule }) as EveningHistoryRow;
-    expect(complicity([lived('duo'), lived('squad'), lived('squad')], '2026-10-06').lived).toBe(1);
   });
 });

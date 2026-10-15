@@ -35,7 +35,7 @@ from urllib.parse import quote
 
 import psycopg
 
-from surprise import mail, parcours, push
+from surprise import mail, meteo, parcours, push
 from surprise.local_store import PostgresStore
 
 PARIS = parcours.PARIS
@@ -228,6 +228,20 @@ def plan(evening: Evening, route: dict[str, Any]) -> list[Moment]:
     return moments
 
 
+def weather_moment(evening: Evening, route: dict[str, Any], rainy: list[tuple[dict[str, Any], int]]) -> Moment:
+    """Rain likely on steps out in the open, 48 hours before (surprise.meteo): the instigateur told, the plan B offered."""
+    start = datetime.fromisoformat(route["start"])
+    secret = evening.secret_title or "Votre soirée"
+    said = [f"{chance} % de risque de pluie à {hour(datetime.fromisoformat(step['start']))} pour « {step['title']} »" for step, chance in rainy]
+    return Moment(
+        "meteo", evening.instigateur, _local(evening.day, -2, time(10)), start - timedelta(hours=4), f"Pluie annoncée pour « {secret} »",
+        (f"{'. '.join(said)}.",
+         "Un plan B couvert ? Sur la feuille de route, « ↻ Plan B » propose un autre lieu à la même heure, le reste de la soirée gardé."
+         " Pensez alors à refaire la réservation."),
+        ("Voir le plan B", _revelation(evening)), f"Pluie annoncée : {said[0]}. Un plan B couvert ?",
+    )
+
+
 def invitation_moment(evening: Evening, route: dict[str, Any], row: dict[str, Any]) -> Moment:
     """An invitation sent by email from the app, to the address given: the evening's day and hour, its link."""
     start = datetime.fromisoformat(route["start"])
@@ -378,10 +392,14 @@ class Report:
     failed: list[tuple[Moment, str]] = field(default_factory=list)  # (moment, why)
 
 
-def run(db: str, now: datetime | None = None, *, via: mail.Relay | None = None, firebase: dict[str, Any] | None = None, dry_run: bool = False) -> Report:
+def run(
+    db: str, now: datetime | None = None, *, via: mail.Relay | None = None, firebase: dict[str, Any] | None = None, dry_run: bool = False,
+    weather: meteo.Fetch | None = None,
+) -> Report:
     """One pass: every moment due now, emailed and pushed to the browsers that allowed them, then noted as sent.
     `via`: the SMTP relay (else SMTP_URL; without one, no email); `firebase`: the service account (else
-    FIREBASE_SERVICE_ACCOUNT; without one, no push). `dry_run`: nothing sent nor noted."""
+    FIREBASE_SERVICE_ACCOUNT; without one, no push); `weather`: the forecasts (Open-Meteo, surprise.meteo), read only
+    for the evenings two days away whose rain was not told yet. `dry_run`: nothing sent nor noted."""
     now = now or datetime.now(PARIS)
     via = via or mail.relay()
     if firebase is None and os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip():
@@ -408,7 +426,13 @@ def run(db: str, now: datetime | None = None, *, via: mail.Relay | None = None, 
         for evening in kept:
             if not (route := route_of(evening)):
                 continue
-            for moment in plan(evening, route):
+            moments = plan(evening, route)
+            # Two days before, until four hours before: the forecast of its steps out in the open, if not told yet.
+            told = (evening.id, "meteo", evening.instigateur.address) in sent or (evening.id, "meteo", f"push:{evening.instigateur.user_id}") in sent
+            if not told and _local(evening.day, -2, time(10)) <= now < datetime.fromisoformat(route["start"]) - timedelta(hours=4):
+                if rainy := meteo.rainy_steps(route, weather or meteo.cached):
+                    moments.append(weather_moment(evening, route, rainy))
+            for moment in moments:
                 if not due(moment, now):
                     continue
                 person = moment.to

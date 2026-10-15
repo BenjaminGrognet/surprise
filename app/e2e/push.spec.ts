@@ -3,7 +3,8 @@
 // forgotten at sign-out. Google stands in: Firebase's servers answer from here, and the push subscription, which
 // Chromium asks of Google's push service, is the tests' own (the e2e build's Firebase project, scripts/build-e2e.js).
 // The browser's question too: not asked yet, then answered as the test grants it.
-import { expect, type Page, test } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const PASSWORD = `e2e-${Math.random().toString(36).slice(2)}`;
 const email = (label: string) => `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@e2e.test`;

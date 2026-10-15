@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { TextButton } from '@/components/buttons';
 import { CompassGuide } from '@/components/compass-guide';
+import { EveningCard } from '@/components/evening-card';
 import { Hop } from '@/components/hop';
 import { Countdown, PageCard } from '@/components/intrigue-card';
 import { NotifyAsk } from '@/components/notify-ask';
@@ -19,6 +20,7 @@ import { useTastes } from '@/hooks/use-tastes';
 import { useTheme } from '@/hooks/use-theme';
 import { bookedSteps, saveBookedSteps, type Vote } from '@/lib/account';
 import { place, redoPart, refusal, type SoireeRoute, type SoireeStep } from '@/lib/api';
+import { onTheDay } from '@/lib/cartes';
 import { cluesFor, inTime, nextClue, shownClues, type RevealMode } from '@/lib/clues';
 import { formatTime, longDay } from '@/lib/dates';
 import { syncPhone } from '@/lib/phone';
@@ -104,7 +106,7 @@ export function Organiser({
       <Tabs tab={tab} onTab={setTab} pending={left} />
 
       {tab === 'aventure' ? (
-        <Aventure route={route} steps={steps} now={now} swapping={swapping} notice={swapNotice || tastes.error} onSwap={swap} votes={tastes.votes} onVote={tastes.vote} />
+        <Aventure route={route} pageName={pageName} steps={steps} now={now} swapping={swapping} notice={swapNotice || tastes.error} onSwap={swap} votes={tastes.votes} onVote={tastes.vote} />
       ) : (
         <Coulisses route={route} pageName={pageName} secretTitle={secretTitle} toBook={toBook} booked={booked} onToggle={toggle} error={error} now={now} mode={mode} />
       )}
@@ -144,22 +146,28 @@ type Votes = { votes: Record<string, Vote>; onVote: (step: SoireeStep, vote: Vot
 
 // L'Aventure: the evening as a silk thread, a fine gold line with each step hung on a glowing anchor.
 function Aventure({
-  route, steps, now, swapping, notice, onSwap, votes, onVote,
-}: { route: SoireeRoute; steps: SoireeStep[]; now: number; swapping: string | null; notice: string; onSwap: (step: SoireeStep) => void } & Votes) {
+  route, pageName, steps, now, swapping, notice, onSwap, votes, onVote,
+}: {
+  route: SoireeRoute; pageName: string; steps: SoireeStep[]; now: number; swapping: string | null; notice: string; onSwap: (step: SoireeStep) => void;
+} & Votes) {
   return (
     <View style={styles.section}>
       {/* The title alone: the pitch would repeat the steps and the price shown below. */}
       <ThemedText type="subtitle">{route.title}</ThemedText>
       {notice ? <ThemedText type="small" themeColor="accentInk">{notice}</ThemedText> : null}
-      <SilkThread steps={steps} party={route} now={now} swapping={swapping} onSwap={onSwap} votes={votes} onVote={onVote} />
+      <SilkThread steps={steps} party={route} pageName={pageName} now={now} swapping={swapping} onSwap={onSwap} votes={votes} onVote={onVote} />
     </View>
   );
 }
 
+// On the day, each step with its card of the evening (lib/cartes.ts), the same the passager sees.
 function SilkThread({
-  steps, party, now, swapping, onSwap, votes, onVote,
-}: { steps: SoireeStep[]; party: SoireeRoute; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void } & Votes) {
+  steps, party, pageName, now, swapping, onSwap, votes, onVote,
+}: {
+  steps: SoireeStep[]; party: SoireeRoute; pageName: string; now: number; swapping: string | null; onSwap: (step: SoireeStep) => void;
+} & Votes) {
   const theme = useTheme();
+  const today = onTheDay(party.day, now);
   return (
     <View style={styles.thread}>
       <View style={[styles.threadLine, { backgroundColor: theme.accentSoft }]} />
@@ -173,6 +181,7 @@ function SilkThread({
             onSwap={step.redo && Date.parse(step.start) > now && swapping === null ? () => onSwap(step) : null}
             vote={votes[step.id]}
             onVote={step.role === 'nuit' || party.formule === 'squad' ? null : (v) => onVote(step, v)}
+            card={today && step.role !== 'nuit' ? <EveningCard evening={pageName} formule={party.formule ?? 'duo'} role={step.role} position={i} /> : null}
           />
         </View>
       ))}
@@ -181,8 +190,10 @@ function SilkThread({
 }
 
 function ThreadStep({
-  step, party, busy, onSwap, vote, onVote,
-}: { step: SoireeStep; party: SoireeRoute; busy: boolean; onSwap: (() => void) | null; vote?: Vote; onVote: ((vote: Vote) => void) | null }) {
+  step, party, busy, onSwap, vote, onVote, card,
+}: {
+  step: SoireeStep; party: SoireeRoute; busy: boolean; onSwap: (() => void) | null; vote?: Vote; onVote: ((vote: Vote) => void) | null; card: ReactNode;
+}) {
   const theme = useTheme();
   const [more, setMore] = useState(false);
   const [photo, setPhoto] = useState(false);
@@ -229,6 +240,7 @@ function ThreadStep({
         </View>
         {/* For the evenings to come: whether this kind of outing is theirs. */}
         {onVote ? <TasteVote vote={vote} onVote={onVote} said /> : null}
+        {card}
       </View>
     </View>
   );
