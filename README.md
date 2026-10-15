@@ -695,6 +695,47 @@ AWIN_PUBLISHER_ID=...         # le lien profond d'Awin, clickref=<page>
 AWIN_MERCHANTS=fnacspectacles.com:1234,thefork.fr:5678,tiqets.com:9012   # l'identifiant de chaque site sur Awin
 ```
 
+### Souvenirs imprimés (Printify, brouillons)
+
+En réserve, invisible en prod : un outil local seulement, ni écran dans l'app, ni route d'API, ni tâche sur le serveur.
+Les photos de la soirée, elles, restent prises et scellées dans le Livre comme avant.
+
+Élégants et épurés, sur papier blanc ou blanc cassé : le monogramme Secret Date de l'app (`app/assets/images/
+logo-secretdate.png`, son or seul, imprimé en encre dorée), Cormorant et Manrope, des filets fins, l'émeraude pour le
+tracé, avec le nom secret de la soirée, ses indices et le tracé de ses étapes (`surprise.souvenirs_print`) :
+- le carton de la soirée, acrylique sur socle bois (Posterflow, Allemagne) : la photo préférée dans une arche, le nom
+  secret, le jour, le tracé, un QR code vers le Livre ;
+- l'affiche de la nuit, A3 mate (OPT OnDemand, Tchéquie) : le nom secret, le vrai ciel de Paris à l'heure de la
+  dernière étape en traits fins, les indices reçus avant, le tracé et ses étapes ;
+- le mug cœur (OPT OnDemand), toujours sur blanc comme sa céramique : sur sa face, le monogramme, le nom secret, le
+  jour et le tracé.
+
+Deux fonds (`--fond`) : blanc cassé (`casse`, par défaut) et blanc (`blanc`) ; `--fond tous` compose les deux et les met
+côte à côte dans `data/souvenirs/planche.png`.
+
+Composés à la taille que l'imprimeur demande, ils deviennent dans Printify des produits en brouillon, jamais publiés ni
+commandés : Printify en dessine les mockups. Fabriqués dans l'Union européenne seulement (ni douane ni trois semaines
+d'attente) : magnet et bougie, que seuls des ateliers américains ou canadiens font, sont dessinés
+(`apercu --souvenirs magnet,bougie`) mais pas proposés. L'exemple prend ses photos dans `data/souvenirs/exemple/` (non
+versionné), la première pour le carton : quatre photos CC0 de Wikimedia Commons (« Couple holding hands by a wall »,
+« Making pottery », « Quai de Valmy at night, Paris, 2016 », « Classy meal for two ») ; sans elles, des photos dessinées.
+
+```bash
+# .env : Printify › My profile › Connections › Personal access tokens ; une boutique (Add new store) doit exister
+PRINTIFY_API_TOKEN=...
+PRINTIFY_SHOP_ID=...          # facultatif : la première boutique sinon
+
+# les PNG seuls, dans data/souvenirs/, sans Printify
+uv run --env-file .env python -m surprise.souvenirs_print apercu --photos ~/Photos/soiree --prenoms "Camille & Léo" --jour 2026-10-14 \
+  --titre "Le Serment du Canal Saint-Martin" --indice "Vos papilles sont conviées." --indice "Tout se joue rive droite."
+# les produits du catalogue dont le titre contient ces mots, et leurs ateliers (pays)
+uv run --env-file .env python -m surprise.souvenirs_print catalogue acrylic
+# la planche des deux fonds
+uv run --env-file .env python -m surprise.souvenirs_print apercu --fond tous
+# les brouillons dans la boutique, avec la qualité d'impression des photos
+uv run --env-file .env python -m surprise.souvenirs_print brouillon --photos ~/Photos/soiree --souvenirs plaque,mug
+```
+
 ## Modération
 
 Interface locale pour relire les activités collectées (dans Supabase, ou la base SQLite sans `SUPABASE_DB_URL`) et
