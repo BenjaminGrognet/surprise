@@ -48,9 +48,11 @@ pages du Livre du compte.
 
 ## A2. Le quiz « Vous connaissez-vous vraiment ? »
 
-- Une série de 8 questions par semaine (`public.quiz_questions` : série, rang, question, 4 choix). Huit séries, dans
-  l'ordre du parcours du duo (la suivante après chaque semaine jouée) : Petites manies, Et si… (scénarios absurdes), Goûts
-  et dégoûts, Notre mémoire, L'enfant que j'étais, Par gros temps (stress et disputes), Le langage du cœur, Nos rêves.
+- Une série de 8 questions par semaine (`public.quiz_questions` : série, rang, question, 4 choix). Seize séries, dans
+  l'ordre du parcours du duo (la suivante après chaque semaine jouée), soit quatre mois avant de recommencer. Une première
+  saison du léger au profond : Petites manies, Et si… (scénarios absurdes), Goûts et dégoûts, Notre mémoire, L'enfant que
+  j'étais, Par gros temps (stress et disputes), Le langage du cœur, Nos rêves ; une seconde, de même : Mode survie, En
+  vacances, Paris mon amour, Nos premières fois, Sous la couette, L'argent et nous, Ce qui me touche, Dans dix ans.
 - Pour chaque question, chacun donne **sa** réponse et **devine** celle de l'autre (`public.quiz_reponses`). Une question
   se dévoile quand les deux y ont répondu : qui a deviné juste.
 - Le score de la semaine : les bonnes devinettes des deux, sur 16, et son verdict une fois la série finie (Télépathes, Âmes
@@ -173,6 +175,29 @@ base par les migrations. Il n'est recopié d'aucun livre ni d'aucun jeu ; il s'i
   la deuxième, 3 dès la quatrième).
 
 Les activités elles-mêmes restent celles de la collecte (les sources de CLAUDE.md).
+
+## Alimenter les contenus
+
+Le parcours s'épuise : 108 questions du jour, 16 séries de quiz (quatre mois), 40 défis. Pour l'allonger sans
+migration, à côté de la collecte des activités (`surprise/inspirations.py`, lancé chaque nuit après elle par
+`deploy/collecte.service`) :
+
+1. **Ré-aspirer** : `python -m surprise.inspirations aspirer --limit 50` relit les pages des sources ci-dessus
+   (une page n'est relue qu'après 30 jours ; `--refresh` pour forcer) et garde chaque idée trouvée, avec son genre
+   (question du jour, question de quiz, défi) et son palier devinés par les règles (`pipeline.inspirations`). Une idée
+   déjà vue n'est pas gardée deux fois. Mariages.net refuse les robots (403) : la page est passée.
+2. **Ré-imaginer** : `python -m surprise.inspirations reimaginer` en tire une première version, par les règles
+   (tutoiement de l'app, le partenaire devenu « moi », une question de quiz tournée à la première personne : « Quel est
+   son plat préféré ? » → « Mon plat préféré », ses quatre réponses à écrire). Avec `--claude` (sur demande,
+   `ANTHROPIC_API_KEY`), Claude l'écrit à sa façon, dans le ton de l'app.
+3. **Publier** : la modération (`/admin/contenus`) montre chaque idée et sa version. On la retouche, on choisit ce
+   qu'elle devient (question du jour, question de quiz, défi, carte du soir), on la publie ou on l'écarte. Huit
+   questions de quiz gardées, avec un titre et une accroche, forment une série.
+
+Les mots des sources ne vont jamais dans l'app : une version trop proche de l'idée (plus de 75 % de lettres communes,
+`CLOSE`) est refusée, à réécrire avec les nôtres. Ce qui est publié s'ajoute **à la fin du parcours** (l'id suivant),
+si bien que la progression des duos ne bouge pas : ceux qui ont tout vu continuent avec le nouveau. La publication
+écrit dans les tables de l'app : Supabase seulement (`SUPABASE_DB_URL`).
 
 ## Les phases
 

@@ -1,4 +1,5 @@
-"""Local moderation UI: review collected activities and approve or reject them.
+"""Local moderation UI: review collected activities and approve or reject them; and the couple's content harvested
+(surprise.inspirations), retouched and published at /admin/contenus.
 
 Serves a single page (/admin) and a small JSON API on 127.0.0.1, backed by the
 pipeline's store (Supabase when SUPABASE_DB_URL is set, else SQLite). The client's server (surprise.quiz)
@@ -20,7 +21,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import httpx
 
-from surprise import images
+from surprise import images, inspirations
 from surprise.categories import CATEGORIES
 from surprise.enrich import place_photo
 from surprise.local_store import STATUSES, open_store
@@ -29,6 +30,7 @@ from surprise.sources import SOURCES, source_name
 from surprise.tags import FACETS, TAGS, VIBES, describe
 
 PAGE = files("surprise").joinpath("admin.html")
+CONTENUS = files("surprise").joinpath("admin_contenus.html")
 _PLACE_ID = re.compile(r"^[A-Za-z0-9_-]{10,300}$")
 
 
@@ -62,6 +64,15 @@ def make_handler(db: Path | str | None) -> type[BaseHTTPRequestHandler]:
             path = urlsplit(self.path).path
             if path in ("/admin", "/admin/"):
                 self._send(HTTPStatus.OK, PAGE.read_bytes(), "text/html; charset=utf-8")
+            elif path == "/admin/contenus":
+                self._send(HTTPStatus.OK, CONTENUS.read_bytes(), "text/html; charset=utf-8")
+            elif path == "/api/inspirations":
+                with open_store(db) as store:
+                    ideas = store.inspirations()
+                self._send_json(HTTPStatus.OK, {
+                    "inspirations": ideas, "sources": {key: name for key, (name, _) in inspirations.SOURCES.items()},
+                    "themes": inspirations.THEMES, "defi_genres": inspirations.DEFI_GENRES,
+                })
             elif path == "/":
                 self.send_response(HTTPStatus.FOUND)
                 self.send_header("Location", "/admin")
@@ -84,17 +95,23 @@ def make_handler(db: Path | str | None) -> type[BaseHTTPRequestHandler]:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
 
         def do_POST(self) -> None:
-            # /api/activities/<source_id>/<external_id>/status
             parts = urlsplit(self.path).path.strip("/").split("/")
-            if len(parts) != 5 or parts[:2] != ["api", "activities"] or parts[4] != "status":
+            is_status = len(parts) == 5 and parts[:2] == ["api", "activities"] and parts[4] == "status"
+            is_content = (len(parts) == 3 and parts[:2] == ["api", "inspirations"]) or parts == ["api", "quiz-series"]
+            if not (is_status or is_content):
                 return self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
             # Requiring JSON forces a CORS preflight, so other sites cannot post here.
             if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
                 return self._send_json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"error": "JSON attendu"})
             try:
-                status = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0))).get("status")
-            except (ValueError, AttributeError):
-                status = None
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))
+                body = body if isinstance(body, dict) else {}
+            except ValueError:
+                body = {}
+            if is_content:
+                return self._content(parts, body)
+            # /api/activities/<source_id>/<external_id>/status
+            status = body.get("status")
             if status not in STATUSES:
                 return self._send_json(HTTPStatus.BAD_REQUEST, {"error": f"statut attendu : {', '.join(STATUSES)}"})
             with open_store(db) as store:
@@ -102,6 +119,31 @@ def make_handler(db: Path | str | None) -> type[BaseHTTPRequestHandler]:
             if not found:
                 return self._send_json(HTTPStatus.NOT_FOUND, {"error": "activité inconnue"})
             self._send_json(HTTPStatus.OK, {"status": status})
+
+        def _content(self, parts: list[str], body: dict[str, Any]) -> None:
+            """/api/inspirations/<id> {action: publier (genre, proposition) | ecarter | rouvrir}; /api/quiz-series
+            {titre, accroche, ids}: eight quiz questions kept, as a series."""
+            try:
+                with open_store(db) as store:
+                    if parts[1] == "quiz-series":
+                        where = inspirations.publier_serie(store, str(body.get("titre") or ""), str(body.get("accroche") or ""), list(body.get("ids") or []))
+                        return self._send_json(HTTPStatus.OK, {"publiee": where})
+                    idea_id, action = unquote(parts[2]), body.get("action")
+                    if action == "publier":
+                        where = inspirations.publier(store, idea_id, str(body.get("genre")), dict(body.get("proposition") or {}))
+                        return self._send_json(HTTPStatus.OK, {"statut": "gardee" if where == "gardee" else "publiee", "publiee": where})
+                    if action in ("ecarter", "rouvrir"):
+                        statut = "ecartee" if action == "ecarter" else "proposee"
+                        if not store.decide_inspiration(idea_id, statut):
+                            raise LookupError("Inspiration inconnue.")
+                        return self._send_json(HTTPStatus.OK, {"statut": statut})
+                    return self._send_json(HTTPStatus.BAD_REQUEST, {"error": "action attendue : publier, ecarter, rouvrir"})
+            except LookupError as error:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": str(error)})
+            except (ValueError, TypeError) as error:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            except NotImplementedError as error:
+                self._send_json(HTTPStatus.CONFLICT, {"error": str(error)})
 
         def _image_copy(self, url: str) -> None:
             copy = images.local_copy(url) if images.needs_copy(url) else None

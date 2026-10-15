@@ -1,6 +1,12 @@
-# Caddy devant le serveur Python : le HTTPS (certificat obtenu et renouvelé seul), la compression. __DOMAINE__ est
-# remplacé par deploy/installer.sh (par exemple secretdate.duckdns.org).
+# Caddy devant le serveur Python : le HTTPS (certificat obtenu et renouvelé seul), la compression, et la modération
+# réservée par un mot de passe (utilisateur « moderation », MODERATION_PASSWORD dans .env : docs/deployer.md, étape 6).
+# __DOMAINE__ et __MOT_DE_PASSE_HASH__ sont remplacés par deploy/installer.sh (par exemple secretdate.duckdns.org).
 __DOMAINE__ {
 	encode zstd gzip
+	# Les pages de modération et leur API (surprise.admin) : l'app n'en appelle aucune.
+	@moderation path /admin /admin/* /api/activities /api/activities/* /api/meta /api/image /api/place-photo /api/inspirations /api/inspirations/* /api/quiz-series
+	basic_auth @moderation {
+		moderation __MOT_DE_PASSE_HASH__
+	}
 	reverse_proxy 127.0.0.1:8001
 }

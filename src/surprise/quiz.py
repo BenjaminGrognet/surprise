@@ -648,6 +648,8 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
                 with loading:
                     loaded.pop("base", None)
                 return
+            if path.startswith("/api/inspirations/") or path == "/api/quiz-series":
+                return super().do_POST()
             # Requiring JSON forces a CORS preflight, so other sites cannot post here.
             if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
                 return self._send_json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"error": "JSON attendu"})

@@ -1,8 +1,10 @@
 # La collecte de la nuit (docs/deployer.md) : 50 fiches de plus par source au plus, jamais sans limite ; les pages
-# encore fraîches ne sont pas relues. Puis l'enrichissement (sans appel extérieur) et les mots-clés. Lancée par
+# encore fraîches ne sont pas relues. Puis l'enrichissement (sans appel extérieur) et les mots-clés ; et les idées des
+# sites de questions de couple (surprise.inspirations, pages relues après 30 jours), une version de chacune par les
+# règles, à retoucher et publier sur /admin/contenus. Lancée par
 # collecte.timer ; à la main : sudo systemctl start collecte, journal : journalctl -u collecte.
 [Unit]
-Description=Secret Date : collecte, enrichissement et mots-clés
+Description=Secret Date : collecte, enrichissement, mots-clés et idées de contenus
 After=network-online.target
 Wants=network-online.target
 
@@ -14,4 +16,6 @@ Nice=10
 ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.collect --limit 50
 ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.enrich
 ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.keywords
+ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.inspirations aspirer --limit 50
+ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.inspirations reimaginer
 TimeoutStartSec=4h

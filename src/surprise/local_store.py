@@ -159,6 +159,27 @@ create table if not exists soiree_steps (
   replaced_at text
 );
 create unique index if not exists soiree_steps_current_idx on soiree_steps (soiree_id, route, position) where replaced_at is null;
+-- The couple's content harvested (surprise.inspirations): the pages read, and each idea with our version of it.
+create table if not exists inspiration_pages (
+  url text primary key,
+  source_id text not null,
+  found integer not null default 0,
+  fetched_at text not null default (datetime('now'))
+);
+create table if not exists inspirations (
+  id text primary key,
+  source_id text not null,
+  url text not null,
+  texte text not null,
+  genre text not null check (genre in ('question', 'quiz', 'defi', 'carte')),
+  palier integer not null check (palier between 1 and 4),
+  statut text not null default 'nouvelle' check (statut in ('nouvelle', 'proposee', 'gardee', 'publiee', 'ecartee')),
+  proposition text,
+  proposee_par text,
+  publiee text,
+  fetched_at text not null default (datetime('now')),
+  decided_at text
+);
 """
 # A page read less than this long ago is not read again: its stored payloads are normalized anew.
 FRESH_DAYS = 7
@@ -327,6 +348,60 @@ class LocalStore:
                 " on conflict (question) do update set answer = excluded.answer, checked_at = current_timestamp",
                 [(question, None if answer is None else json.dumps(answer)) for question, answer in answers.items()],
             )
+
+    def inspiration_pages(self, days: float) -> set[str]:
+        """The pages of inspirations read less than `days` ago: not read again."""
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        return {url for (url,) in self._run("select url from inspiration_pages where fetched_at >= ?", (since,))}
+
+    def save_inspirations(self, source_id: str, url: str, ideas: Sequence[dict[str, Any]]) -> int:
+        """The ideas a page gave, an idea already kept left as it is; the count of new ones."""
+        with self._transaction():
+            self._run(
+                "insert into inspiration_pages (url, source_id, found) values (?, ?, ?)"
+                " on conflict (url) do update set found = excluded.found, fetched_at = current_timestamp",
+                (url, source_id, len(ideas)),
+            )
+            return self._run_many(
+                "insert into inspirations (id, source_id, url, texte, genre, palier) values (?, ?, ?, ?, ?, ?) on conflict (id) do nothing",
+                [(idea["id"], source_id, url, idea["texte"], idea["genre"], idea["palier"]) for idea in ideas],
+            )
+
+    def inspirations(self, statut: str | None = None) -> list[dict[str, Any]]:
+        rows = self._run(
+            "select id, source_id, url, texte, genre, palier, statut, proposition, proposee_par, publiee, fetched_at from inspirations"
+            + (" where statut = ?" if statut else "") + " order by fetched_at, id",
+            (statut,) if statut else (),
+        )
+        keys = ("id", "source_id", "url", "texte", "genre", "palier", "statut", "proposition", "proposee_par", "publiee", "fetched_at")
+        found = [dict(zip(keys, row)) for row in rows]
+        for idea in found:
+            idea["proposition"] = json.loads(idea["proposition"]) if idea["proposition"] else None
+            idea["fetched_at"] = str(idea["fetched_at"])
+        return found
+
+    def decide_inspiration(
+        self, idea_id: str, statut: str, proposition: dict[str, Any] | None = None, by: str | None = None, publiee: str | None = None
+    ) -> bool:
+        """Its status and, when given, our version of it and where it was published."""
+        with self._transaction():
+            return self._run(
+                "update inspirations set statut = ?, proposition = coalesce(?, proposition), proposee_par = coalesce(?, proposee_par),"
+                " publiee = coalesce(?, publiee), decided_at = current_timestamp where id = ?",
+                (statut, proposition and json.dumps(proposition, ensure_ascii=False), by, publiee, idea_id),
+            ).rowcount > 0
+
+    def publish_content(self, table: str, row: dict[str, Any]) -> int:
+        """A row added at the end of one of the app's content tables (public.questions_du_jour…): Supabase only."""
+        raise NotImplementedError("La publication écrit dans les tables de l'app : Supabase (SUPABASE_DB_URL) seulement.")
+
+    def publish_series(self, titre: str, accroche: str, questions: Sequence[dict[str, Any]]) -> int:
+        """A quiz series and its eight questions, together or not at all; the series' id."""
+        with self._transaction():
+            serie = self.publish_content("quiz_series", {"titre": titre, "accroche": accroche})
+            for rang, question in enumerate(questions, 1):
+                self.publish_content("quiz_questions", {"serie": serie, "rang": rang, "question": question["question"], "choix": list(question["choix"])})
+        return serie
 
     def save_profile(self, profile_id: str, answers: dict[str, Any], profile: dict[str, Any]) -> None:
         with self._transaction():
@@ -665,6 +740,19 @@ class PostgresStore(LocalStore):
         # A vote's activity too: its kind still counts in the couple's tastes (surprise.parcours.tastes_from).
         voted = {tuple(a.split(":", 1)) for (a,) in self._run("select activity_id from public.gouts").fetchall()}
         return super().kept_activities() | voted
+
+    def publish_content(self, table: str, row: dict[str, Any]) -> int:
+        # The next id, at the end of the journey: the duos' progress (offsets in the order of the ids) stays where it is.
+        assert table in ("questions_du_jour", "quiz_series", "quiz_questions", "defis", "cartes_du_soir"), table
+        columns = list(row)
+        with self._transaction():
+            self._run(f"lock table public.{table} in exclusive mode")
+            (next_id,) = self._run(f"select coalesce(max(id), 0) + 1 from public.{table}").fetchone()
+            self._run(
+                f"insert into public.{table} (id, {', '.join(columns)}) values (?, {', '.join('?' * len(columns))})",
+                (next_id, *row.values()),
+            )
+        return next_id
 
     def version(self) -> Any:
         return self._run(

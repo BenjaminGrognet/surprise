@@ -58,11 +58,14 @@ def test_the_server_unit_serves_the_site_and_sends_the_emails(monkeypatch):
 
 def test_the_nightly_collection_keeps_its_limit(monkeypatch):
     runs = commands("collecte.service")
-    assert [module for module, _ in runs] == ["surprise.collect", "surprise.enrich", "surprise.keywords"]
+    assert [module for module, _ in runs] == ["surprise.collect", "surprise.enrich", "surprise.keywords", "surprise.inspirations", "surprise.inspirations"]
     collect = parse(*runs[0], monkeypatch)
     assert collect.limit == 50 and not collect.refresh  # never without a limit; fresh pages are not read again
     enrich = parse(*runs[1], monkeypatch)
     assert not enrich.claude  # descriptions from the texts, no outside call
+    harvest, draft = parse(*runs[3], monkeypatch), parse(*runs[4], monkeypatch)
+    assert harvest.step == "aspirer" and harvest.limit == 50 and not harvest.refresh
+    assert draft.step == "reimaginer" and not draft.claude  # the couple's content drafted by the rules, no outside call
 
 
 def test_every_unit_has_its_placeholders_filled_by_the_installer():
@@ -71,7 +74,27 @@ def test_every_unit_has_its_placeholders_filled_by_the_installer():
         assert unit in installer
         left = set(re.findall(r"__[A-Z]+__", (DEPLOY / unit).read_text(encoding="utf-8")))
         assert left <= {"__UTILISATEUR__", "__DOSSIER__"}
-    assert "__DOMAINE__" in (DEPLOY / "Caddyfile").read_text(encoding="utf-8")
+    caddyfile = (DEPLOY / "Caddyfile").read_text(encoding="utf-8")
+    assert set(re.findall(r"__[A-Z_]+__", caddyfile)) == {"__DOMAINE__", "__MOT_DE_PASSE_HASH__"}
+    assert all(f"s|{placeholder}|" in installer for placeholder in ("__DOMAINE__", "__MOT_DE_PASSE_HASH__"))
+
+
+def test_the_moderation_and_its_api_are_behind_the_password_the_apps_routes_are_not():
+    caddyfile = (DEPLOY / "Caddyfile").read_text(encoding="utf-8")
+    matcher = re.search(r"@moderation path (.+)", caddyfile).group(1).split()
+    assert re.search(r"basic_auth @moderation \{\s*moderation __MOT_DE_PASSE_HASH__\s*\}", caddyfile)
+
+    def guarded(path: str) -> bool:  # Caddy's path matcher: exact, or a prefix ending in *
+        return any(path == m or (m.endswith("*") and path.startswith(m[:-1])) for m in matcher)
+
+    admin = (Path(__file__).resolve().parents[1] / "src" / "surprise" / "admin.py").read_text(encoding="utf-8")
+    routes = set(re.findall(r'path == "(/[^"]+)"', admin)) - {"/"}
+    assert {"/admin/contenus", "/api/activities", "/api/inspirations", "/api/meta"} <= routes
+    for path in [*routes, "/admin", "/admin/", "/api/activities/qfap/1/status", "/api/inspirations/abc", "/api/quiz-series"]:
+        assert guarded(path), path
+    for path in ["/", "/couple", "/api/soiree", "/api/soirees", "/api/quiz", "/api/parcours/abc", "/images/a.jpg", "/api/images/broken",
+                 "/api/courriels/stop", "/api/profiles", "/_expo/static/js/web/index.js"]:
+        assert not guarded(path), path
 
 
 @pytest.mark.parametrize("script", ["installer.sh", "deployer.sh", "sauvegarde.sh"])

@@ -284,6 +284,19 @@ uv run python -m surprise.keywords       # calcule et enregistre les mots-clés
 uv run python -m surprise.originality    # répartition, les plus originales et les plus classiques
 ```
 
+## Contenus du couple
+
+Les questions du jour, quiz, défis et cartes s'allongent à côté de la collecte (docs/complicite.md, « Alimenter les
+contenus ») : les idées des sites de questions de couple, une version de chacune, puis la modération qui la retouche
+et la publie à la fin du parcours (jamais les mots des sources).
+
+```bash
+uv run --env-file .env python -m surprise.inspirations aspirer --limit 50   # pages relues après 30 jours
+uv run --env-file .env python -m surprise.inspirations reimaginer           # version par les règles (--claude : par Claude)
+```
+
+Puis `/admin/contenus` (lien en haut de la modération).
+
 ## Disponibilités
 
 Vérifie pour une date si les activités de la base locale sont réservables à 2 (créneaux horaires et formule),

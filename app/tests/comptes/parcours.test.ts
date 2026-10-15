@@ -64,6 +64,17 @@ test("the week's quiz: a new duo's first series, the next once a week played; th
   expect(next.serie).toMatchObject({ id: 2, titre: 'Et si…' });
   expect(next.questions).toHaveLength(8);
 
+  // Eight weeks played: the second season's first; sixteen: the journey again from the start.
+  const weeks = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => {
+    const day = new Date(`${quiz.semaine}T12:00:00`);
+    day.setDate(day.getDate() - 7 * (from + i + 2));
+    return { duo_id: duo.id, semaine: day.toLocaleDateString('sv-SE'), question_id: 1, author: other.id, moi: 0, devine: 0 };
+  });
+  expect((await admin.from('quiz_reponses').insert(weeks(0, 7))).error).toBeNull();
+  expect((await weeksQuiz()).serie).toMatchObject({ id: 9, titre: 'Mode survie' });
+  expect((await admin.from('quiz_reponses').insert(weeks(7, 15))).error).toBeNull();
+  expect((await weeksQuiz()).serie).toMatchObject({ id: 1, titre: 'Petites manies' });
+
   expect(verdict(16)).toMatch(/^Télépathes/);
   expect(verdict(11)).toMatch(/^Âmes complices/);
   expect(verdict(7)).toMatch(/^Complices en rodage/);

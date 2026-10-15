@@ -132,9 +132,14 @@ Le script (`deploy/installer.sh`, relançable sans risque) :
   - `surprise.service` : le site, l'API et les emails des soirées (`python -m surprise.quiz --courriers`), relancé
     seul s'il s'arrête et au démarrage ;
   - `collecte.timer` : chaque nuit vers 4 h, la collecte de toutes les sources à `--limit 50` (jamais sans limite ;
-    les pages encore fraîches ne sont pas relues), puis l'enrichissement (sans appel extérieur) et les mots-clés ;
+    les pages encore fraîches ne sont pas relues), puis l'enrichissement (sans appel extérieur), les mots-clés, et les
+    idées des sites de questions de couple (relues après 30 jours), à retoucher et publier sur `/admin/contenus` ;
   - `sauvegarde.timer` : chaque nuit vers 3 h, une copie de la base et des images (plus bas) ;
-- écrit `/etc/caddy/Caddyfile` pour le domaine : Caddy obtient et renouvelle seul le certificat.
+- écrit `/etc/caddy/Caddyfile` pour le domaine : Caddy obtient et renouvelle seul le certificat ;
+- met la modération derrière un mot de passe : `/admin`, `/admin/contenus` et leur API (approuver une activité, publier
+  un contenu du couple dans l'app) demandent l'utilisateur `moderation` et le mot de passe `MODERATION_PASSWORD` du
+  `.env` du serveur. Sans lui, le script en tire un au hasard, l'écrit dans ce `.env` et l'affiche à la fin. Pour en
+  choisir un autre : changer la ligne dans `~/surprise/.env`, puis relancer le script.
 
 Le site est en ligne sur `https://secretdate.duckdns.org` une minute plus tard.
 

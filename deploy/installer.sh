@@ -59,7 +59,16 @@ echo "== Les services : le site, la collecte de la nuit, la sauvegarde"
 for UNITE in surprise.service collecte.service collecte.timer sauvegarde.service sauvegarde.timer; do
   sed -e "s|__UTILISATEUR__|$UTILISATEUR|g" -e "s|__DOSSIER__|$DOSSIER|g" "deploy/$UNITE" | sudo tee "/etc/systemd/system/$UNITE" >/dev/null
 done
-sed "s|__DOMAINE__|$DOMAINE|g" deploy/Caddyfile | sudo tee /etc/caddy/Caddyfile >/dev/null
+# La modération derrière un mot de passe : celui de .env (MODERATION_PASSWORD), tiré au hasard la première fois.
+if ! grep -q '^MODERATION_PASSWORD=.' .env; then
+  printf '
+MODERATION_PASSWORD=%s
+' "$(openssl rand -base64 24 | tr -d '/+=')" >> .env
+  NOUVEAU_MOT_DE_PASSE=1
+fi
+MOT_DE_PASSE=$(grep '^MODERATION_PASSWORD=' .env | tail -n 1 | cut -d= -f2-)
+HASH=$(caddy hash-password --plaintext "$MOT_DE_PASSE")
+sed -e "s|__DOMAINE__|$DOMAINE|g" -e "s|__MOT_DE_PASSE_HASH__|$HASH|g" deploy/Caddyfile | sudo tee /etc/caddy/Caddyfile >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable --now surprise.service collecte.timer sauvegarde.timer
 sudo systemctl restart surprise.service
@@ -68,3 +77,7 @@ sudo systemctl reload caddy
 echo
 echo "Fini. Le site : https://$DOMAINE (le certificat arrive en une minute)."
 echo "Journal du serveur : journalctl -u surprise -f ; prochaines tâches : systemctl list-timers 'collecte*' 'sauvegarde*'"
+echo "La modération : https://$DOMAINE/admin, utilisateur « moderation », mot de passe MODERATION_PASSWORD de $DOSSIER/.env."
+if [ "${NOUVEAU_MOT_DE_PASSE:-}" = 1 ]; then
+  echo "Mot de passe tiré au hasard, à garder : $MOT_DE_PASSE"
+fi

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surprise — contenus du couple</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --surface: #ffffff; --text: #1d1c1a; --muted: #6b6860; --border: #e3e0d8;
+    --accent: #7a3cff; --ok: #1f8a4c; --ok-bg: #e5f4ea; --ko: #c0392b; --ko-bg: #fbe9e7; --focus: #7a3cff33;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151413; --surface: #1f1e1c; --text: #ecebe7; --muted: #a09d94; --border: #34322e;
+      --accent: #a98bff; --ok: #5cc88a; --ok-bg: #1b3325; --ko: #ef7a6c; --ko-bg: #3a211d; --focus: #a98bff33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .bar { max-width: 900px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  h1 { font-size: 17px; margin: 0 12px 0 0; }
+  h1 a { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 8px; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tab { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; font-size: 14px; }
+  .tab[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .tab .n { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+  input, select, textarea { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+  textarea { width: 100%; resize: vertical; min-height: 44px; }
+  main { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+  .meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .meta a { color: var(--accent); }
+  .badge { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); }
+  .source { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--border); color: var(--muted); font-style: italic; }
+  .fields { display: grid; gap: 8px; margin: 8px 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .choix { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .actions { display: flex; gap: 8px; margin-top: 8px; }
+  button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  button.publish { background: var(--ok); border-color: var(--ok); color: #fff; }
+  button.reject { color: var(--ko); border-color: var(--ko); }
+  button:disabled { opacity: .4; cursor: default; }
+  .error { color: var(--ko); font-size: 13px; margin-top: 6px; }
+  .done { color: var(--ok); font-size: 13px; }
+  .serie { position: sticky; top: 60px; z-index: 1; background: var(--surface); border: 1px solid var(--accent); }
+  .empty { text-align: center; color: var(--muted); padding: 48px 0; }
+  @media (max-width: 600px) { .choix { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Contenus du couple <a href="/admin">← activités</a></h1>
+    <div class="tabs" id="tabs"></div>
+    <select id="genre" aria-label="Genre"><option value="">Tous genres</option></select>
+  </div>
+</header>
+<main>
+  <p class="hint">Les idées viennent des sites de questions de couple (<code>python -m surprise.inspirations aspirer --limit 50</code>,
+    puis <code>reimaginer</code>). Leurs mots ne vont jamais dans l'app : réécrivez la version avec les nôtres, puis publiez-la. Elle
+    s'ajoute à la fin du parcours. Huit questions de quiz gardées forment une série.</p>
+  <div id="list"></div>
+</main>
+<script>
+const GENRES = { question: "Question du jour", quiz: "Question de quiz", defi: "Défi de la semaine", carte: "Carte du soir" };
+const TABS = [
+  ["proposee", "À retoucher"], ["gardee", "Gardées pour le quiz"], ["publiee", "Publiées"], ["ecartee", "Écartées"],
+];
+let data = { inspirations: [], sources: {}, themes: [], defi_genres: [] };
+let tab = "proposee";
+let picked = [];
+
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const child of children.flat()) if (child != null) el.append(child);
+  return el;
+}
+
+function inTab(idea) {
+  return tab === "proposee" ? idea.statut === "proposee" || idea.statut === "nouvelle" : idea.statut === tab;
+}
+
+function select(name, options, value, labels = {}) {
+  return h("select", { name, "aria-label": name }, options.map((o) => h("option", { value: o, selected: String(o) === String(value) }, labels[o] ?? String(o))));
+}
+
+// The version's fields, in the shape of its genre, drawn from what is there (the rules', Claude's or written here).
+function fields(genre, v, idea) {
+  v = v || {};
+  if (genre === "quiz") {
+    const choix = v.choix || ["", "", "", ""];
+    return [
+      h("input", { name: "question", value: v.question ?? v.texte ?? "", placeholder: "Mon dimanche parfait", "aria-label": "Question du quiz" }),
+      h("div", { class: "choix" }, [0, 1, 2, 3].map((i) => h("input", { name: `choix${i}`, value: choix[i] || "", placeholder: `Réponse ${i + 1}`, "aria-label": `Réponse ${i + 1}` }))),
+    ];
+  }
+  if (genre === "defi") {
+    return [
+      h("div", { class: "row" }, h("input", { name: "titre", value: v.titre || "", placeholder: "Titre du défi", "aria-label": "Titre du défi" }),
+        h("label", {}, "Genre", select("genre_defi", data.defi_genres, v.genre || "geste"))),
+      h("textarea", { name: "texte", "aria-label": "Le défi", placeholder: "Glissez un petit mot…" }, v.texte ?? v.question ?? ""),
+    ];
+  }
+  if (genre === "carte") {
+    return [
+      h("textarea", { name: "texte", "aria-label": "La carte" }, v.texte ?? v.question ?? ""),
+      h("div", { class: "row" },
+        h("label", {}, "Carte", select("genre_carte", ["conversation", "defi"], v.genre === "defi" ? "defi" : "conversation", { conversation: "de conversation", defi: "de défi" })),
+        h("label", {}, "Profondeur", select("profondeur", [1, 2, 3], v.profondeur || Math.min(3, idea.palier)))),
+    ];
+  }
+  return [
+    h("textarea", { name: "texte", "aria-label": "La question" }, v.texte ?? v.question ?? ""),
+    h("div", { class: "row" },
+      h("label", {}, "Thème", select("theme", data.themes, v.theme || "nous")),
+      h("label", {}, "Palier", select("palier", [1, 2, 3, 4], v.palier || idea.palier, { 1: "1 · pour rire", 2: "2 · se raconter", 3: "3 · nous deux", 4: "4 · à cœur ouvert" }))),
+  ];
+}
+
+function version(form, genre) {
+  const get = (name) => (form.elements[name]?.value || "").trim();
+  if (genre === "quiz") return { question: get("question"), choix: [0, 1, 2, 3].map((i) => get(`choix${i}`)) };
+  if (genre === "defi") return { titre: get("titre"), texte: get("texte"), genre: get("genre_defi") };
+  if (genre === "carte") return { texte: get("texte"), genre: get("genre_carte"), profondeur: Number(get("profondeur")) };
+  return { texte: get("texte"), theme: get("theme"), palier: Number(get("palier")) };
+}
+
+async function post(url, body) {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const answer = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(answer.error || `Erreur ${res.status}`);
+  return answer;
+}
+
+function card(idea) {
+  let genre = idea.genre;
+  const error = h("div", { class: "error", role: "alert" });
+  const box = h("div", { class: "fields" });
+  const form = h("form", { onsubmit: (e) => e.preventDefault() }, box);
+  const draw = (v) => { box.replaceChildren(...fields(genre, v, idea)); };
+  draw(idea.proposition);
+  const meta = h("div", { class: "meta" },
+    h("span", { class: "badge" }, data.sources[idea.source_id] || idea.source_id),
+    h("a", { href: idea.url, target: "_blank", rel: "noopener" }, "la page"),
+    h("span", {}, `palier ${idea.palier}`),
+    idea.proposee_par ? h("span", {}, `version : ${idea.proposee_par === "regles" ? "les règles" : idea.proposee_par}`) : null,
+    idea.publiee ? h("span", { class: "done" }, `publiée : ${idea.publiee}`) : null);
+  const kind = select("genre", Object.keys(GENRES), genre, GENRES);
+  kind.addEventListener("change", () => { const v = version(form, genre); genre = kind.value; draw(v); });
+  const actions = h("div", { class: "actions" });
+  if (idea.statut !== "publiee") {
+    if (idea.statut !== "ecartee") {
+      actions.append(h("button", { class: "publish", onclick: async (e) => {
+        e.target.disabled = true; error.textContent = "";
+        try {
+          const answer = await post(`/api/inspirations/${encodeURIComponent(idea.id)}`, { action: "publier", genre, proposition: version(form, genre) });
+          Object.assign(idea, { statut: answer.statut, publiee: answer.publiee === "gardee" ? null : answer.publiee, genre, proposition: version(form, genre) });
+          render();
+        } catch (err) { error.textContent = err.message; e.target.disabled = false; }
+      } }, genre === "quiz" ? "Garder pour une série" : "Publier"));
+      actions.append(h("button", { class: "reject", onclick: () => decide(idea, "ecarter") }, "Écarter"));
+    } else {
+      actions.append(h("button", { onclick: () => decide(idea, "rouvrir") }, "Reprendre"));
+    }
+  }
+  if (idea.statut === "gardee") {
+    const at = picked.indexOf(idea.id);
+    actions.append(h("label", { class: "meta" }, h("input", { type: "checkbox", checked: at >= 0, onchange: (e) => {
+      picked = e.target.checked ? [...picked, idea.id] : picked.filter((id) => id !== idea.id);
+      render();
+    } }), at >= 0 ? `n° ${at + 1} de la série` : "Dans la série"));
+  }
+  return h("div", { class: "card", "data-id": idea.id }, meta,
+    h("div", { class: "source", title: "Les mots de la source : jamais publiés tels quels" }, idea.texte),
+    h("div", { class: "row" }, h("label", {}, "Devient", kind)), form, error, actions);
+}
+
+async function decide(idea, action) {
+  try {
+    idea.statut = (await post(`/api/inspirations/${encodeURIComponent(idea.id)}`, { action })).statut;
+    render();
+  } catch (err) { alert(err.message); }
+}
+
+function serie() {
+  const error = h("div", { class: "error", role: "alert" });
+  const titre = h("input", { placeholder: "Titre de la série", "aria-label": "Titre de la série" });
+  const accroche = h("input", { placeholder: "Son accroche", "aria-label": "Accroche de la série", style: "flex:1" });
+  const button = h("button", { class: "publish", disabled: picked.length !== 8, onclick: async () => {
+    button.disabled = true; error.textContent = "";
+    try {
+      const answer = await post("/api/quiz-series", { titre: titre.value, accroche: accroche.value, ids: picked });
+      for (const idea of data.inspirations) if (picked.includes(idea.id)) Object.assign(idea, { statut: "publiee", publiee: answer.publiee });
+      picked = [];
+      render();
+    } catch (err) { error.textContent = err.message; button.disabled = false; }
+  } }, `Publier la série (${picked.length}/8)`);
+  return h("div", { class: "card serie" }, h("div", { class: "row" }, titre, accroche, button), error);
+}
+
+function render() {
+  const genre = document.getElementById("genre").value;
+  document.getElementById("tabs").replaceChildren(...TABS.map(([key, label]) => {
+    const n = data.inspirations.filter((i) => (key === "proposee" ? i.statut === "proposee" || i.statut === "nouvelle" : i.statut === key)).length;
+    return h("button", { class: "tab", "aria-pressed": key === tab, onclick: () => { tab = key; render(); } }, label, h("span", { class: "n" }, n));
+  }));
+  const shown = data.inspirations.filter((i) => inTab(i) && (!genre || i.genre === genre));
+  const list = document.getElementById("list");
+  list.replaceChildren(...(tab === "gardee" ? [serie()] : []), ...(shown.length ? shown.map(card) : [h("p", { class: "empty" }, "Rien ici pour l'instant.")]));
+}
+
+document.getElementById("genre").append(...Object.entries(GENRES).map(([k, v]) => h("option", { value: k }, v)));
+document.getElementById("genre").addEventListener("change", render);
+fetch("/api/inspirations").then((r) => r.json()).then((d) => { data = d; render(); });
+</script>
+</body>
+</html>

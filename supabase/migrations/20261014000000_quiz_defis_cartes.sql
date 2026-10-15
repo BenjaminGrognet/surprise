@@ -3,7 +3,7 @@
 -- both ticked it. On the day, a card for each step: a question or a little défi for two, a gage for a band. All of it
 -- written for the app, and the gauge fed by it.
 
--- The quiz: eight series in the order of the journey (from the daily traps to the dreams), a duo's weeks one after
+-- The quiz: sixteen series in the order of the journey (two seasons, each from the light to the deep), a duo's weeks one after
 -- the other; eight questions each with four answers.
 create table public.quiz_series (
   id smallint primary key,
@@ -31,7 +31,15 @@ insert into public.quiz_series (id, titre, accroche) values
   (5, 'L''enfant que j''étais', 'Cours de récré, goûters et bêtises : l''autre vous connaît-il d''avant ?'),
   (6, 'Par gros temps', 'Stress, disputes, réconciliations : comment chacun traverse les orages'),
   (7, 'Le langage du cœur', 'Ce qui fait du bien, à l''un et à l''autre'),
-  (8, 'Nos rêves', 'Ce dont nous rêvons, à voix haute ou en secret');
+  (8, 'Nos rêves', 'Ce dont nous rêvons, à voix haute ou en secret'),
+  (9, 'Mode survie', 'Zombies, île déserte et panne de courant : qui s''en sort, et comment ?'),
+  (10, 'En vacances', 'Valise, programme et coups de soleil : nos vacances, version vérité'),
+  (11, 'Paris, mon amour', 'Métro, terrasses et quartiers fétiches : notre Paris à chacun'),
+  (12, 'Nos premières fois', 'Premier regard, premier message, première dispute : qui se souvient de quoi ?'),
+  (13, 'Sous la couette', 'Couette, oreillers et câlins : la nuit, chacun ses lois'),
+  (14, 'L''argent et nous', 'Fourmi ou cigale ? Ce que l''argent dit de chacun'),
+  (15, 'Ce qui me touche', 'Larmes, fous rires et petits bonheurs : ce qui nous émeut vraiment'),
+  (16, 'Dans dix ans', 'Où, comment, avec qui : le futur, chacun le voit à sa façon');
 
 insert into public.quiz_questions (id, serie, rang, question, choix) values
   (1, 1, 1, 'Ma position pour m''endormir', array['En étoile de mer', 'En chien de fusil', 'Sur le dos, comme un pharaon', 'Ça change toutes les nuits']),
@@ -97,7 +105,71 @@ insert into public.quiz_questions (id, serie, rang, question, choix) values
   (61, 8, 5, 'Une année sabbatique serait faite pour', array['Voyager', 'Apprendre', 'Se reposer enfin', 'Créer quelque chose']),
   (62, 8, 6, 'Dans dix ans, je nous vois', array['Au même endroit, en mieux', 'Dans une autre ville', 'Dans un autre pays', 'Allez savoir, et c''est très bien']),
   (63, 8, 7, 'Le projet fou que je n''ose pas dire', array['Changer de métier', 'Écrire un livre', 'Partir un an', 'Monter une affaire']),
-  (64, 8, 8, 'Pour nos vieux jours, je rêve', array['D''une maison pleine de monde', 'D''un tour du monde en camping-car', 'D''un village au soleil', 'De rester à Paris, évidemment']);
+  (64, 8, 8, 'Pour nos vieux jours, je rêve', array['D''une maison pleine de monde', 'D''un tour du monde en camping-car', 'D''un village au soleil', 'De rester à Paris, évidemment']),
+  (65, 9, 1, 'Face à une invasion de zombies, je', array['Sors un plan, et un plan B', 'Tombe dans les cinq premières minutes', 'Essaie de les raisonner', 'File avec les provisions']),
+  (66, 9, 2, 'Sur une île déserte, l''objet que j''emporte', array['Un couteau suisse', 'Un bon roman, tant pis pour la survie', 'Une enceinte et ma playlist', 'Un téléphone satellite, soyons sérieux']),
+  (67, 9, 3, 'Panne de courant toute une soirée : je', array['Sors les bougies, c''est romantique', 'Calcule ce qui va décongeler', 'Propose un jeu à la lampe frontale', 'Vais me coucher à 20 h']),
+  (68, 9, 4, 'Mon rôle dans une aventure à la Koh-Lanta', array['Le feu, c''est moi', 'La pêche et la cueillette', 'Les alliances et la stratégie', 'Le moral des troupes']),
+  (69, 9, 5, 'Perdus en forêt sans réseau, je', array['Suis le soleil et la mousse des arbres', 'Panique en silence', 'Fais confiance à l''autre, totalement', 'Trouve une auberge, comme par miracle']),
+  (70, 9, 6, 'Une araignée au plafond de la chambre', array['Un verre, un carton, et dehors', 'J''appelle à l''aide', 'Je l''adopte et je lui donne un nom', 'Je change de pièce, pour toujours']),
+  (71, 9, 7, 'Mon atout le plus utile en pleine crise', array['Garder mon calme', 'Faire rire tout le monde', 'Trouver à manger n''importe où', 'Dormir n''importe où']),
+  (72, 9, 8, 'Au bout de trois jours sans téléphone, je', array['Revis, enfin', 'Tremble un peu', 'Ai commencé un journal intime', 'En ai emprunté un']),
+  (73, 10, 1, 'Ma valise, la veille du départ', array['Faite depuis une semaine, liste cochée', 'Bouclée en vingt minutes, à minuit', 'Trop pleine, comme toujours', 'Pas faite : je squatte celle de l''autre']),
+  (74, 10, 2, 'Mes vacances idéales', array['Un transat, un livre, rien d''autre', 'Une ville arpentée du matin au soir', 'Un sac à dos et pas de plan', 'Une maison pleine d''amis']),
+  (75, 10, 3, 'En voyage, c''est moi qui', array['Tiens le programme heure par heure', 'Déniche les petites adresses', 'Me perds, carte en main', 'Photographie absolument tout']),
+  (76, 10, 4, 'La première chose que je fais à l''hôtel', array['Je teste le lit', 'J''inspecte la salle de bains', 'Je défais la valise', 'Je ressors aussitôt']),
+  (77, 10, 5, 'Le souvenir que je rapporte toujours', array['Un aimant pour le frigo', 'Des spécialités à manger', 'Rien, les photos suffisent', 'Un objet inutile et adoré']),
+  (78, 10, 6, 'Le jour du retour, je', array['Planifie déjà les prochaines', 'Ai le blues du dimanche soir, puissance dix', 'Retrouve mon lit avec bonheur', 'Lance une machine avant de poser mon sac']),
+  (79, 10, 7, 'Mon pire cauchemar de vacances', array['Un vol annulé', 'La pluie sept jours sur sept', 'Pas de wifi', 'Un programme imposé à la minute']),
+  (80, 10, 8, 'Si je pouvais partir demain, ce serait', array['Au Japon', 'Sur une petite île grecque', 'En road trip à l''américaine', 'À la campagne, à une heure de Paris']),
+  (81, 11, 1, 'Mon quartier de cœur', array['Le Marais', 'Montmartre', 'Le canal Saint-Martin', 'La rive gauche, de Saint-Germain au Luxembourg']),
+  (82, 11, 2, 'Dans le métro, je', array['Lis', 'Observe les gens et invente leur vie', 'Écoute un podcast', 'Cours pour attraper la correspondance']),
+  (83, 11, 3, 'Ma terrasse idéale', array['Au soleil, même en février', 'Sur un toit avec vue', 'Au bord de l''eau', 'Le café du coin, toujours le même']),
+  (84, 11, 4, 'Le classique parisien que je n''ai jamais fait, avouons-le', array['Monter à la tour Eiffel', 'Descendre aux catacombes', 'Le Louvre en entier', 'Un bateau-mouche']),
+  (85, 11, 5, 'Mon dimanche parfait à Paris', array['Marché puis brunch', 'Musée et longue balade', 'Grasse matinée et cinéma', 'Pique-nique sur les quais']),
+  (86, 11, 6, 'Ce qui m''agace le plus à Paris', array['Les trottinettes', 'Le métro bondé', 'Le prix du café en terrasse', 'Rien : j''aime tout, même ça']),
+  (87, 11, 7, 'Mon sandwich parisien', array['Le jambon-beurre, simple et parfait', 'Le falafel du Marais', 'Le croque-monsieur', 'Le banh mi du 13e']),
+  (88, 11, 8, 'Si je quittais Paris un jour, ce serait pour', array['La mer', 'La montagne', 'Une autre grande ville', 'Jamais, impossible']),
+  (89, 12, 1, 'Ce que j''ai remarqué en premier chez l''autre', array['Le sourire', 'Le regard', 'La voix', 'L''humour']),
+  (90, 12, 2, 'Mon état d''esprit au premier rendez-vous', array['Pleine assurance', 'Le trac, très fort', 'Simple curiosité', 'Déjà sous le charme']),
+  (91, 12, 3, 'Notre premier baiser, pour moi, c''était', array['Une évidence', 'Une surprise', 'Un peu maladroit, et c''est très bien', 'Trop longtemps attendu']),
+  (92, 12, 4, 'Le premier cadeau que j''ai offert, je l''ai trouvé', array['Des semaines à l''avance', 'La veille au soir', 'En pensant à une blague entre nous', 'Grâce à un ami']),
+  (93, 12, 5, 'Notre première dispute portait sur', array['Une broutille, vraiment', 'Un retard', 'Une histoire de vaisselle', 'Je ne m''en souviens plus, et c''est mieux']),
+  (94, 12, 6, 'Le premier « je t''aime »', array['C''est moi qui l''ai dit', 'C''est l''autre qui l''a dit', 'En même temps, ou presque', 'Par écrit']),
+  (95, 12, 7, 'La première fois que j''ai présenté l''autre à mes proches', array['De la fierté, sans réserve', 'Un brin d''inquiétude', 'L''envie de tout raconter', 'La hâte que ce soit fini']),
+  (96, 12, 8, 'Le moment où j''ai su que c''était sérieux', array['Dès le premier soir', 'Pendant un premier voyage', 'Un jour ordinaire, sans prévenir', 'Je le sais encore chaque jour']),
+  (97, 13, 1, 'Ma part de la couette', array['Je l''enroule autour de moi', 'Je la partage, en principe', 'Je dors dessus, pas dessous', 'J''en veux une rien qu''à moi']),
+  (98, 13, 2, 'Les câlins du soir, pour moi', array['Indispensables pour m''endormir', 'Deux minutes, puis chacun son côté', 'Plutôt le matin', 'Ça dépend de la chaleur']),
+  (99, 13, 3, 'La chambre idéale', array['Fenêtre ouverte, même en hiver', 'Une petite fraîcheur', 'Bien chaude, comme un cocon', 'Ventilateur, toute l''année']),
+  (100, 13, 4, 'Juste avant de dormir, je', array['Lis quelques pages', 'Fais défiler mon téléphone', 'Refais le monde à voix basse', 'Dors déjà']),
+  (101, 13, 5, 'Ce qui me réveille la nuit', array['Le moindre bruit', 'Les ronflements de l''autre', 'Une idée géniale', 'Rien, je dors comme une pierre']),
+  (102, 13, 6, 'Le petit-déjeuner au lit, pour moi', array['Le grand luxe', 'Des miettes partout, non merci', 'Seulement le dimanche', 'Seulement s''il est préparé par l''autre']),
+  (103, 13, 7, 'Mon côté du lit', array['Celui de la fenêtre', 'Celui de la porte', 'Le milieu, si je peux', 'Celui dont l''autre ne veut pas']),
+  (104, 13, 8, 'Le rêve que je fais le plus souvent', array['Je vole', 'Je rate un train ou un examen', 'Je retrouve des gens d''avant', 'Je ne me souviens jamais de mes rêves']),
+  (105, 14, 1, 'Je suis plutôt', array['Fourmi : chaque euro a sa place', 'Cigale : on ne vit qu''une fois', 'Fourmi le mois, cigale en vacances', 'Ni l''un ni l''autre : je ne regarde jamais']),
+  (106, 14, 2, 'Un billet de 50 € trouvé par terre : je', array['Le mets de côté', 'Nous offre un bon dîner', 'Cherche à qui il appartient', 'Le dépense dans l''heure, pour un caprice']),
+  (107, 14, 3, 'L''achat que je regrette le plus souvent', array['Les vêtements jamais portés', 'Les gadgets', 'Les abonnements oubliés', 'Rien : je ne regrette jamais']),
+  (108, 14, 4, 'Le cadeau qui me fait le plus plaisir', array['Une surprise faite main', 'Un objet dont j''ai vraiment besoin', 'Une expérience à vivre', 'Un cadeau qui fait rire']),
+  (109, 14, 5, 'Au restaurant entre amis, l''addition', array['Divisée à parts égales, c''est plus simple', 'Chacun sa part, au centime près', 'J''invite, pour le plaisir', 'Je sors l''appli pour faire les comptes']),
+  (110, 14, 6, 'Si je gagnais au loto demain', array['Je démissionne le jour même', 'Je ne change rien, ou presque', 'J''achète une maison pour nous', 'Je gâte tous mes proches']),
+  (111, 14, 7, 'Ce qui me rassure le plus', array['Une épargne de côté', 'Un métier qui me plaît', 'Savoir qu''on est deux', 'Ne rien posséder qui m''encombre']),
+  (112, 14, 8, 'Mon rêve le plus cher, au sens propre', array['Un appartement avec terrasse', 'Un tour du monde', 'Une petite maison de campagne', 'Une année sans travailler']),
+  (113, 15, 1, 'Le genre de film qui me fait pleurer', array['Les histoires d''amour', 'Les films d''animation', 'Les histoires vraies', 'Aucun, jamais une larme']),
+  (114, 15, 2, 'Ce qui me redonne le sourire un mauvais jour', array['Un message de l''autre', 'Un bon repas', 'Une chanson à fond', 'Une heure rien qu''à moi']),
+  (115, 15, 3, 'Le compliment qui me touche le plus', array['Sur mon travail', 'Sur mon allure', 'Sur ma gentillesse', 'Sur mon humour']),
+  (116, 15, 4, 'Ce que je garde précieusement', array['Des lettres', 'Des photos d''enfance', 'Un objet de famille', 'Des tickets de concerts et de cinéma']),
+  (117, 15, 5, 'Quand l''émotion me prend, je', array['La montre tout de suite', 'Fais une blague pour donner le change', 'Attends d''avoir un moment à moi', 'Ne m''en rends compte que plus tard']),
+  (118, 15, 6, 'Ma plus grande fierté', array['Ce que j''ai construit au travail', 'Mes amitiés', 'Nous deux', 'Avoir changé quelque chose en moi']),
+  (119, 15, 7, 'Un petit bonheur qui me suffit', array['Le premier café du matin', 'Le soleil sur une terrasse', 'Une soirée sans rien de prévu', 'L''odeur du pain chaud']),
+  (120, 15, 8, 'Quand ça va mal, j''ai surtout besoin', array['Qu''on m''écoute, sans conseils', 'Qu''on cherche une solution avec moi', 'Qu''on me change les idées', 'Qu''on me laisse un peu de temps']),
+  (121, 16, 1, 'Dans dix ans, je nous vois habiter', array['Toujours à Paris', 'Une maison avec jardin', 'À l''étranger', 'Là où le vent nous aura menés']),
+  (122, 16, 2, 'Dans dix ans, mon métier', array['Le même, en mieux', 'Un tout autre, enfin choisi', 'À mon compte', 'Je préfère ne pas y penser']),
+  (123, 16, 3, 'Nos dimanches, dans dix ans', array['Un grand déjeuner de famille', 'Une balade, toujours à deux', 'Un brunch avec les amis de toujours', 'Une grasse matinée : rien ne change']),
+  (124, 16, 4, 'Ce que j''aurai enfin appris', array['Une langue étrangère', 'Un instrument', 'La cuisine, la vraie', 'Le lâcher-prise']),
+  (125, 16, 5, 'La tradition que je veux que nous gardions', array['Notre soirée à nous, chaque semaine', 'Un voyage par an', 'Chaque anniversaire fêté en grand', 'Nos blagues, toujours les mêmes']),
+  (126, 16, 6, 'Ce qui aura le plus changé chez moi', array['Ma patience', 'Mon style', 'Mes priorités', 'Rien du tout, j''y tiens']),
+  (127, 16, 7, 'Ce qui ne devra jamais changer entre nous', array['Les fous rires', 'La tendresse', 'La confiance', 'Les conversations jusqu''à pas d''heure']),
+  (128, 16, 8, 'Pour fêter nos dix ans de plus, je rêve', array['De refaire notre premier rendez-vous', 'D''un grand voyage à deux', 'D''une fête avec tous nos proches', 'D''une soirée surprise imaginée par l''autre']);
 
 -- The answers: for oneself (moi) and the guess of the other's (devine), 0 to 3, final once given.
 create table public.quiz_reponses (
