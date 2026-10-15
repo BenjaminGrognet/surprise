@@ -54,7 +54,34 @@ export type Question = {
 };
 export type QuizData = { questions: Question[]; vibes: Record<string, string> };
 
-export const getQuiz = () => api<QuizData>('/api/quiz');
+// What the server always answers the same (the quiz, the evening form's options): asked once per launch of the app,
+// then given at once — the form opens without a "Chargement…" in between. A failure is not kept: asked again next time.
+const kept = new Map<string, unknown>();
+const asked = new Map<string, Promise<unknown>>();
+export function once<T>(path: string): Promise<T> {
+  if (!asked.has(path)) {
+    asked.set(path, api<T>(path).then(
+      (value) => {
+        kept.set(path, value);
+        return value;
+      },
+      (error) => {
+        asked.delete(path);
+        throw error;
+      },
+    ));
+  }
+  return asked.get(path) as Promise<T>;
+}
+// Already there: to draw the page with it straight away, rather than after a turn of the event loop.
+export const known = <T>(path: string) => kept.get(path) as T | undefined;
+// Forgotten (the tests; a new server's options).
+export function forgetKnown() {
+  kept.clear();
+  asked.clear();
+}
+
+export const getQuiz = () => once<QuizData>('/api/quiz');
 // Stateless: the server only scores the answers, it doesn't keep them — the profile itself
 // lives on this device (see lib/local-store.ts) and, for a signed-in couple, in Supabase.
 export const saveProfile = (answers: Record<string, unknown>) =>
@@ -98,7 +125,18 @@ export type Night = {
   votes?: Record<string, 1 | -1>;
 };
 
-export const getSoiree = (formule: Formule = 'duo') => api<SoireeData>(formule === 'squad' ? '/api/soiree?formule=squad' : '/api/soiree');
+const soireePath = (formule: Formule) => (formule === 'squad' ? '/api/soiree?formule=squad' : '/api/soiree');
+export const getSoiree = (formule: Formule = 'duo') => once<SoireeData>(soireePath(formule));
+// The form of a formula, when both its options and the quiz's vibes are already there.
+export function knownSoiree(formule: Formule): { data: SoireeData; vibes: Record<string, string> } | null {
+  const data = known<SoireeData>(soireePath(formule));
+  const quiz = known<QuizData>('/api/quiz');
+  return data && quiz ? { data, vibes: { ...quiz.vibes, ...data.vibes } } : null;
+}
+// Asked ahead, while the couple reads the page before (the formula's choice): failures stay quiet, asked again later.
+export function prefetchSoiree() {
+  for (const call of [getQuiz, () => getSoiree('duo'), () => getSoiree('squad')]) call().catch(() => {});
+}
 
 // One step of a composed route (surprise.parcours.step_json): all the raw data, no HTML —
 // this screen decides how to lay it out.

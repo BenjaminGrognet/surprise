@@ -9,6 +9,7 @@ are copied once into data/images and served from there.
 
 import argparse
 import hashlib
+import io
 import re
 import sys
 import time
@@ -91,14 +92,44 @@ def local_copy(url: str, client: httpx.Client | None = None, directory: Path | N
     suffix = _TYPES.get(response.headers.get("Content-Type", "").split(";")[0].strip())
     if not suffix:
         return None
+    content, suffix = lighter(response.content, suffix)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{_stem(url)}{suffix}"
-    path.write_bytes(response.content)
+    path.write_bytes(content)
     return path
 
 
 def _smaller(url: str) -> str:
     return _BILLETREDUC_SIZE.sub("/zg/n800/", url, count=1)
+
+
+# A step's photo is shown at most a phone's width (375 pt, three pixels each): wider is weight for nothing.
+MAX_SIDE = 1200
+JPEG_QUALITY = 82
+
+
+def lighter(content: bytes, suffix: str) -> tuple[bytes, str]:
+    """The image made lighter for a page: at most MAX_SIDE pixels on its longer side, a JPEG unless it has
+    transparency (then a PNG); kept as it is when that saves nothing, when it moves (GIF) or cannot be read."""
+    from PIL import Image, ImageOps, UnidentifiedImageError  # only needed when an image is copied
+
+    if suffix == ".gif":
+        return content, suffix
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            image = ImageOps.exif_transpose(image)  # a phone's photo stands as it was taken
+            image.thumbnail((MAX_SIDE, MAX_SIDE), Image.Resampling.LANCZOS)
+            clear = image.mode in ("RGBA", "LA", "PA") or (image.mode == "P" and "transparency" in image.info)
+            out = io.BytesIO()
+            if clear:
+                image.save(out, "PNG", optimize=True)
+            else:
+                image.convert("RGB").save(out, "JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
+    except (UnidentifiedImageError, OSError, ValueError):
+        return content, suffix
+    if out.tell() >= len(content):
+        return content, suffix
+    return out.getvalue(), ".png" if clear else ".jpg"
 
 
 def replacement(client: httpx.Client, item: dict[str, Any], dead: str) -> str | None:

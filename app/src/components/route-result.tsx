@@ -24,6 +24,7 @@ export function RouteResult({
   onRedo,
   onChoose,
   busyRedo,
+  keeping,
   votes,
   onVote,
 }: {
@@ -32,6 +33,8 @@ export function RouteResult({
   onRedo?: (redo: string) => void;
   onChoose?: () => void;
   busyRedo?: string | null;
+  // An evening being kept: true on this route (its button turns), false on the others (theirs wait); unset otherwise.
+  keeping?: boolean;
   // The instigateur's votes on the steps (hooks/use-tastes.ts), for the evenings to come; the night is not voted on.
   votes?: Record<string, Vote>;
   onVote?: (step: SoireeStep, vote: Vote) => void;
@@ -66,7 +69,9 @@ export function RouteResult({
       </View>
 
       {!onChoose ? null : (
-        <PrimaryButton wide disabled={chosen} onPress={onChoose}>{chosen ? '✓ Gardée dans vos intrigues' : 'Garder cette intrigue'}</PrimaryButton>
+        <PrimaryButton wide disabled={chosen || keeping === false} busy={keeping === true} onPress={onChoose}>
+          {chosen ? '✓ Gardée dans vos intrigues' : keeping ? 'On scelle l’intrigue…' : 'Garder cette intrigue'}
+        </PrimaryButton>
       )}
     </View>
   );
@@ -105,8 +110,8 @@ function StepRow({
         <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]}>
           <StepImage step={step} style={styles.thumbImg} />
         </View>
-        {onRedo && step.redo ? <Pressable onPress={busyRedo ? undefined : () => onRedo(step.redo!)} style={styles.redoRow}>{busyRedo === step.redo ? <Spinner size={11} /> : null}<ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === step.redo ? 'Recherche…' : '↻ Changer'}</ThemedText></Pressable> : null}
-        {onRedo && removable && remove ? <Pressable onPress={() => onRedo(remove)}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === remove ? 'Retrait…' : '✕ Retirer'}</ThemedText></Pressable> : null}
+        {onRedo && step.redo ? <Pressable onPress={busyRedo ? undefined : () => onRedo(step.redo!)} hitSlop={6} accessibilityRole="button" style={[styles.redoRow, styles.tap]}>{busyRedo === step.redo ? <Spinner size={11} /> : null}<ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === step.redo ? 'Recherche…' : '↻ Changer'}</ThemedText></Pressable> : null}
+        {onRedo && removable && remove ? <Pressable onPress={() => onRedo(remove)} hitSlop={6} accessibilityRole="button" style={styles.tap}><ThemedText type="small" style={{ color: INK_SOFT }}>{busyRedo === remove ? 'Retrait…' : '✕ Retirer'}</ThemedText></Pressable> : null}
         {onVote ? <View style={styles.vote}><TasteVote vote={vote} onVote={(v) => onVote(step, v)} /></View> : null}
       </View>
       <View style={styles.body}>
@@ -117,7 +122,7 @@ function StepRow({
         {showWhere ? <ThemedText type="small" style={{ color: INK_SOFT }} numberOfLines={1}>{where}</ThemedText> : null}
         {step.text ? <ThemedText type="small" style={{ color: INK }} numberOfLines={open ? undefined : 1}>{step.text}</ThemedText> : null}
         {long ? (
-          <Pressable onPress={() => setOpen(!open)}>
+          <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={styles.tap}>
             <ThemedText type="small" style={{ color: LINK_INK }}>{open ? '− Réduire' : '+ Lire la suite'}</ThemedText>
           </Pressable>
         ) : null}
@@ -141,6 +146,8 @@ function StepRow({
 
 const styles = StyleSheet.create({
   redoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // A finger's room around the small links (Changer, Retirer, Lire la suite), not only their line of text.
+  tap: { paddingVertical: 4 },
   route: { gap: Spacing.one, padding: Spacing.two + 4, borderRadius: Radius.tile, borderWidth: 1, marginTop: Spacing.one },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
   eyebrow: { flexShrink: 1 },

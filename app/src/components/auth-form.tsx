@@ -22,17 +22,23 @@ export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer n
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  // Supabase answering: the button says so and takes no second press (the Enter key neither).
+  const [busy, setBusy] = useState(false);
   const emailRef = useRef<TextInput>(null);
   const pick = (key: TabKey) => { setTab(key); emailRef.current?.focus(); };
 
   async function submit() {
+    if (busy) return;
     setError('');
+    setBusy(true);
     try {
       if (tab === 'in') await signIn(email, password);
       else await signUp(email, password);
       onSignedIn();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -60,7 +66,9 @@ export function AuthForm({ onSignedIn, startWith = 'in', signUpLabel = 'Créer n
           />
         </Field>
         {error ? <ThemedText themeColor="danger">{error}</ThemedText> : null}
-        <PrimaryButton wide compact={compact} onPress={submit}>{tab === 'in' ? 'Se connecter' : signUpLabel}</PrimaryButton>
+        <PrimaryButton wide compact={compact} busy={busy} onPress={submit}>
+          {busy ? (tab === 'in' ? 'Connexion…' : 'Création du compte…') : tab === 'in' ? 'Se connecter' : signUpLabel}
+        </PrimaryButton>
       </View>
     </>
   );

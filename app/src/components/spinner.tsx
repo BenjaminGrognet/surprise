@@ -5,8 +5,9 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-// An emerald arc turning on a faint ring: "wait a moment", next to a link that was just pressed.
-export function Spinner({ size = 14 }: { size?: number }) {
+// An emerald arc turning on a faint ring: "wait a moment", next to a link that was just pressed. `color`: in another
+// ink, the night's on an emerald button.
+export function Spinner({ size = 14, color }: { size?: number; color?: string }) {
   const theme = useTheme();
   const [turn] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -20,7 +21,7 @@ export function Spinner({ size = 14 }: { size?: number }) {
       accessibilityLabel="Chargement"
       style={{
         width: size, height: size, borderRadius: size / 2, borderWidth: Math.max(2, size / 7),
-        borderColor: theme.accentFaint, borderTopColor: theme.accent, transform: [{ rotate }],
+        borderColor: color ? `${color}40` : theme.accentFaint, borderTopColor: color ?? theme.accent, transform: [{ rotate }],
       }}
     />
   );

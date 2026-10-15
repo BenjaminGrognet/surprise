@@ -14,7 +14,7 @@ import { useCouple } from '@/hooks/use-couple';
 import { useNow } from '@/hooks/use-now';
 import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { accountProfile, eveningsHistory, upcomingEvenings, type EveningHistoryRow } from '@/lib/account';
-import { getSoireeState, place, type Profile, type SoireeRoute } from '@/lib/api';
+import { getSoireeState, place, prefetchSoiree, type Profile, type SoireeRoute } from '@/lib/api';
 import { cluesFor, dayHint, inTime, nextClue, revealAt, revealMode, stepRevealed, stepWords } from '@/lib/clues';
 import { complicity, type Complicity } from '@/lib/complicity';
 import { eveningRole, guests, isSquad, placesLeft, type AccountRole } from '@/lib/couple';
@@ -45,18 +45,21 @@ export default function AccueilScreen() {
   // Read again each time the page comes back into view, not only the first: the stack keeps it mounted under the
   // form, so an evening kept there (then the tab bar's way home) would not show without it.
   useFocusEffect(useCallback(() => {
+    // The evening form's options, asked ahead: "Lancer une nouvelle intrigue" opens it at once.
+    prefetchSoiree();
     (async () => {
-      // Signed in, only the account's own profile counts: never one left on this device by someone else.
-      const known = supabaseConfigured
-        ? (await accountProfile().catch(() => null))?.profile ?? null
-        : (await rememberedProfile())?.profile ?? null;
+      const today = isoDay(new Date());
+      // All read at once, not one after the other: the page shows in one round trip. Signed in, only the account's
+      // own profile counts: never one left on this device by someone else.
+      const [known, rows, history] = await Promise.all([
+        supabaseConfigured
+          ? accountProfile().then((p) => p?.profile ?? null, () => null)
+          : rememberedProfile().then((p) => p?.profile ?? null),
+        supabaseConfigured ? upcomingEvenings(today).catch((): EveningHistoryRow[] => []) : ([] as EveningHistoryRow[]),
+        supabaseConfigured ? eveningsHistory().catch((): EveningHistoryRow[] => []) : ([] as EveningHistoryRow[]),
+      ]);
       setProfile(known);
       if (supabaseConfigured) {
-        const today = isoDay(new Date());
-        const [rows, history] = await Promise.all([
-          upcomingEvenings(today).catch((): EveningHistoryRow[] => []),
-          eveningsHistory().catch(() => []),
-        ]);
         setGauge(complicity(history, today));
         // An evening of the past week whose book the account hasn't sealed yet.
         const weekAgo = new Date();

@@ -30,18 +30,22 @@ export function TextLink({ href, children }: { href: Href; children: string }) {
 
 // Same look as PrimaryLink/TextLink, but for in-page actions (advance a quiz step, submit a
 // form) rather than navigation — a Link would remount the screen and lose local state.
+// `busy`: its action under way (a sign-in, an evening kept): a spinner turns in it, and it takes no second press.
 export function PrimaryButton({
-  onPress, disabled, wide, compact, children,
-}: { onPress: () => void; disabled?: boolean; wide?: boolean; compact?: boolean; children: string }) {
+  onPress, disabled, busy, wide, compact, children,
+}: { onPress: () => void; disabled?: boolean; busy?: boolean; wide?: boolean; compact?: boolean; children: string }) {
   const theme = useTheme();
   return (
     <Pressable
-      disabled={disabled}
+      disabled={disabled || busy}
       onPress={onPress}
+      accessibilityRole="button"
+      aria-busy={busy}
       style={[
-        styles.primary, wide && styles.wide, compact && styles.primaryCompact,
+        styles.primary, wide && styles.wide, compact && styles.primaryCompact, busy && styles.busy,
         { backgroundColor: theme.satin, boxShadow: disabled ? 'none' : `0 8px 22px ${theme.glow}` }, disabled && styles.disabled,
       ]}>
+      {busy ? <Spinner size={16} color={theme.onAccent} /> : null}
       <ThemedText style={[styles.primaryLabel, { color: theme.onAccent }]}>{children}</ThemedText>
     </Pressable>
   );
@@ -77,6 +81,7 @@ const styles = StyleSheet.create({
   wide: { alignSelf: 'stretch' },
   primaryLabel: { fontFamily: Fonts.sansBold, fontSize: 15, lineHeight: 20, letterSpacing: 0.3 },
   primaryCompact: { paddingVertical: 12 },
+  busy: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.two + 2 },
   ghost: { borderWidth: 1, borderRadius: Radius.pill, paddingVertical: Spacing.two + 2, paddingHorizontal: Spacing.three + 2, alignSelf: 'flex-start' },
   disabled: { opacity: 0.4 },
 });

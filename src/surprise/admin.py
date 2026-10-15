@@ -146,8 +146,8 @@ def make_handler(db: Path | str | None) -> type[BaseHTTPRequestHandler]:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self._cors_headers()
-            # The activity list weighs tens of megabytes: about six times less compressed.
-            if len(body) > 100_000 and "gzip" in self.headers.get("Accept-Encoding", ""):
+            # The activity list weighs tens of megabytes: about six times less compressed. A photo is already compressed.
+            if len(body) > 100_000 and not content_type.startswith("image/") and "gzip" in self.headers.get("Accept-Encoding", ""):
                 body = gzip.compress(body, compresslevel=5)
                 self.send_header("Content-Encoding", "gzip")
             self.send_header("Content-Length", str(len(body)))

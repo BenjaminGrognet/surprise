@@ -1,0 +1,6 @@
+# Caddy devant le serveur Python : le HTTPS (certificat obtenu et renouvelé seul), la compression. __DOMAINE__ est
+# remplacé par deploy/installer.sh (par exemple secretdate.duckdns.org).
+__DOMAINE__ {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8001
+}

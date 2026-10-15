@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, type Ref, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
@@ -7,15 +7,15 @@ import { DayField } from '@/components/day-field';
 import { CardEmblem, IntrigueCard, PageCard } from '@/components/intrigue-card';
 import { OptionCard, OptionGrid } from '@/components/option-card';
 import { RouteResult } from '@/components/route-result';
-import { Screen } from '@/components/screen';
-import { Waiting } from '@/components/spinner';
+import { Screen, useBringIntoView } from '@/components/screen';
+import { Spinner, Waiting } from '@/components/spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Brands, Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTastes } from '@/hooks/use-tastes';
 import { PaletteProvider, useTheme } from '@/hooks/use-theme';
 import { chooseEvening, currentUser, eveningsHistory, keptEvening, myTastes, votesOf } from '@/lib/account';
 import {
-  chooseRoute, composeSoiree, getQuiz, getSoiree, getSoireeState, redoPart, refusal,
+  chooseRoute, composeSoiree, getQuiz, getSoiree, getSoireeState, knownSoiree, prefetchSoiree, redoPart, refusal,
   type ComposedSoiree, type Formule, type Night, type Profile, type SoireeData,
 } from '@/lib/api';
 import { isoDay, longDay, nextFriday, shortDay } from '@/lib/dates';
@@ -41,6 +41,9 @@ const NIGHTS = [
   { value: false, label: 'On rentre', icon: 'maison' },
   { value: true, label: 'On découche', icon: 'cle' },
 ];
+// What the form still needs before an evening can be composed: a mood, and whether they dine.
+type Missing = 'humeur' | 'diner';
+
 // While Claude's titles are still coming, poll for up to a minute, every couple of seconds.
 const NAMING_TIMEOUT_MS = 60000;
 const NAMING_POLL_MS = 2000;
@@ -51,8 +54,12 @@ export default function SoireeScreen() {
   const { soiree: saved, formule: asked } = useLocalSearchParams<{ soiree?: string; formule?: string }>();
   const [formule, setFormule] = useState<Formule | null>(asked === 'squad' || asked === 'duo' ? asked : null);
   const [personnes, setPersonnes] = useState(PERSONNES.default);
-  const [data, setData] = useState<SoireeData | null>(null);
-  const [vibes, setVibes] = useState<Record<string, string>>({});
+  // The form's options, there at once when they were asked before (lib/api.ts once, prefetchSoiree).
+  const [data, setData] = useState<SoireeData | null>(() => (formule ? knownSoiree(formule)?.data ?? null : null));
+  const [vibes, setVibes] = useState<Record<string, string>>(() => (formule ? knownSoiree(formule)?.vibes ?? {} : {}));
+  // The options could not be had (server out of reach): said, with a way to ask again.
+  const [unreachable, setUnreachable] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [picked, setPicked] = useState<string[] | null>(null); // the moods chosen, null: the middle one
   const [secrets, setSecrets] = useState<string[]>([]);
@@ -64,14 +71,26 @@ export default function SoireeScreen() {
   const [status, setStatus] = useState<'idle' | 'composing' | 'error'>('idle');
   const [composed, setComposed] = useState<ComposedSoiree | null>(null);
   const [busyRedo, setBusyRedo] = useState<string | null>(null);
+  // The route being kept (its index), while the server keeps it.
+  const [keeping, setKeeping] = useState<number | null>(null);
+  // The form's button, pressed with an answer missing, brings its question into view and lights it (`asking`).
+  const scroller = useBringIntoView();
+  const moodQuestion = useRef<View>(null);
+  const dinnerQuestion = useRef<View>(null);
+  const [asking, setAsking] = useState<Missing | null>(null);
   // 'signin': not signed in, needs a link to /compte. A string: a plain error message.
   const [notice, setNotice] = useState<'signin' | string | null>(null);
   const tastes = useTastes();
 
+  useEffect(prefetchSoiree, []);
+
   useEffect(() => {
     if (!formule) return;
     (async () => {
-      const [soiree, quiz] = await Promise.all([getSoiree(formule), getQuiz()]);
+      setUnreachable(false);
+      const both = await Promise.all([getSoiree(formule), getQuiz()]).catch(() => null);
+      if (!both) return setUnreachable(true);
+      const [soiree, quiz] = both;
       setData(soiree);
       // A band says its vibes its own way.
       setVibes({ ...quiz.vibes, ...soiree.vibes });
@@ -86,12 +105,14 @@ export default function SoireeScreen() {
         }));
       }
     })();
-  }, [formule]);
+  }, [formule, attempt]);
 
   // Another formula, other wishes: those chosen for the other one go.
   function pickFormule(chosen: Formule) {
     if (chosen !== formule) {
-      setData(null);
+      const ready = knownSoiree(chosen);
+      setData(ready?.data ?? null);
+      if (ready) setVibes(ready.vibes);
       setSecrets([]);
       setEviter([]);
       setPicked(null);
@@ -133,7 +154,16 @@ export default function SoireeScreen() {
     return (
       <PaletteProvider name={squad ? 'squad' : 'date'}>
         <Screen>
-          <ThemedText themeColor="textSecondary">Chargement…</ThemedText>
+          {unreachable ? (
+            <PageCard badge="Hors ligne" title="Le salon reste clos…" text="Le serveur ne répond pas pour l'instant : vérifiez la connexion, puis réessayez.">
+              <PrimaryButton onPress={() => setAttempt((n) => n + 1)}>Réessayer</PrimaryButton>
+            </PageCard>
+          ) : (
+            <View style={styles.loading}>
+              <Spinner size={22} />
+              <ThemedText themeColor="textSecondary">On prépare le salon…</ThemedText>
+            </View>
+          )}
         </Screen>
       </PaletteProvider>
     );
@@ -187,21 +217,23 @@ export default function SoireeScreen() {
   }
 
   async function choose(route: ComposedSoiree['routes'][number]) {
-    if (!composed) return;
+    if (!composed || keeping !== null) return;
     setNotice(null);
-    if (!(await currentUser())) {
-      setNotice('signin');
-      return;
-    }
-    // The page keeps this route alone (the others go), then the couple's history keeps the page. Kept again
-    // (the history failed the first time), the page has that route as its route 0 and nothing changes.
-    const kept = await chooseRoute(composed.name, route.index).catch(() => null);
-    if (!kept) {
-      setNotice("Cette intrigue n'a pas pu être gardée : réessayez dans un instant.");
-      return;
-    }
-    setComposed(kept);
+    // A few seconds (the server copies its images): the button says so, and no second press keeps another one.
+    setKeeping(route.index);
     try {
+      if (!(await currentUser())) {
+        setNotice('signin');
+        return;
+      }
+      // The page keeps this route alone (the others go), then the couple's history keeps the page. Kept again
+      // (the history failed the first time), the page has that route as its route 0 and nothing changes.
+      const kept = await chooseRoute(composed.name, route.index).catch(() => null);
+      if (!kept) {
+        setNotice("Cette intrigue n'a pas pu être gardée : réessayez dans un instant.");
+        return;
+      }
+      setComposed(kept);
       await chooseEvening({
         pageName: composed.name, title: route.title, secretTitle: route.secret_title, pitch: route.pitch,
         vibes: composed.vibes.map((v) => vibes[v] || v), day: route.day,
@@ -211,6 +243,8 @@ export default function SoireeScreen() {
       router.replace({ pathname: '/revelation', params: { soiree: composed.name } });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Impossible de la garder.');
+    } finally {
+      setKeeping(null);
     }
   }
 
@@ -256,6 +290,7 @@ export default function SoireeScreen() {
             busyRedo={busyRedo}
             onRedo={redo}
             onChoose={() => choose(route)}
+            keeping={keeping === null ? undefined : keeping === route.index}
             votes={tastes.votes}
             onVote={band ? undefined : tastes.vote}
           />
@@ -271,7 +306,14 @@ export default function SoireeScreen() {
   const toggleEviter = (value: string) => setEviter((e) => (e.includes(value) ? e.filter((v) => v !== value) : [...e, value]));
   const toggleOccasion = (value: string) => setNight((n) => ({ ...n, occasion: n.occasion === value ? null : value }));
   const toggleEnd = (value: string) => setNight((n) => ({ ...n, end: n.end === value ? null : value }));
-  const ready = envies.length > 0 && night.diner !== null && !!night.day;
+  const missing: Missing | null = envies.length === 0 ? 'humeur' : night.diner === null ? 'diner' : null;
+  // Lit while it is still the answer missing: answered, the light goes.
+  const lit = asking && asking === missing ? asking : null;
+  // Rather than a button that does nothing, one that shows what it still needs.
+  function guide(part: Missing) {
+    setAsking(part);
+    scroller.bring(part === 'humeur' ? moodQuestion.current : dinnerQuestion.current);
+  }
   const profileLine = profile
     ? `${profile.names ? `${profile.names}, vos` : 'Vos'} « jamais », votre budget et vos goûts s'appliquent.`
     : 'On trame avec des réglages par défaut.';
@@ -279,7 +321,7 @@ export default function SoireeScreen() {
   const range = data.personnes ?? PERSONNES;
   return (
     <PaletteProvider name={squad ? 'squad' : 'date'}>
-      <Screen key="envies" gap={Spacing.two}>
+      <Screen key="envies" gap={Spacing.two} scroller={scroller}>
         {squad ? (
           <PageCard
             badge="Squad"
@@ -305,7 +347,11 @@ export default function SoireeScreen() {
           </Section>
         ) : null}
 
-        <Section title="L'humeur du soir" hint={`Une ou plusieurs : ${data.max} envies en tout avec les options secrètes.`}>
+        <Section
+          title="L'humeur du soir"
+          hint={`Une ou plusieurs : ${data.max} envies en tout avec les options secrètes.`}
+          ref={moodQuestion}
+          lit={lit === 'humeur'}>
           <OptionGrid>
             {moods.map((m) => (
               <OptionCard key={m.value} label={m.label} icon={m.icon} emoji={m.emoji} selected={chosenMoods.includes(m.value)}
@@ -315,7 +361,7 @@ export default function SoireeScreen() {
           </OptionGrid>
         </Section>
 
-        <Section title="Le dîner fait-il partie du complot ?">
+        <Section title="Le dîner fait-il partie du complot ?" ref={dinnerQuestion} lit={lit === 'diner'}>
           <OptionGrid>
             {MEALS.map((o) => (
               <OptionCard key={String(o.value)} label={o.label} icon={o.icon} selected={night.diner === o.value}
@@ -392,10 +438,11 @@ export default function SoireeScreen() {
 
         {status === 'composing' ? <Waiting {...(squad ? COMPOSING_SQUAD : COMPOSING_DATE)} /> : null}
         {status === 'error' && <ThemedText themeColor="danger">L&apos;intrigue n&apos;a pas pu être tramée. Réessayez dans un instant.</ThemedText>}
-        <PrimaryButton wide disabled={!ready || status === 'composing'} onPress={compose}>
+        <PrimaryButton wide disabled={!night.day} busy={status === 'composing'} onPress={missing ? () => guide(missing) : compose}>
           {status === 'composing'
             ? `Le ${longDay(night.day)} se trame en secret…`
-            : night.diner === null ? 'Dîner ou pas ? Dites-le-nous' : squad ? `Tramer la virée à ${personnes}` : 'Tramer nos intrigues'}
+            : missing === 'humeur' ? 'Une humeur ? Choisissez-la'
+              : missing === 'diner' ? 'Dîner ou pas ? Dites-le-nous' : squad ? `Tramer la virée à ${personnes}` : 'Tramer nos intrigues'}
         </PrimaryButton>
       </Screen>
     </PaletteProvider>
@@ -473,13 +520,24 @@ function Stepper({ value, min, max, onChange }: { value: number; min: number; ma
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+// `lit`: the answer the form still needs, its frame in gold with a word saying so.
+function Section({
+  title, hint, children, ref, lit,
+}: { title: string; hint?: string; children: ReactNode; ref?: Ref<View>; lit?: boolean }) {
   const theme = useTheme();
   return (
-    <View style={[styles.section, { borderColor: theme.line, backgroundColor: theme.backgroundElement }]}>
+    <View
+      ref={ref}
+      testID={lit ? 'question-attendue' : undefined}
+      style={[
+        styles.section,
+        { borderColor: lit ? theme.gold : theme.line, backgroundColor: theme.backgroundElement },
+        lit && { boxShadow: `0 0 18px -6px ${theme.gold}` },
+      ]}>
       <View style={styles.sectionHead}>
         <ThemedText type="smallBold">{title}</ThemedText>
         {hint ? <ThemedText type="small" themeColor="textSecondary">{hint}</ThemedText> : null}
+        {lit ? <ThemedText type="small" style={{ color: theme.gold }}>Votre réponse ici, et l’intrigue se trame.</ThemedText> : null}
       </View>
       {children}
     </View>
@@ -496,6 +554,7 @@ const styles = StyleSheet.create({
   stepSign: { fontSize: 24, lineHeight: 28 },
   stepValue: { alignItems: 'center', minWidth: 80 },
   stepFigure: { fontFamily: Fonts.sansThin, fontSize: 40, lineHeight: 46 },
+  loading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two + 2, paddingTop: Spacing.four },
   section: { gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.tile, borderWidth: 1 },
   sectionHead: { gap: 2 },
   notice: { padding: Spacing.three, borderRadius: 14 },

@@ -1,0 +1,11 @@
+# La copie de la nuit (deploy/sauvegarde.sh), lancée par sauvegarde.timer.
+[Unit]
+Description=Secret Date : sauvegarde de la base et des images
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__UTILISATEUR__
+WorkingDirectory=__DOSSIER__
+ExecStart=/bin/sh __DOSSIER__/deploy/sauvegarde.sh

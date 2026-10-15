@@ -1,1 +1,4 @@
 *.cmd text eol=crlf
+# The server scripts and units run on Linux: always LF, whatever the checkout.
+*.sh text eol=lf
+deploy/** text eol=lf

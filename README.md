@@ -1,7 +1,8 @@
 # surprise
 
 Tout lancer soi-même : double-cliquer sur `lancer.cmd` (serveur + app Expo), `collecte.cmd` (collecte, 200 fiches par source) ou `admin.cmd` (modération) ; détail dans
-[docs/lancer-en-local.md](docs/lancer-en-local.md).
+[docs/lancer-en-local.md](docs/lancer-en-local.md). Mettre le site et l'app en ligne gratuitement (Oracle Cloud, Supabase,
+EAS) : [docs/deployer.md](docs/deployer.md), avec les fichiers du serveur dans `deploy/`.
 
 ## Tests
 
@@ -241,7 +242,9 @@ la photo morte, peut être proposée, et l'app montre alors sa bannière (ci-des
 Dans l'app, une image d'étape qui ne charge pas est redemandée après 2 s, puis signalée au serveur
 (`POST /api/images/broken`), qui la revérifie et la remplace ou la note morte de la même façon ; à défaut, l'étape
 montre une bannière de l'app selon son genre, jamais un blanc. Les images d'une soirée gardée sont copiées dans
-`data/images` au moment du choix et servies de là : elles tiennent jusqu'au jour J.
+`data/images` au moment du choix et servies de là : elles tiennent jusqu'au jour J. Chaque copie est réduite à 1 200 px
+au plus (JPEG, PNG si elle a de la transparence ; `images.lighter`) et gardée un mois par le navigateur. Les mettre dans
+Supabase Storage a été étudié et écarté : docs/deployer.md, § Les images.
 
 ## Tags et vibes
 
@@ -399,6 +402,9 @@ Un seul site, qui est l'app : le serveur sert le build web de l'app Expo (`app/d
 `app/`, refait par `lancer.cmd` quand l'app ou `app/.env` ont changé : quelques secondes, Metro gardant un cache par
 jeu de variables `EXPO_PUBLIC_`, `metro.config.js`), l'API qu'elle appelle (`/api/…`) et la modération (`/admin`).
 Il n'y a pas d'autre page client : toute évolution se fait dans `app/` et vaut pour le téléphone comme pour le site.
+Ce qui porte l'empreinte de son contenu dans son nom (scripts `/_expo/static/`, polices et images `/assets/…<hash>.ext`)
+est gardé par le navigateur sans jamais être redemandé : 2,5 Mo de polices et d'images de moins à chaque visite
+(`quiz.web_cache`) ; les pages, elles, sont relues, pour qu'un nouveau build se voie aussitôt.
 Le build web appelle l'API sur sa propre adresse ; en développement (`npm run web`, port 8081), sur
 `EXPO_PUBLIC_API_URL`.
 

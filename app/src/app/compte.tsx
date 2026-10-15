@@ -59,7 +59,8 @@ export default function CompteScreen() {
   return <Screen gap={user ? undefined : Spacing.two}>{user ? <LoggedIn email={user.email} onSignOut={() => signOut().then(refresh)} /> : <LoggedOut onSignedIn={refresh} />}</Screen>;
 }
 
-// Signing in: the same emerald card as every page's head, then the couple's photo above the form.
+// Signing in: the same emerald card as every page's head, in a sentence, then the form at once — on a phone, it opens
+// above the fold —, and under it the couple's photo and how the two sides play.
 function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
   const theme = useTheme();
   return (
@@ -67,18 +68,8 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
       <PageCard
         badge="Accès privé"
         title="Laissez la routine derrière vous."
-        text={
-          'Secret Date imagine des soirées surprises à Paris pour celles et ceux qui aiment ne pas savoir ce qui les attend.\n\n' +
-          'D’un côté, l’Instigateur : celui qui choisit, orchestre et garde le secret.\n' +
-          'De l’autre, son invité·e : une aventure à découvrir, indice après indice, jusqu’au jour J.\n\n' +
-          'Deux espaces, une même aventure — chacun découvre l’expérience de son côté.'
-        }
+        text="Des soirées surprises à Paris, pour celles et ceux qui aiment ne pas savoir ce qui les attend."
       />
-      <View style={[styles.photo, { borderColor: theme.line }]}>
-        <Image source={require('@/assets/images/bannieres/romantiques.jpg')} style={StyleSheet.absoluteFill} contentFit="cover" />
-        <View style={[StyleSheet.absoluteFill, styles.veil]} />
-        <ThemedText style={[styles.motto, { color: theme.gold }]}>Le mystère commence.</ThemedText>
-      </View>
       <AuthForm
         compact
         onSignedIn={() => {
@@ -86,9 +77,28 @@ function LoggedOut({ onSignedIn }: { onSignedIn: () => void }) {
           router.replace('/');
         }}
       />
+      <View style={[styles.photo, styles.photoAfter, { borderColor: theme.line }]}>
+        <Image source={require('@/assets/images/bannieres/romantiques.jpg')} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <View style={[StyleSheet.absoluteFill, styles.veil]} />
+        <ThemedText style={[styles.motto, { color: theme.gold }]}>Le mystère commence.</ThemedText>
+      </View>
+      <View style={styles.sides}>
+        {SIDES.map(([who, text]) => (
+          <ThemedText key={who} type="small" style={{ color: theme.creamSoft }}>
+            <ThemedText type="smallBold" style={{ color: theme.gold }}>{who}</ThemedText> {text}
+          </ThemedText>
+        ))}
+      </View>
     </>
   );
 }
+
+// The two sides of an evening, under the form.
+const SIDES = [
+  ['L’Instigateur', 'choisit, orchestre et garde le secret.'],
+  ['Son invité·e', 'découvre l’aventure indice après indice, jusqu’au jour J.'],
+  ['Deux espaces,', 'une même aventure : chacun la vit de son côté.'],
+] as const;
 
 function LoggedIn({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
   const { role } = useCouple();
@@ -318,6 +328,8 @@ function Notice({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   photo: { height: 104, borderRadius: Radius.card, borderWidth: 1, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  photoAfter: { marginTop: Spacing.three },
+  sides: { gap: Spacing.two, paddingHorizontal: Spacing.one, paddingBottom: Spacing.two },
   veil: { backgroundColor: 'rgba(4, 15, 10, 0.45)' },
   motto: { fontFamily: Fonts.headingItalic, fontSize: 26, lineHeight: 32 },
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },

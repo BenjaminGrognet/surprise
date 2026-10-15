@@ -1,0 +1,11 @@
+# Chaque nuit vers 4 h (heure de la machine), rattrapée au démarrage si la machine était éteinte.
+[Unit]
+Description=Secret Date : collecte de la nuit
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

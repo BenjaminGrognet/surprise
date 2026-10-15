@@ -1,0 +1,16 @@
+# Le site, l'API et les emails des soirées (docs/deployer.md). Posé par deploy/installer.sh, qui remplace
+# __UTILISATEUR__ et __DOSSIER__ ; relancé seul s'il s'arrête, et au démarrage de la machine.
+[Unit]
+Description=Secret Date (site, API et emails)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=__UTILISATEUR__
+WorkingDirectory=__DOSSIER__
+ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.quiz --host 127.0.0.1 --port 8001 --no-open --courriers
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

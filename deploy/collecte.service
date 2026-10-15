@@ -1,0 +1,17 @@
+# La collecte de la nuit (docs/deployer.md) : 50 fiches de plus par source au plus, jamais sans limite ; les pages
+# encore fraîches ne sont pas relues. Puis l'enrichissement (sans appel extérieur) et les mots-clés. Lancée par
+# collecte.timer ; à la main : sudo systemctl start collecte, journal : journalctl -u collecte.
+[Unit]
+Description=Secret Date : collecte, enrichissement et mots-clés
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__UTILISATEUR__
+WorkingDirectory=__DOSSIER__
+Nice=10
+ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.collect --limit 50
+ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.enrich
+ExecStart=/home/__UTILISATEUR__/.local/bin/uv run --env-file .env python -m surprise.keywords
+TimeoutStartSec=4h

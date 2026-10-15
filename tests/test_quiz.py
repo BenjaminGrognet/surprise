@@ -140,8 +140,16 @@ def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
     (web / "index.html").write_text("accueil de l'app", encoding="utf-8")
     (web / "soiree.html").write_text("soirée de l'app", encoding="utf-8")
     (web / "_expo" / "entry.js").write_text("app()", encoding="utf-8")
+    font = web / "assets" / "node_modules" / "@expo-google-fonts" / "manrope" / "Manrope_400Regular.8ca1a84037fdb644723129315c390ad9.ttf"
+    font.parent.mkdir(parents=True)
+    font.write_bytes(b"ttf")
+    (web / "assets" / "notes.txt").write_text("sans empreinte", encoding="utf-8")
     (tmp_path / "secret.txt").write_text("hors du site", encoding="utf-8")
     monkeypatch.setattr(quiz, "WEB", web)
+    copies = tmp_path / "images"
+    copies.mkdir()
+    (copies / "123615a8c39cf785da3f.jpg").write_bytes(b"\xff\xd8" + b"x" * 200_000)
+    monkeypatch.setattr(quiz.images, "DIRECTORY", copies)
     with serving(quiz.make_handler(tmp_path / "s.db", checks=0)) as url:
         body = json.dumps({"answers": ANSWERS}).encode()
         created = json.load(urlopen(Request(f"{url}/api/profiles", data=body, headers={"Content-Type": "application/json"})))
@@ -161,6 +169,13 @@ def test_profile_is_computed_through_the_api(tmp_path, monkeypatch):
         # The hashed scripts stay in the browser's cache; a page is always read anew, so a new build shows at once.
         assert "immutable" in urlopen(f"{url}/_expo/static/js/index-4f2a.js").headers["Cache-Control"]
         assert urlopen(f"{url}/soiree").headers["Cache-Control"] == "no-store"
+        # So do the fonts and pictures named after their content; an asset without its hash is read anew.
+        assert "immutable" in urlopen(f"{url}/assets/node_modules/@expo-google-fonts/manrope/{font.name}").headers["Cache-Control"]
+        assert urlopen(f"{url}/assets/notes.txt").headers["Cache-Control"] == "no-store"
+        # A kept evening's image copy: a month in the browser's cache, sent as it is (a JPEG gains nothing by gzip).
+        copy = urlopen(Request(f"{url}/images/123615a8c39cf785da3f.jpg", headers={"Accept-Encoding": "gzip"}))
+        assert copy.headers["Cache-Control"] == quiz.IMAGE_CACHE and copy.headers["Content-Type"] == "image/jpeg"
+        assert copy.headers.get("Content-Encoding") is None and len(copy.read()) == 200_002
         with pytest.raises(HTTPError):
             urlopen(f"{url}/..%2Fsecret.txt")
         assert b"<title>Surprise" in urlopen(f"{url}/admin").read() and json.load(urlopen(f"{url}/api/meta"))["vibes"]

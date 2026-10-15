@@ -3,6 +3,8 @@ production, never written), for the next Friday as the app proposes it: for each
 step with its own text; a band's evenings; and a couple's journey, a step changed, a route drawn again, one kept and the
 next evening without it. Everything the API writes stays in the test's own store; no booking engine is asked."""
 
+import random
+
 import pytest
 
 import prod_activities
@@ -71,6 +73,9 @@ def test_a_band_gets_routes_shown_whole(api, envies, occasion):
 
 
 def test_a_couple_changes_a_step_redraws_a_route_and_keeps_the_evening(api):
+    # The same draw of luck (parcours.lucky) each run: a route redrawn is all new when the base has one, but the draw
+    # decides which candidates are looked at first, and the production base changes every night.
+    random.seed(2026)
     profile = api("/api/profiles", {"answers": ANSWERS})["profile"]
     evening = {"envies": ["rire", "jouer"], "diner": False, "day": DAY.isoformat(), "profile": profile}
     page = api("/api/soirees", evening)

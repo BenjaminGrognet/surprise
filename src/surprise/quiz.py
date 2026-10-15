@@ -61,10 +61,17 @@ def web_file(path: str) -> Path | None:
             return file
     return None
 
+# A build's asset named after its content (fonts, pictures): "Manrope_400Regular.8ca1a84037fdb644723129315c390ad9.ttf".
+_HASHED_ASSET = re.compile(r"^/assets/.+\.[0-9a-f]{32}(@\dx)?\.\w+$")
+# The copies of images (/images/…) are named after their address: a month in the browser's cache.
+IMAGE_CACHE = "public, max-age=2592000"
+
+
 def web_cache(path: str) -> str:
-    """The build's scripts carry their content's hash in their name: kept by the browser, never asked again. The
-    pages and the rest are read anew, so a new build shows at once."""
-    return "public, max-age=31536000, immutable" if path.startswith("/_expo/static/") else "no-store"
+    """The build's scripts and assets carry their content's hash in their name: kept by the browser, never asked
+    again (the fonts and pictures weigh 2.5 MB, read anew at each visit otherwise). The pages and the rest are read
+    anew, so a new build shows at once."""
+    return "public, max-age=31536000, immutable" if path.startswith("/_expo/static/") or _HASHED_ASSET.match(path) else "no-store"
 
 # A soirée-type budget (profile) that the couple can also adjust for one particular evening (/soiree).
 BUDGET_OPTIONS: list[dict[str, Any]] = [
@@ -565,7 +572,7 @@ def make_handler(db: Path | str | None, checks: int, warm: bool = False, account
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "introuvable"})
                 self._send_json(HTTPStatus.OK, parcours.soiree_json(path.rsplit("/", 1)[1], state))
             elif re.match(r"^/images/\w+\.\w+$", path) and (image := images.DIRECTORY / path.removeprefix("/images/")).exists():
-                self._send(HTTPStatus.OK, image.read_bytes(), images.MEDIA_TYPES.get(image.suffix, "application/octet-stream"))
+                self._send(HTTPStatus.OK, image.read_bytes(), images.MEDIA_TYPES.get(image.suffix, "application/octet-stream"), IMAGE_CACHE)
             elif page := web_file(path):
                 kind = TYPES.guess_type(page.name)[0] or "application/octet-stream"
                 self._send(HTTPStatus.OK, page.read_bytes(), kind + ("; charset=utf-8" if kind.startswith("text/") else ""), web_cache(path))
