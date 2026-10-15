@@ -540,7 +540,7 @@ ne reçoit ce qu'il a arrêté : Mon compte › Emails (`public.email_prefs`), o
 couleurs de la nuit et de l'or ; leurs liens mènent à l'app (`APP_URL`), ceux des réservations sont des liens partenaires
 quand un programme est configuré (plus bas, « Liens partenaires »).
 
-Le connecteur est le SMTP de n'importe quel fournisseur (Brevo, Mailjet, Resend, Gmail, OVH…), `surprise.mail` :
+Le connecteur est le SMTP de n'importe quel fournisseur (AgentMail, Brevo, Mailjet, Resend, Gmail, OVH…), `surprise.mail` :
 
 ```bash
 # .env, pour le serveur seulement
@@ -549,6 +549,17 @@ MAIL_FROM=Secret Date <bonjour@secretdate.fr>
 MAIL_SECRET=une-longue-phrase-secrete   # signe les liens qui arrêtent les emails
 APP_URL=https://secretdate.fr           # l'adresse publique de l'app (http://127.0.0.1:8001 par défaut)
 ```
+
+Avec **AgentMail** (console.agentmail.to) : l'identifiant est l'adresse de la boîte (« Inboxes » › Inbox ID), le mot de
+passe une clé API (« API Keys », avec `message_send` si elle est restreinte), et l'expéditeur doit être cette même boîte,
+sinon les envois risquent d'être refusés. Le `@` de l'identifiant s'écrit `%40` (et tout caractère spécial de la clé aussi) :
+
+```bash
+SMTP_URL=smtps://secretdate%40agentmail.to:LA_CLE_API@smtp.agentmail.to:465   # ou smtp://…:587 pour STARTTLS
+MAIL_FROM=Secret Date <secretdate@agentmail.to>
+```
+
+Sur la machine Oracle Cloud, les ports 465 et 587 sortent sans rien ouvrir (c'est le 25 qu'Oracle bloque).
 
 ```bash
 # ce qui partirait maintenant, sans rien envoyer

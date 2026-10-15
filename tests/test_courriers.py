@@ -186,6 +186,19 @@ def test_the_relay_is_its_url_and_sends_each_email_once_connected(relay):
     assert relay.last.calls[1] == ("starttls",) and not any(c[0] == "login" for c in relay.last.calls)
 
 
+def test_agentmail_is_a_plain_relay_its_inbox_the_account_and_its_key_the_password(relay):
+    """AgentMail's SMTP: the inbox address (its "@" encoded) logs in with the API key, TLS from the start on 465."""
+    via = mail.relay("smtps://secretdate%40agentmail.to:am_Cl%C3%A9-123@smtp.agentmail.to:465", "Secret Date <secretdate@agentmail.to>")
+    assert via == mail.Relay("smtp.agentmail.to", 465, True, "secretdate@agentmail.to", "am_Clé-123", "Secret Date <secretdate@agentmail.to>")
+    mail.send([mail.Letter("lea@example.com", "Bonsoir", "texte", "<p>html</p>")], via)
+    assert relay.last.calls[0] == ("connect", "smtp.agentmail.to", 465, True)
+    assert ("login", "secretdate@agentmail.to", "am_Clé-123") in relay.last.calls
+    assert relay.last.messages[0]["From"] == "Secret Date <secretdate@agentmail.to>"
+    # 587 goes through STARTTLS, then logs in (AgentMail refuses a login before it).
+    mail.send([mail.Letter("lea@example.com", "B", "t", "<p>h</p>")], mail.relay("smtp://secretdate%40agentmail.to:cle@smtp.agentmail.to:587"))
+    assert relay.last.calls[1] == ("starttls",) and relay.last.calls[2][0] == "login"
+
+
 # A whole pass on the local Supabase -----------------------------------------------------------
 
 
